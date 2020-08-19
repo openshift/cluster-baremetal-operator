@@ -17,25 +17,91 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+	operatorv1 "github.com/openshift/api/operator/v1"
+)
 
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+        // ProvisioningInterface is the name of the network interface
+        // on a baremetal server to the provisioning network. It can
+        // have values like eth1 or ens3.
+        ProvisioningInterface string `json:"provisioningInterface,omitempty"`
 
-	// Foo is an example field of Provisioning. Edit Provisioning_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+        // ProvisioningIP is the IP address assigned to the
+        // provisioningInterface of the baremetal server. This IP
+        // address should be within the provisioning subnet, and
+        // outside of the DHCP range.
+        ProvisioningIP string `json:"provisioningIP,omitempty"`
+
+        // ProvisioningNetworkCIDR is the network on which the
+        // baremetal nodes are provisioned. The provisioningIP and the
+        // IPs in the dhcpRange all come from within this network.
+        ProvisioningNetworkCIDR string `json:"provisioningNetworkCIDR,omitempty"`
+
+        // ProvisioningDHCPExternal indicates whether the DHCP server
+        // for IP addresses in the provisioning DHCP range is present
+        // within the metal3 cluster or external to it. This field is being
+	// deprecated in favor of provisioningNetwork.
+        ProvisioningDHCPExternal bool `json:"provisioningDHCPExternal,omitempty"`
+
+        // ProvisioningDHCPRange needs to be interpreted along with
+        // ProvisioningDHCPExternal. If the value of
+        // provisioningDHCPExternal is set to False, then
+        // ProvisioningDHCPRange represents the range of IP addresses
+        // that the DHCP server running within the metal3 cluster can
+        // use while provisioning baremetal servers. If the value of
+        // ProvisioningDHCPExternal is set to True, then the value of
+        // ProvisioningDHCPRange will be ignored. When the value of
+        // ProvisioningDHCPExternal is set to False, indicating an
+        // internal DHCP server and the value of ProvisioningDHCPRange
+        // is not set, then the DHCP range is taken to be the default
+        // range which goes from .10 to .100 of the
+        // ProvisioningNetworkCIDR. This is the only value in all of
+        // the Provisioning configuration that can be changed after
+        // the installer has created the CR. This value needs to be
+        // two comma sererated IP addresses within the
+        // ProvisioningNetworkCIDR where the 1st address represents
+        // the start of the range and the 2nd address represents the
+        // last usable address in the  range.
+        ProvisioningDHCPRange string `json:"provisioningDHCPRange,omitempty"`
+
+        // ProvisioningOSDownloadURL is the location from which the OS
+        // Image used to boot baremetal host machines can be downloaded
+        // by the metal3 cluster.
+        ProvisioningOSDownloadURL string `json:"provisioningOSDownloadURL,omitempty"`
+
+	// ProvisioningNetwork provides a way to indicate the state of the
+	// underlying network configuration for the provisioning network.
+	// This field can have one of the following values -
+	// `Managed`- when the provisioning network is completely managed by
+	// the Baremetal IPI solution.
+	// `Unmanaged`- when the provsioning network is present and used but
+	// the user is responsible for managing DHCP. Virtual media provisioning
+	// is recommended but PXE is still available if required.
+	// `Disabled`- when the provisioning network is fully disabled. User can
+	// bring up the baremetal cluster using virtual media or assisted
+	// installation. If using metal3 for power management, BMCs must be
+	// accessible from the machine networks. User should provide two IPs on
+	// the external network that would be used for provisioning services.
+	ProvisioningNetwork string `json:"provisioningNetwork,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning
 type ProvisioningStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	operatorv1.OperatorStatus `json:",inline"`
 }
+
+// Provisioning contains configuration used by the Provisioning
+// service (Ironic) to provision baremetal hosts.
+// Provisioning is created by the OpenShift installer using admin or
+// user provided information about the provisioning network and the
+// NIC on the server that can be used to PXE boot it.
+// This CR is a singleton, created by the installer and currently only
+// consumed by the cluster-baremetal-operator to bring up and update
+// containers in a metal3 cluster.
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:path=provisionings,scope=Cluster
 
 // +kubebuilder:object:root=true
 
