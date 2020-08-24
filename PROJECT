@@ -1,0 +1,6 @@
+repo: github.com/openshift/cluster-baremetal-operator-1
+resources:
+- group: metal3.io
+  kind: Provisioning
+  version: v1alpha1
+version: "2"

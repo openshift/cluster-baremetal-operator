@@ -1,0 +1,20 @@
+# permissions to do viewer provisionings.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: provisioning-viewer-role
+rules:
+- apiGroups:
+  - metal3.io.
+  resources:
+  - provisionings
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metal3.io.
+  resources:
+  - provisionings/status
+  verbs:
+  - get
