@@ -33,8 +33,8 @@ type ProvisioningReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=metal3.io.,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io.,resources=provisionings/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
