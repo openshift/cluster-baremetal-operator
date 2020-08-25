@@ -17,6 +17,9 @@ all: manager
 test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
 
+# Alias for CI
+unit: test
+
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go
