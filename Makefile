@@ -47,7 +47,7 @@ manifests: controller-gen
 
 # Run go fmt against code
 fmt:
-	go fmt ./...
+	hack/go-fmt.sh
 
 # Run go lint against code
 lint:
