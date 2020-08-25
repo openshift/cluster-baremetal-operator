@@ -49,6 +49,10 @@ manifests: controller-gen
 fmt:
 	go fmt ./...
 
+# Run go lint against code
+lint:
+	golint -set_exit_status -min_confidence 0.3 ./...
+
 # Run go vet against code
 vet:
 	go vet ./...
