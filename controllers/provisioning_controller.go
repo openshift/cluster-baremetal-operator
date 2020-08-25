@@ -23,7 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator-1/api/v1alpha1"
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object

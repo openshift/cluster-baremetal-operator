@@ -1,4 +1,4 @@
-repo: github.com/openshift/cluster-baremetal-operator-1
+repo: github.com/openshift/cluster-baremetal-operator
 resources:
 - group: metal3.io
   kind: Provisioning

@@ -1,4 +1,4 @@
-module github.com/openshift/cluster-baremetal-operator-1
+module github.com/openshift/cluster-baremetal-operator
 
 go 1.13
 
