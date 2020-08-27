@@ -85,3 +85,7 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+vendor: vet
+	go mod tidy
+	go mod vendor
