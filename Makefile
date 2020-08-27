@@ -51,7 +51,7 @@ fmt:
 
 # Run go lint against code
 lint:
-	golint -set_exit_status -min_confidence 0.3 ./...
+	golint -set_exit_status -min_confidence 0.3 $(shell go list -f '{{ .ImportPath }}' ./...)
 
 # Run go vet against code
 vet:
