@@ -17,6 +17,9 @@ all: manager
 test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
 
+# Alias for CI
+unit: test
+
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go
@@ -44,7 +47,11 @@ manifests: controller-gen
 
 # Run go fmt against code
 fmt:
-	go fmt ./...
+	hack/go-fmt.sh
+
+# Run go lint against code
+lint:
+	golint -set_exit_status -min_confidence 0.3 $(shell go list -f '{{ .ImportPath }}' ./...)
 
 # Run go vet against code
 vet:
@@ -78,3 +85,8 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+vendor: vet
+	go mod tidy
+	go mod vendor
+	go mod verify

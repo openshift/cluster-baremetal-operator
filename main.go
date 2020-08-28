@@ -19,8 +19,8 @@ import (
 	"flag"
 	"os"
 
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator-1/api/v1alpha1"
-	"github.com/openshift/cluster-baremetal-operator-1/controllers"
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/cluster-baremetal-operator/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"

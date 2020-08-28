@@ -23,7 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator-1/api/v1alpha1"
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
@@ -33,9 +33,11 @@ type ProvisioningReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=metal3.io.,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io.,resources=provisionings/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 
+// Reconcile updates the cluster settings when the Provisioning
+// resource changes
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("provisioning", req.NamespacedName)
@@ -45,6 +47,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).
