@@ -23,21 +23,22 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
-var componentNamespace = "openshift-machine-api"
-var componentName = "cluster-baremetal-operator"
+const (
+	componentNamespace = "openshift-machine-api"
+	componentName      = "cluster-baremetal-operator"
+)
 
 // ProvisioningReconciler reconciles a Provisioning object
 type ProvisioningReconciler struct {
-        // This client, initialized using mgr.Client() above, is a split client
-        // that reads objects from the cache and writes to the apiserver
-        client client.Client
-
-	Log    logr.Logger
+	// This client, initialized using mgr.Client() above, is a split client
+	// that reads objects from the cache and writes to the apiserver
+	Client client.Client
 	Scheme *runtime.Scheme
+	Log    logr.Logger
 }
 
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
@@ -49,26 +50,26 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	ctx := context.Background()
 	log := r.Log.WithValues("provisioning", req.NamespacedName)
 
-	log.Info("Reconciling Provisioning")
-
 	infra := &osconfigv1.Infrastructure{}
-	err := r.client.Get(ctx, client.ObjectKey{
+	err := r.Client.Get(ctx, client.ObjectKey{
 		Name: "cluster",
-		}, infra)
-        if err != nil {
-                log.Info("Unable to determine Platform that the Operator is running on.")
-                return ctrl.Result{}, err
-        }
+	}, infra)
+	if err != nil {
+		log.Info("Unable to determine Platform that the Operator is running on.")
+		return ctrl.Result{}, err
+	}
 
-        // Disable ourselves on platforms other than bare metal
-        if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
+	// Disable ourselves on platforms other than bare metal
+	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
+		log.Info("Not Baremetal Platform. Setting CBO to disabled state.")
 		// set ClusterOperator status to Disabled.
-                if err != nil {
-                        return ctrl.Result{}, err
-                }
-                // We're disabled; don't requeue
-                return ctrl.Result{}, nil
-        }
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		// We're disabled; don't requeue
+		return ctrl.Result{}, nil
+	}
+	log.Info("CBO is running on Baremetal Platform.")
 
 	return ctrl.Result{}, nil
 }
