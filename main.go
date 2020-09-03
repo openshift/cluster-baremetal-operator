@@ -35,9 +35,15 @@ var (
 )
 
 func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		log.Error(err, "Error adding k8s client to scheme.")
+		os.Exit(1)
+	}
 
-	_ = metal3iov1alpha1.AddToScheme(scheme)
+	if err := metal3iov1alpha1.AddToScheme(scheme); err != nil {
+		log.Error(err, "Error adding k8s client to scheme.")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:scheme
 }
 
