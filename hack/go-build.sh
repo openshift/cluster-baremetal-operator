@@ -19,5 +19,5 @@ GLDFLAGS+="-extldflags '-static'"
 eval $(go env)
 
 echo "Building ${REPO}/controllers to bin/${WHAT}"
-GO111MODULE=${GO111MODULE} CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build ${GOFLAGS} -ldflags "${GLDFLAGS}" -o bin/${WHAT} ${REPO}/controllers
+GO111MODULE=${GO111MODULE} CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build ${GOFLAGS} -ldflags "${GLDFLAGS}" -o bin/${WHAT} ${REPO}
 

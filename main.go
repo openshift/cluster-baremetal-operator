@@ -27,6 +27,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
+
+	osconfigv1 "github.com/openshift/api/config/v1"
 )
 
 var (
@@ -36,15 +38,20 @@ var (
 
 func init() {
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		log.Error(err, "Error adding k8s client to scheme.")
+		setupLog.Error(err, "Error adding k8s client to scheme.")
 		os.Exit(1)
 	}
 
 	if err := metal3iov1alpha1.AddToScheme(scheme); err != nil {
-		log.Error(err, "Error adding k8s client to scheme.")
+		setupLog.Error(err, "Error adding k8s client to scheme.")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:scheme
+	// The following is needed to read the Infrastructure CR
+	if err := osconfigv1.Install(scheme); err != nil {
+		setupLog.Error(err, "")
+		os.Exit(1)
+	}
 }
 
 func main() {
@@ -79,18 +86,6 @@ func main() {
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
-
-	setupLog.Info("Registering Components.")
-
-	// Setup Scheme for all resources
-	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
-	if err := osconfigv1.Install(mgr.GetScheme()); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

@@ -38,7 +38,7 @@ type ProvisioningReconciler struct {
 	// that reads objects from the cache and writes to the apiserver
 	Client client.Client
 	Scheme *runtime.Scheme
-	Log    logr.Logger
+	Log logr.Logger
 }
 
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
@@ -55,21 +55,19 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		Name: "cluster",
 	}, infra)
 	if err != nil {
-		log.Info("Unable to determine Platform that the Operator is running on.")
+		log.Error(err, "unable to determine Platform")
 		return ctrl.Result{}, err
 	}
 
+	log.V(1).Info("CBO is running on Platform ", infra.Status.Platform)
+
 	// Disable ourselves on platforms other than bare metal
 	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
-		log.Info("Not Baremetal Platform. Setting CBO to disabled state.")
-		// set ClusterOperator status to Disabled.
-		if err != nil {
-			return ctrl.Result{}, err
-		}
+		log.V(1).Info("setting CBO to disabled state in current Platform")
+		// TODO: Set ClusterOperator status to Disabled.
 		// We're disabled; don't requeue
 		return ctrl.Result{}, nil
 	}
-	log.Info("CBO is running on Baremetal Platform.")
 
 	return ctrl.Result{}, nil
 }
