@@ -59,11 +59,11 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	log.V(1).Info("CBO is running on Platform ", infra.Status.Platform)
+	log.V(1).Info("reconciling", "platform", infra.Status.Platform)
 
 	// Disable ourselves on platforms other than bare metal
 	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
-		log.V(1).Info("setting CBO to disabled state in current Platform")
+		log.V(1).Info("disabled", "platform", infra.Status.Platform)
 		// TODO: Set ClusterOperator status to Disabled.
 		// We're disabled; don't requeue
 		return ctrl.Result{}, nil
