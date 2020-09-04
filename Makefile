@@ -11,11 +11,14 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+# Set VERBOSE to -v to make tests produce more output
+VERBOSE ?= ""
+
 all: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+	go test $(VERBOSE) ./... -coverprofile cover.out
 
 # Alias for CI
 unit: test

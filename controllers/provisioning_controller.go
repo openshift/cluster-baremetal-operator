@@ -19,6 +19,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,26 +45,39 @@ type ProvisioningReconciler struct {
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 
-// Reconcile updates the cluster settings when the Provisioning
-// resource changes
-func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("provisioning", req.NamespacedName)
 
 	infra := &osconfigv1.Infrastructure{}
 	err := r.Client.Get(ctx, client.ObjectKey{
 		Name: "cluster",
 	}, infra)
 	if err != nil {
-		log.Error(err, "unable to determine Platform")
-		return ctrl.Result{}, err
+		r.Log.Error(err, "unable to determine Platform")
+		return false, err
 	}
 
-	log.V(1).Info("CBO is running on Platform ", infra.Status.Platform)
+	r.Log.V(1).Info("reconciling", "platform", infra.Status.Platform)
 
 	// Disable ourselves on platforms other than bare metal
 	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
-		log.V(1).Info("setting CBO to disabled state in current Platform")
+		r.Log.V(1).Info("disabled", "platform", infra.Status.Platform)
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// Reconcile updates the cluster settings when the Provisioning
+// resource changes
+func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	//log := r.Log.WithValues("provisioning", req.NamespacedName)
+
+	enabled, err := r.isEnabled()
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
+	}
+	if !enabled {
 		// TODO: Set ClusterOperator status to Disabled.
 		// We're disabled; don't requeue
 		return ctrl.Result{}, nil
