@@ -17,8 +17,10 @@ package controllers
 
 import (
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -33,6 +35,9 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 
 func init() {
+	ctrl.SetLogger(zap.New(func(o *zap.Options) {
+		o.Development = true
+	}))
 	// Register our package types with the global scheme
 	metal3iov1alpha1.AddToScheme(scheme.Scheme)
 }
