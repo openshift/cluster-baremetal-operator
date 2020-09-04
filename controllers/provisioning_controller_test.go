@@ -3,10 +3,11 @@ package controllers
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -31,16 +32,11 @@ func newFakeProvisioningReconciler(scheme *runtime.Scheme, object runtime.Object
 }
 
 func TestReconcile(t *testing.T) {
-	request := ctrl.Request{
-		NamespacedName: client.ObjectKey{
-			Namespace: metav1.NamespaceNone,
-			Name:      "Provisioning",
-		},
-	}
 	testCases := []struct {
 		name          string
 		infra         *configv1.Infrastructure
 		expectedError bool
+		isEnabled     bool
 	}{
 		{
 			name: "BaremetalPlatform",
@@ -57,11 +53,30 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			expectedError: false,
+			isEnabled:     true,
+		},
+		{
+			name: "NoPlatform",
+			infra: &configv1.Infrastructure{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Infrastructure",
+					APIVersion: "apps/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Status: configv1.InfrastructureStatus{
+					Platform: "",
+				},
+			},
+			expectedError: false,
+			isEnabled:     false,
 		},
 		{
 			name:          "BadPlatform",
 			infra:         &configv1.Infrastructure{},
 			expectedError: true,
+			isEnabled:     false,
 		},
 	}
 	for _, tc := range testCases {
@@ -69,10 +84,16 @@ func TestReconcile(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
 			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.infra)
-			_, err := reconciler.Reconcile(request)
-			if tc.expectedError != (err != nil) {
-				t.Errorf("ExpectedError: %v, got: %v", tc.expectedError, err)
+			enabled, err := reconciler.isEnabled()
+			if tc.expectedError && err == nil {
+				t.Error("should have produced an error")
+				return
 			}
+			if !tc.expectedError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			assert.Equal(t, tc.isEnabled, enabled, "enabled results did not match")
 		})
 	}
 }
