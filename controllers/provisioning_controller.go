@@ -38,7 +38,7 @@ type ProvisioningReconciler struct {
 	// that reads objects from the cache and writes to the apiserver
 	Client client.Client
 	Scheme *runtime.Scheme
-	Log logr.Logger
+	Log    logr.Logger
 }
 
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
