@@ -27,6 +27,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
+
+	osconfigv1 "github.com/openshift/api/config/v1"
 )
 
 var (
@@ -35,10 +37,21 @@ var (
 )
 
 func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		setupLog.Error(err, "Error adding k8s client to scheme.")
+		os.Exit(1)
+	}
 
-	_ = metal3iov1alpha1.AddToScheme(scheme)
+	if err := metal3iov1alpha1.AddToScheme(scheme); err != nil {
+		setupLog.Error(err, "Error adding k8s client to scheme.")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:scheme
+	// The following is needed to read the Infrastructure CR
+	if err := osconfigv1.Install(scheme); err != nil {
+		setupLog.Error(err, "")
+		os.Exit(1)
+	}
 }
 
 func main() {
