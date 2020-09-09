@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,6 +32,8 @@ import (
 const (
 	componentNamespace = "openshift-machine-api"
 	componentName      = "cluster-baremetal-operator"
+	// Remove from here when this is brought in as part of baremetal_config.go
+	baremetalProvisioningCR = "provisioning-configuration"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
@@ -68,6 +71,27 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	return true, nil
 }
 
+func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3iov1alpha1.Provisioning, error) {
+	ctx := context.Background()
+
+	// provisioning.metal3.io is a singleton
+	if req.Name != baremetalProvisioningCR {
+		r.Log.V(1).Info("ignoring invalid CR", "name", req.Name)
+		return nil, nil
+	}
+	// Fetch the Provisioning instance
+	instance := &metal3iov1alpha1.Provisioning{}
+	if err := r.Client.Get(ctx, req.NamespacedName, instance); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Log.V(1).Info("Provisioning CR not found")
+			return nil, nil
+		}
+		r.Log.Error(err, "unable to read Provisioning CR")
+		return nil, err
+	}
+	return instance, nil
+}
+
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -83,6 +107,16 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
+	baremetalConfig, err := r.readProvisioningCR(req)
+	if err != nil {
+		// Error reading the object - requeue the request.
+		return ctrl.Result{}, err
+	}
+	if baremetalConfig == nil {
+		// Provisioning configuration not available at this time.
+		// Cannot proceed wtih metal3 deployment.
+		return ctrl.Result{}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
