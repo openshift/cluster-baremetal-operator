@@ -93,3 +93,7 @@ vendor: vet
 	go mod tidy
 	go mod vendor
 	go mod verify
+
+.PHONY: generate-check
+generate-check:
+	./hack/generate.sh
