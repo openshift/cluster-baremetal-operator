@@ -22,27 +22,33 @@ import (
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
+	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 const (
-	componentNamespace = "openshift-machine-api"
-	componentName      = "cluster-baremetal-operator"
 	// Remove from here when this is brought in as part of baremetal_config.go
 	baremetalProvisioningCR = "provisioning-configuration"
+	// ComponentNamespace is namespace where CBO resides
+	ComponentNamespace = "openshift-machine-api"
+	// ComponentName is the full name of CBO
+	ComponentName = "cluster-baremetal-operator"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
 type ProvisioningReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	Client client.Client
-	Scheme *runtime.Scheme
-	Log    logr.Logger
+	Client        client.Client
+	Scheme        *runtime.Scheme
+	Log           logr.Logger
+	OSClient      osclientset.Interface
+	EventRecorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
@@ -102,7 +108,12 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
 	}
 	if !enabled {
-		// TODO: Set ClusterOperator status to Disabled.
+		// set ClusterOperator status to disabled=true, available=true
+		err = r.updateCOStatusDisabled()
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
 		// We're disabled; don't requeue
 		return ctrl.Result{}, nil
 	}
