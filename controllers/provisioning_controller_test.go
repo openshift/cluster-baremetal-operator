@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -12,6 +11,7 @@ import (
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1 "github.com/openshift/api/config/v1"
+	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
@@ -26,9 +26,10 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 
 func newFakeProvisioningReconciler(scheme *runtime.Scheme, object runtime.Object) *ProvisioningReconciler {
 	return &ProvisioningReconciler{
-		Client: fakeclient.NewFakeClientWithScheme(scheme, object),
-		Log:    ctrl.Log.WithName("controllers").WithName("Provisioning"),
-		Scheme: scheme,
+		Client:   fakeclient.NewFakeClientWithScheme(scheme, object),
+		Log:      ctrl.Log.WithName("controllers").WithName("Provisioning"),
+		Scheme:   scheme,
+		OSClient: fakeconfigclientset.NewSimpleClientset(),
 	}
 }
 
