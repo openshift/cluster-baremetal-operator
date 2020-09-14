@@ -4,7 +4,7 @@
 # in this script we *do* want globbing.
 # shellcheck disable=SC2086
 
-set -eux
+set -e
 
 ARTIFACTS=${ARTIFACTS:-/tmp}
 
@@ -14,6 +14,6 @@ export XDG_CACHE_HOME="/tmp/.cache"
 
 INPUT_FILES="config/crd/bases/*.yaml"
 cksum $INPUT_FILES > "$ARTIFACTS/lint.cksums.before"
-make generate
+make manifests
 cksum $INPUT_FILES > "$ARTIFACTS/lint.cksums.after"
 diff "$ARTIFACTS/lint.cksums.before" "$ARTIFACTS/lint.cksums.after"
