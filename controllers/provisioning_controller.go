@@ -128,6 +128,12 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Cannot proceed wtih metal3 deployment.
 		return ctrl.Result{}, nil
 	}
+	if err := validateBaremetalProvisioningConfig(baremetalConfig); err != nil {
+		// Provisioning configuration is not valid.
+		// Requeue request.
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
