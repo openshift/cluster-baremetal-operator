@@ -57,7 +57,7 @@ func validateManagedConfig(config *metal3iov1alpha1.Provisioning) error {
 		config.Spec.ProvisioningNetworkCIDR == "" ||
 		config.Spec.ProvisioningDHCPRange == "" ||
 		config.Spec.ProvisioningOSDownloadURL == "" {
-		return fmt.Errorf("Configuration missing in Managed ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
+		return fmt.Errorf("configuration missing in Managed ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
 	}
 	return nil
 }
@@ -68,7 +68,7 @@ func validateUnmanagedConfig(config *metal3iov1alpha1.Provisioning) error {
 		config.Spec.ProvisioningIP == "" ||
 		config.Spec.ProvisioningNetworkCIDR == "" ||
 		config.Spec.ProvisioningOSDownloadURL == "" {
-		return fmt.Errorf("Configuration missing in Unmanaged ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
+		return fmt.Errorf("configuration missing in Unmanaged ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
 	}
 	return nil
 }
@@ -78,7 +78,7 @@ func validateDisabledConfig(config *metal3iov1alpha1.Provisioning) error {
 	if config.Spec.ProvisioningIP == "" ||
 		config.Spec.ProvisioningNetworkCIDR == "" ||
 		config.Spec.ProvisioningOSDownloadURL == "" {
-		return fmt.Errorf("Configuration missing in Disabled ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
+		return fmt.Errorf("configuration missing in Disabled ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
 	}
 	return nil
 }
