@@ -25,6 +25,13 @@ import (
 // +kubebuilder:validation:Enum=Managed;Unmanaged;Disabled
 type ProvisioningNetwork string
 
+// ProvisioningNetwork modes
+const (
+	ProvisioningNetworkManaged   = "Managed"
+	ProvisioningNetworkUnmanaged = "Unmanaged"
+	ProvisioningNetworkDisabled  = "Disabled"
+)
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface

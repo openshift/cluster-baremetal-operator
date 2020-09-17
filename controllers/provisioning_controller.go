@@ -32,8 +32,6 @@ import (
 )
 
 const (
-	// Remove from here when this is brought in as part of baremetal_config.go
-	baremetalProvisioningCR = "provisioning-configuration"
 	// ComponentNamespace is namespace where CBO resides
 	ComponentNamespace = "openshift-machine-api"
 	// ComponentName is the full name of CBO
@@ -131,7 +129,8 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if err := validateBaremetalProvisioningConfig(baremetalConfig); err != nil {
 		// Provisioning configuration is not valid.
 		// Requeue request.
-		return ctrl.Result{}, err
+		r.Log.Error(err, "invalid config in Provisioning CR")
+		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil

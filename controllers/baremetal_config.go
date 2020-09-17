@@ -23,62 +23,92 @@ import (
 )
 
 const (
-	provisioningNetworkManaged   = "Managed"
-	provisioningNetworkUnmanaged = "Unmanaged"
-	provisioningNetworkDisabled  = "Disabled"
+	baremetalProvisioningCR = "provisioning-configuration"
 )
 
-func validateBaremetalProvisioningConfig(config *metal3iov1alpha1.Provisioning) error {
-	if config.Spec.ProvisioningNetwork == "" {
-		config.Spec.ProvisioningNetwork = provisioningNetworkManaged
-		if config.Spec.ProvisioningDHCPExternal {
-			config.Spec.ProvisioningNetwork = provisioningNetworkUnmanaged
+func validateBaremetalProvisioningConfig(prov *metal3iov1alpha1.Provisioning) error {
+	provisioningNetworkMode := getProvisioningNetworkMode(prov)
+	glog.V(1).Infof("Final Provisioning Network Mode %s", provisioningNetworkMode)
+	switch provisioningNetworkMode {
+	case metal3iov1alpha1.ProvisioningNetworkManaged:
+		return validateManagedConfig(prov)
+	case metal3iov1alpha1.ProvisioningNetworkUnmanaged:
+		return validateUnmanagedConfig(prov)
+	case metal3iov1alpha1.ProvisioningNetworkDisabled:
+		return validateDisabledConfig(prov)
+	default:
+		// When the ProvisioningNetwork provided is not one of the known values,
+		// it defaults to Managed mode.
+		return validateManagedConfig(prov)
+
+	}
+}
+
+func getProvisioningNetworkMode(prov *metal3iov1alpha1.Provisioning) string {
+	provisioningNetworkMode := prov.Spec.ProvisioningNetwork
+	if provisioningNetworkMode == "" {
+		// Set it to the default Managed mode
+		provisioningNetworkMode = metal3iov1alpha1.ProvisioningNetworkManaged
+		if prov.Spec.ProvisioningDHCPExternal {
+			glog.V(1).Info("ProvisioningDHCPExternal is being deprecated in favor of ProvisioningNetwork and will be removed in the next release")
+			provisioningNetworkMode = metal3iov1alpha1.ProvisioningNetworkUnmanaged
 		}
-		glog.V(1).Infof("ProvisioningNetwork config not provided. Based on ProvisioningDHCPExternal setting it to: %s", config.Spec.ProvisioningNetwork)
+		glog.V(1).Info("ProvisioningNetwork config not provided. Using ProvisioningDHCPExternal to set its value")
 	}
-	switch config.Spec.ProvisioningNetwork {
-	case provisioningNetworkManaged:
-		glog.V(1).Info("Provisioning Network Managed")
-		return validateManagedConfig(config)
-	case provisioningNetworkUnmanaged:
-		glog.V(1).Info("Provisioning Network Unmanaged")
-		return validateUnmanagedConfig(config)
-	case provisioningNetworkDisabled:
-		glog.V(1).Info("Provisioning Network Disabled")
-		return validateDisabledConfig(config)
+	return provisioningNetworkMode
+}
+
+func validateManagedConfig(prov *metal3iov1alpha1.Provisioning) error {
+	for _, toTest := range []struct {
+		Name  string
+		Value string
+	}{
+
+		{Name: "ProvisioningInterface", Value: prov.Spec.ProvisioningInterface},
+		{Name: "ProvisioningIP", Value: prov.Spec.ProvisioningIP},
+		{Name: "ProvisioningNetworkCIDR", Value: prov.Spec.ProvisioningNetworkCIDR},
+		{Name: "ProvisioningDHCPRange", Value: prov.Spec.ProvisioningDHCPRange},
+		{Name: "ProvisioningOSDownloadURL", Value: prov.Spec.ProvisioningOSDownloadURL},
+	} {
+		if toTest.Value == "" {
+			return fmt.Errorf("%s is required but is empty", toTest.Name)
+		}
 	}
 	return nil
 }
 
-func validateManagedConfig(config *metal3iov1alpha1.Provisioning) error {
-	// All values must be provided in the provisioning CR
-	if config.Spec.ProvisioningInterface == "" ||
-		config.Spec.ProvisioningIP == "" ||
-		config.Spec.ProvisioningNetworkCIDR == "" ||
-		config.Spec.ProvisioningDHCPRange == "" ||
-		config.Spec.ProvisioningOSDownloadURL == "" {
-		return fmt.Errorf("configuration missing in Managed ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
+func validateUnmanagedConfig(prov *metal3iov1alpha1.Provisioning) error {
+	for _, toTest := range []struct {
+		Name  string
+		Value string
+	}{
+
+		{Name: "ProvisioningInterface", Value: prov.Spec.ProvisioningInterface},
+		{Name: "ProvisioningIP", Value: prov.Spec.ProvisioningIP},
+		{Name: "ProvisioningNetworkCIDR", Value: prov.Spec.ProvisioningNetworkCIDR},
+		{Name: "ProvisioningOSDownloadURL", Value: prov.Spec.ProvisioningOSDownloadURL},
+	} {
+		if toTest.Value == "" {
+			return fmt.Errorf("%s is required but is empty", toTest.Name)
+		}
 	}
 	return nil
 }
 
-func validateUnmanagedConfig(config *metal3iov1alpha1.Provisioning) error {
-	// All values except ProvisioningDHCPRange must be provided in the provisioning CR
-	if config.Spec.ProvisioningInterface == "" ||
-		config.Spec.ProvisioningIP == "" ||
-		config.Spec.ProvisioningNetworkCIDR == "" ||
-		config.Spec.ProvisioningOSDownloadURL == "" {
-		return fmt.Errorf("configuration missing in Unmanaged ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
-	}
-	return nil
-}
+func validateDisabledConfig(prov *metal3iov1alpha1.Provisioning) error {
+	for _, toTest := range []struct {
+		Name  string
+		Value string
+	}{
 
-func validateDisabledConfig(config *metal3iov1alpha1.Provisioning) error {
-	// All values except ProvisioningDHCPRange must be provided in the provisioning CR
-	if config.Spec.ProvisioningIP == "" ||
-		config.Spec.ProvisioningNetworkCIDR == "" ||
-		config.Spec.ProvisioningOSDownloadURL == "" {
-		return fmt.Errorf("configuration missing in Disabled ProvisioningNetwork mode in config resource %s", baremetalProvisioningCR)
+		{Name: "ProvisioningIP", Value: prov.Spec.ProvisioningIP},
+		{Name: "ProvisioningNetworkCIDR", Value: prov.Spec.ProvisioningNetworkCIDR},
+		{Name: "ProvisioningOSDownloadURL", Value: prov.Spec.ProvisioningOSDownloadURL},
+		{Name: "ProvisioningNetwork", Value: prov.Spec.ProvisioningNetwork},
+	} {
+		if toTest.Value == "" {
+			return fmt.Errorf("%s is required but is empty", toTest.Name)
+		}
 	}
 	return nil
 }
