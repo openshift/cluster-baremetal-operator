@@ -18,14 +18,18 @@ package provisioning
 import (
 	"fmt"
 
-	"github.com/golang/glog"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
+)
+
+var (
+	log = ctrl.Log.WithName("provisioning")
 )
 
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
 func ValidateBaremetalProvisioningConfig(prov *metal3iov1alpha1.Provisioning) error {
 	provisioningNetworkMode := getProvisioningNetworkMode(prov)
-	glog.V(1).Infof("Final Provisioning Network Mode %s", provisioningNetworkMode)
+	log.V(1).Info("Final Provisioning Network", "Mode", provisioningNetworkMode)
 	switch provisioningNetworkMode {
 	case metal3iov1alpha1.ProvisioningNetworkManaged:
 		return validateManagedConfig(prov)
@@ -47,10 +51,10 @@ func getProvisioningNetworkMode(prov *metal3iov1alpha1.Provisioning) string {
 		// Set it to the default Managed mode
 		provisioningNetworkMode = metal3iov1alpha1.ProvisioningNetworkManaged
 		if prov.Spec.ProvisioningDHCPExternal {
-			glog.V(1).Info("ProvisioningDHCPExternal is being deprecated in favor of ProvisioningNetwork and will be removed in the next release")
+			log.V(1).Info("ProvisioningDHCPExternal is being deprecated in favor of ProvisioningNetwork and will be removed in the next release")
 			provisioningNetworkMode = metal3iov1alpha1.ProvisioningNetworkUnmanaged
 		}
-		glog.V(1).Info("ProvisioningNetwork config not provided. Using ProvisioningDHCPExternal to set its value")
+		log.V(1).Info("ProvisioningNetwork config not provided. Using ProvisioningDHCPExternal to set its value")
 	}
 	return provisioningNetworkMode
 }
