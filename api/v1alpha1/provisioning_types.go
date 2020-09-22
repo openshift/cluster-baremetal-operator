@@ -21,6 +21,10 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 )
 
+// ProvisioningNetwork is the boot mode of the system
+// +kubebuilder:validation:Enum=Managed;Unmanaged;Disabled
+type ProvisioningNetwork string
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface
@@ -84,13 +88,16 @@ type ProvisioningSpec struct {
 	// installation. If using metal3 for power management, BMCs must be
 	// accessible from the machine networks. User should provide two IPs on
 	// the external network that would be used for provisioning services.
-	ProvisioningNetwork string `json:"provisioningNetwork,omitempty"`
+	ProvisioningNetwork ProvisioningNetwork `json:"provisioningNetwork,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning
 type ProvisioningStatus struct {
 	operatorv1.OperatorStatus `json:",inline"`
 }
+
+// +kubebuilder:resource:path=provisionings,scope=Cluster
+// +kubebuilder:subresource:status
 
 // Provisioning contains configuration used by the Provisioning
 // service (Ironic) to provision baremetal hosts.
@@ -100,12 +107,7 @@ type ProvisioningStatus struct {
 // This CR is a singleton, created by the installer and currently only
 // consumed by the cluster-baremetal-operator to bring up and update
 // containers in a metal3 cluster.
-
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=provisionings,scope=Cluster
-// +kubebuilder:subresource:status
-
-// Provisioning is the Schema for the provisionings API
 type Provisioning struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
