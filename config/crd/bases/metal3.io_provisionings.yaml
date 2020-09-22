@@ -13,7 +13,9 @@ spec:
     listKind: ProvisioningList
     plural: provisionings
     singular: provisioning
-  scope: Namespaced
+  scope: Cluster
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: Provisioning is the Schema for the provisionings API

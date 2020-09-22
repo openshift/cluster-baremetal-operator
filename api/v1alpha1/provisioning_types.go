@@ -100,10 +100,10 @@ type ProvisioningStatus struct {
 // This CR is a singleton, created by the installer and currently only
 // consumed by the cluster-baremetal-operator to bring up and update
 // containers in a metal3 cluster.
-// +kubebuilder:subresource:status
-// +kubebuilder:resource:path=provisionings,scope=Cluster
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:path=provisionings,scope=Cluster
+// +kubebuilder:subresource:status
 
 // Provisioning is the Schema for the provisionings API
 type Provisioning struct {
