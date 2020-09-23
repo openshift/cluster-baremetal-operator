@@ -47,9 +47,9 @@ deploy: manifests
 	kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
+.PHONY: manifests
 manifests: 
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-	@sed -i '/^    controller-gen.kubebuilder.io\/version: (devel)/d' config/crd/bases/*
+	hack/gen-crd.sh
 
 # Run go fmt against code
 fmt:
