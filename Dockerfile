@@ -1,27 +1,12 @@
-# Build the manager binary
-FROM golang:1.13 as builder
+# When bumping the Go version, don't forget to update the configuration of the
+# CI jobs in openshift/release.
+FROM registry.svc.ci.openshift.org/ocp/builder:rhel-8-golang-1.15-openshift-4.6 AS builder
+WORKDIR /go/src/github.com/openshift/cluster-baremetal-operator
+COPY . .
+RUN make manager
 
-WORKDIR /workspace
-# Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
-
-# Copy the go source
-COPY main.go main.go
-COPY api/ api/
-COPY controllers/ controllers/
-
-# Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
-
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /
-COPY --from=builder /workspace/manager .
-USER nonroot:nonroot
-
-ENTRYPOINT ["/manager"]
+FROM registry.svc.ci.openshift.org/ocp/4.6:base
+COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/bin/manager /usr/bin/cluster-baremetal-operator
+COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/manifests /manifests
+LABEL io.openshift.release.operator=true
+ENTRYPOINT ["/usr/bin/cluster-baremetal-operator"]
