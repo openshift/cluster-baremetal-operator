@@ -83,3 +83,7 @@ vendor: vet
 .PHONY: generate-check
 generate-check:
 	./hack/generate.sh
+
+.PHONY: bmh-crd
+bmh-crd:
+	./hack/get-bmh-crd.sh
