@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package provisioning
 
 import (
 	"strings"
@@ -24,6 +24,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const testBaremetalProvisioningCR = "test-provisioning-configuration"
+
 func TestValidateManagedProvisioningConfig(t *testing.T) {
 	baremetalCR := &metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
@@ -31,7 +33,7 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: baremetalProvisioningCR,
+			Name: testBaremetalProvisioningCR,
 		},
 	}
 
@@ -103,7 +105,7 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = tc.spec
-			err := validateBaremetalProvisioningConfig(baremetalCR)
+			err := ValidateBaremetalProvisioningConfig(baremetalCR)
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
@@ -124,7 +126,7 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: baremetalProvisioningCR,
+			Name: testBaremetalProvisioningCR,
 		},
 	}
 
@@ -180,7 +182,7 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = tc.spec
-			err := validateBaremetalProvisioningConfig(baremetalCR)
+			err := ValidateBaremetalProvisioningConfig(baremetalCR)
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
@@ -201,7 +203,7 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: baremetalProvisioningCR,
+			Name: testBaremetalProvisioningCR,
 		},
 	}
 
@@ -244,7 +246,7 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = tc.spec
-			err := validateBaremetalProvisioningConfig(baremetalCR)
+			err := ValidateBaremetalProvisioningConfig(baremetalCR)
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return

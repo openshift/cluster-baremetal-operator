@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package provisioning
 
 import (
 	"fmt"
@@ -22,11 +22,8 @@ import (
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
-const (
-	baremetalProvisioningCR = "provisioning-configuration"
-)
-
-func validateBaremetalProvisioningConfig(prov *metal3iov1alpha1.Provisioning) error {
+// ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
+func ValidateBaremetalProvisioningConfig(prov *metal3iov1alpha1.Provisioning) error {
 	provisioningNetworkMode := getProvisioningNetworkMode(prov)
 	glog.V(1).Infof("Final Provisioning Network Mode %s", provisioningNetworkMode)
 	switch provisioningNetworkMode {
