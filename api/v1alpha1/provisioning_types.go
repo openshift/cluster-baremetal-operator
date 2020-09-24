@@ -27,9 +27,9 @@ type ProvisioningNetwork string
 
 // ProvisioningNetwork modes
 const (
-	ProvisioningNetworkManaged   = "Managed"
-	ProvisioningNetworkUnmanaged = "Unmanaged"
-	ProvisioningNetworkDisabled  = "Disabled"
+	ProvisioningNetworkManaged   ProvisioningNetwork = "Managed"
+	ProvisioningNetworkUnmanaged ProvisioningNetwork = "Unmanaged"
+	ProvisioningNetworkDisabled  ProvisioningNetwork = "Disabled"
 )
 
 // ProvisioningSpec defines the desired state of Provisioning

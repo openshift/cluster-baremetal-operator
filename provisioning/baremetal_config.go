@@ -37,15 +37,11 @@ func ValidateBaremetalProvisioningConfig(prov *metal3iov1alpha1.Provisioning) er
 		return validateUnmanagedConfig(prov)
 	case metal3iov1alpha1.ProvisioningNetworkDisabled:
 		return validateDisabledConfig(prov)
-	default:
-		// When the ProvisioningNetwork provided is not one of the known values,
-		// it defaults to Managed mode.
-		return validateManagedConfig(prov)
-
 	}
+	return nil
 }
 
-func getProvisioningNetworkMode(prov *metal3iov1alpha1.Provisioning) string {
+func getProvisioningNetworkMode(prov *metal3iov1alpha1.Provisioning) metal3iov1alpha1.ProvisioningNetwork {
 	provisioningNetworkMode := prov.Spec.ProvisioningNetwork
 	if provisioningNetworkMode == "" {
 		// Set it to the default Managed mode
@@ -105,7 +101,6 @@ func validateDisabledConfig(prov *metal3iov1alpha1.Provisioning) error {
 		{Name: "ProvisioningIP", Value: prov.Spec.ProvisioningIP},
 		{Name: "ProvisioningNetworkCIDR", Value: prov.Spec.ProvisioningNetworkCIDR},
 		{Name: "ProvisioningOSDownloadURL", Value: prov.Spec.ProvisioningOSDownloadURL},
-		{Name: "ProvisioningNetwork", Value: prov.Spec.ProvisioningNetwork},
 	} {
 		if toTest.Value == "" {
 			return fmt.Errorf("%s is required but is empty", toTest.Name)

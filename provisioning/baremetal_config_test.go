@@ -41,7 +41,7 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 		name          string
 		spec          metal3iov1alpha1.ProvisioningSpec
 		expectedError bool
-		expectedMode  string
+		expectedMode  metal3iov1alpha1.ProvisioningNetwork
 		expectedMsg   string
 	}{
 		{
@@ -134,7 +134,7 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 		name          string
 		spec          metal3iov1alpha1.ProvisioningSpec
 		expectedError bool
-		expectedMode  string
+		expectedMode  metal3iov1alpha1.ProvisioningNetwork
 		expectedMsg   string
 	}{
 		{
@@ -211,7 +211,7 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 		name          string
 		spec          metal3iov1alpha1.ProvisioningSpec
 		expectedError bool
-		expectedMode  string
+		expectedMode  metal3iov1alpha1.ProvisioningNetwork
 		expectedMsg   string
 	}{
 		{
