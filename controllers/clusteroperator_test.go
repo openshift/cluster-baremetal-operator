@@ -11,6 +11,8 @@ import (
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
@@ -187,5 +189,80 @@ func normalizeTransitionTimes(got, expected osconfigv1.ClusterOperatorStatus) {
 
 	for i := range expected.Conditions {
 		expected.Conditions[i].LastTransitionTime = now
+	}
+}
+
+func TestUpdateCOStatusDegraded(t *testing.T) {
+	baremetalCR := &metal3iov1alpha1.Provisioning{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Provisioning",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: BaremetalProvisioningCR,
+		},
+	}
+
+	tCases := []struct {
+		name                       string
+		spec                       metal3iov1alpha1.ProvisioningSpec
+		degradedReason             string
+		expectedConditions         []osconfigv1.ClusterOperatorStatusCondition
+		expectedDegradedMessage    string
+		expectedProgressingMessage string
+		expectedMatch              bool
+	}{
+		{
+			name: "Incorrect Config",
+			spec: metal3iov1alpha1.ProvisioningSpec{
+				ProvisioningInterface:     "eth0",
+				ProvisioningIP:            "172.30.20.3",
+				ProvisioningNetworkCIDR:   "172.30.20.0/24",
+				ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
+				ProvisioningOSDownloadURL: "",
+				ProvisioningNetwork:       "Managed",
+			},
+			degradedReason: "Incorrect Config",
+			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "Incorrect Config", "Operator is Degraded"),
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, "ProvisioningOSDownloadURL is required but is empty", "Operator is Degraded while Progressing"),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
+			},
+			expectedDegradedMessage:    "Operator is Degraded",
+			expectedProgressingMessage: "Operator is Degraded while Progressing",
+			expectedMatch:              true,
+		},
+	}
+
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	co, _ := reconciler.createClusterOperator()
+	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+
+	for _, tc := range tCases {
+		baremetalCR.Spec = tc.spec
+		if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalCR); err != nil {
+			reconciler.updateCOStatusDegraded(tc.degradedReason, err.Error())
+		}
+		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+
+		for _, expectedCondition := range tc.expectedConditions {
+			ok := v1helpers.IsStatusConditionPresentAndEqual(
+				gotCO.Status.Conditions, expectedCondition.Type, expectedCondition.Status,
+			)
+			if !ok {
+				assert.Regexp(t, tc.expectedMatch, ok)
+			}
+		}
+		for _, condition := range gotCO.Status.Conditions {
+			if condition.Type == osconfigv1.OperatorDegraded {
+				assert.Regexp(t, condition.Reason, tc.degradedReason)
+				assert.Regexp(t, condition.Message, tc.expectedDegradedMessage)
+			}
+			if condition.Type == osconfigv1.OperatorProgressing {
+				assert.Contains(t, condition.Reason, "ProvisioningOSDownloadURL")
+				assert.Regexp(t, condition.Message, tc.expectedProgressingMessage)
+			}
+		}
 	}
 }
