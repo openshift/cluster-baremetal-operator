@@ -29,15 +29,16 @@ import (
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
 )
 
 const (
-	// Remove from here when this is brought in as part of baremetal_config.go
-	baremetalProvisioningCR = "provisioning-configuration"
 	// ComponentNamespace is namespace where CBO resides
 	ComponentNamespace = "openshift-machine-api"
 	// ComponentName is the full name of CBO
 	ComponentName = "cluster-baremetal-operator"
+	// BaremetalProvisioningCR is the name of the provisioning resource
+	BaremetalProvisioningCR = "provisioning-configuration"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
@@ -81,7 +82,7 @@ func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3io
 	ctx := context.Background()
 
 	// provisioning.metal3.io is a singleton
-	if req.Name != baremetalProvisioningCR {
+	if req.Name != BaremetalProvisioningCR {
 		r.Log.V(1).Info("ignoring invalid CR", "name", req.Name)
 		return nil, nil
 	}
@@ -128,6 +129,13 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Cannot proceed wtih metal3 deployment.
 		return ctrl.Result{}, nil
 	}
+	if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalConfig); err != nil {
+		// Provisioning configuration is not valid.
+		// Requeue request.
+		r.Log.Error(err, "invalid config in Provisioning CR")
+		return ctrl.Result{}, nil
+	}
+
 	return ctrl.Result{}, nil
 }
 

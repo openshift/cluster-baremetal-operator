@@ -110,14 +110,14 @@ func TestProvisioningCRName(t *testing.T) {
 	}{
 		{
 			name: "ValidNameAndCR",
-			req:  ctrl.Request{NamespacedName: types.NamespacedName{Name: baremetalProvisioningCR, Namespace: ""}},
+			req:  ctrl.Request{NamespacedName: types.NamespacedName{Name: BaremetalProvisioningCR, Namespace: ""}},
 			baremetalCR: &metal3iov1alpha1.Provisioning{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "Provisioning",
 					APIVersion: "v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: baremetalProvisioningCR,
+					Name: BaremetalProvisioningCR,
 				},
 			},
 			expectedError:  false,
@@ -125,7 +125,7 @@ func TestProvisioningCRName(t *testing.T) {
 		},
 		{
 			name:           "MissingCR",
-			req:            ctrl.Request{NamespacedName: types.NamespacedName{Name: baremetalProvisioningCR, Namespace: ""}},
+			req:            ctrl.Request{NamespacedName: types.NamespacedName{Name: BaremetalProvisioningCR, Namespace: ""}},
 			baremetalCR:    &metal3iov1alpha1.Provisioning{},
 			expectedError:  false,
 			expectedConfig: false,
