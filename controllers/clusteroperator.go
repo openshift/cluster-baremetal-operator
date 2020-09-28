@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/pkg/errors"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // StatusReason is a MixedCaps string representing the reason for a
@@ -77,8 +78,10 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, fmt.Sprintf("failed to create ClusterOperator %s",
+			clusterOperatorName))
 	}
+	r.Log.V(1).Info("created ClusterOperator", "name", clusterOperatorName)
 
 	co.Status = defaultCO.Status
 	return r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
@@ -87,8 +90,7 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 // getOrCreateClusterOperator gets the existing CO, failing which it creates a new CO.
 func (r *ProvisioningReconciler) getOrCreateClusterOperator() (*osconfigv1.ClusterOperator, error) {
 	existing, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
-	if errors.IsNotFound(err) {
-		r.Log.V(1).Info("cluster baremetal operator does not exist, creating a new one.")
+	if k8serrors.IsNotFound(err) {
 		return r.createClusterOperator()
 	}
 
