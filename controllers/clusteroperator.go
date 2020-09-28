@@ -149,3 +149,23 @@ func (r *ProvisioningReconciler) updateCOStatusDisabled() error {
 
 	return r.syncStatus(co, conds)
 }
+
+// updateCOStatusDegraded updates the ClusterOperator's Degraded
+// degradedReason should contain the current reason for the Operator to be marked in that state
+func (r *ProvisioningReconciler) updateCOStatusDegraded(degradedReason string, detailedError string) error {
+	degradedMessage := "Operator is Degraded"
+	progressingMessage := "Operator is Degraded while Progressing"
+
+	co, err := r.getOrCreateClusterOperator()
+	if err != nil {
+		return err
+	}
+
+	conds := []osconfigv1.ClusterOperatorStatusCondition{
+		setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, degradedReason, degradedMessage),
+		setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, detailedError, progressingMessage),
+		setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
+	}
+
+	return r.syncStatus(co, conds)
+}

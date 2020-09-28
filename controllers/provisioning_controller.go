@@ -17,6 +17,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -133,6 +134,11 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Provisioning configuration is not valid.
 		// Requeue request.
 		r.Log.Error(err, "invalid config in Provisioning CR")
+		err = r.updateCOStatusDegraded("invalid config in Provisioning CR", err.Error())
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+		// Temporarily not requeuing request
 		return ctrl.Result{}, nil
 	}
 
