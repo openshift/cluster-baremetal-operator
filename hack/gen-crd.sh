@@ -11,4 +11,4 @@ sed -i '/^    controller-gen.kubebuilder.io\/version: (devel)/d' config/crd/base
 # Copy crds into the manifests
 install_crd \
   "config/crd/bases/metal3.io_provisionings.yaml" \
-  "manifests/0000_30_cluster-baremetal-operator_00_metal3provisioning.crd.yaml"
+  "manifests/0000_31_cluster-baremetal-operator_00_metal3provisioning.crd.yaml"
