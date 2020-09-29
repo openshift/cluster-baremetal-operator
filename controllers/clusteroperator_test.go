@@ -1,7 +1,23 @@
+/*
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -46,14 +62,17 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 
 	for _, tc := range tCases {
 		reconciler.updateCOStatusDisabled()
-		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+		gotCO, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("unable to get clusteroperator: %v", err)
+		}
 
 		for _, expectedCondition := range tc.expectedConditions {
 			ok := v1helpers.IsStatusConditionPresentAndEqual(
 				gotCO.Status.Conditions, expectedCondition.Type, expectedCondition.Status,
 			)
 			if !ok {
-				assert.Regexp(t, tc.expected, ok)
+				assert.Equal(t, tc.expected, ok)
 			}
 		}
 	}
@@ -244,7 +263,11 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 		if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalCR); err != nil {
 			reconciler.updateCOStatusDegraded(tc.degradedReason, err.Error())
 		}
-		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+
+		gotCO, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("unable to get clusteroperator: %v", err)
+		}
 
 		for _, expectedCondition := range tc.expectedConditions {
 			ok := v1helpers.IsStatusConditionPresentAndEqual(
@@ -262,6 +285,56 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 			if condition.Type == osconfigv1.OperatorProgressing {
 				assert.Contains(t, condition.Reason, "ProvisioningOSDownloadURL")
 				assert.Regexp(t, condition.Message, tc.expectedProgressingMessage)
+			}
+		}
+	}
+}
+
+func TestUpdateCOStatusAvailable(t *testing.T) {
+	// Set dummy OperandVersion
+	os.Setenv("RELEASE_VERSION", "0.0.1")
+
+	tCases := []struct {
+		name               string
+		expectedConditions []osconfigv1.ClusterOperatorStatusCondition
+		expected           bool
+	}{
+		{
+			name: "Incorrect Condition",
+			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
+			},
+			expected: false,
+		},
+		{
+			name: "Correct Condition",
+			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
+			},
+			expected: true,
+		},
+	}
+
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	co, _ := reconciler.createClusterOperator()
+	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+
+	for _, tc := range tCases {
+		reconciler.updateCOStatusAvailable()
+
+		gotCO, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("unable to get clusteroperator: %v", err)
+		}
+
+		for _, expectedCondition := range tc.expectedConditions {
+			ok := v1helpers.IsStatusConditionPresentAndEqual(
+				gotCO.Status.Conditions, expectedCondition.Type, expectedCondition.Status,
+			)
+			if !ok {
+				assert.Equal(t, tc.expected, ok)
 			}
 		}
 	}

@@ -1,9 +1,25 @@
+/*
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -25,13 +41,13 @@ const (
 
 	// ReasonEmpty is an empty StatusReason
 	ReasonEmpty StatusReason = ""
-	// ReasonComplete is an empty StatusReason
+	// ReasonComplete signals status completion
 	ReasonComplete StatusReason = "DeployComplete"
-	// ReasonSyncing is an complete StatusReason
+	// ReasonSyncing indicates that we are currently syncing
 	ReasonSyncing StatusReason = "SyncingResources"
-	// ReasonSyncFailed is an failed StatusReason
+	// ReasonSyncFailed means we failed while syncing
 	ReasonSyncFailed StatusReason = "SyncingFailed"
-	// ReasonUnsupported is an unsupported StatusReason
+	// ReasonUnsupported means we have an unsupported platform
 	ReasonUnsupported StatusReason = "UnsupportedPlatform"
 )
 
@@ -114,11 +130,14 @@ func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 	}
 }
 
-// getOperandVersions returns current version
-func getOperandVersions() []osconfigv1.OperandVersion {
+// getOperandVersions returns the operand version
+func (r *ProvisioningReconciler) getOperandVersions() []osconfigv1.OperandVersion {
 	operandVersions := []osconfigv1.OperandVersion{}
 	if releaseVersion := os.Getenv("RELEASE_VERSION"); len(releaseVersion) > 0 {
 		operandVersions = append(operandVersions, osconfigv1.OperandVersion{Name: "operator", Version: releaseVersion})
+	} else {
+		err := fmt.Errorf("env variable: RELEASE_VERSION was not set")
+		r.Log.Error(err, "failed to get OperandVersion")
 	}
 	return operandVersions
 }
@@ -167,6 +186,34 @@ func (r *ProvisioningReconciler) updateCOStatusDegraded(degradedReason string, d
 		setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, degradedReason, degradedMessage),
 		setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, detailedError, progressingMessage),
 		setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
+	}
+
+	return r.syncStatus(co, conds)
+}
+
+// updateCOStatusAvailable updates the ClusterOperator's status to Available
+func (r *ProvisioningReconciler) updateCOStatusAvailable() error {
+	co, err := r.getOrCreateClusterOperator()
+	if err != nil {
+		return err
+	}
+
+	// Write the operand versions when available
+	co.Status.Versions = r.getOperandVersions()
+
+	versionsOutput := []string{}
+	for _, operand := range co.Status.Versions {
+		versionsOutput = append(versionsOutput, fmt.Sprintf("%s: %s", operand.Name, operand.Version))
+	}
+	versions := strings.Join(versionsOutput, ", ")
+
+	conds := []osconfigv1.ClusterOperatorStatusCondition{
+		setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty),
+			fmt.Sprintf("Cluster Baremetal Operator is available at %s", versions)),
+		setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
+		setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+		setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+		setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 	}
 
 	return r.syncStatus(co, conds)

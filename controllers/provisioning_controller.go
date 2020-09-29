@@ -109,11 +109,16 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// set ClusterOperator status to disabled=true, available=true
 		err = r.updateCOStatusDisabled()
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %v", clusterOperatorName, err)
 		}
 
 		// We're disabled; don't requeue
 		return ctrl.Result{}, nil
+	}
+	// set ClusterOperator status to disabled=false, available=true
+	err = r.updateCOStatusAvailable()
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
 	}
 
 	baremetalConfig, err := r.readProvisioningCR(req)
