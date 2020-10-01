@@ -1,8 +1,10 @@
 package provisioning
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,22 +14,31 @@ import (
 const testNamespace = "test-namespce"
 
 func TestGenerateRandomPassword(t *testing.T) {
-	pwd, err := generateRandomPassword()
+	pwd1, err := generateRandomPassword()
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Errorf("Unexpected error while generating random password: %s", err)
 	}
-	if pwd == "" {
+	if pwd1 == "" {
 		t.Errorf("Expected a valid string but got null")
+	}
+	pwd2, err := generateRandomPassword()
+	if err != nil {
+		t.Errorf("Unexpected error while re-generating random password: %s", err)
+	} else {
+		assert.False(t, pwd1 == pwd2, "regenerated random password should not match pervious one")
 	}
 }
 
-//Testing the case where the password already exists
+// Testing the case where the Mariadb password already exists
+// First we create a Mariadb Password using the method being tested.
+// Then we attenpt to create it again by calling the method again.
+// Instead of creating a new one, it should return the pre-existing secret
 func TestCreateMariadbPasswordSecret(t *testing.T) {
 	kubeClient := fakekube.NewSimpleClientset(nil...)
 	client := kubeClient.CoreV1()
 
 	// First create a mariadb password secret
-	if err := createMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace); err != nil {
+	if err := CreateMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace); err != nil {
 		t.Fatalf("Failed to create first Mariadb password. %s ", err)
 	}
 	// Read and get Mariadb password from Secret just created.
@@ -41,7 +52,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 	}
 
 	// The pasword definitely exists. Try creating again.
-	if err := createMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace); err != nil {
+	if err := CreateMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace); err != nil {
 		t.Fatal("Failure creating second Mariadb password.")
 	}
 	newMariadbPassword, err := client.Secrets(testNamespace).Get(context.Background(), baremetalSecretName, metav1.GetOptions{})
@@ -59,29 +70,38 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 	}
 }
 
-func TestCreateMetal3PasswordSecrets(t *testing.T) {
+func TestCreateIronicPasswordSecret(t *testing.T) {
 	kubeClient := fakekube.NewSimpleClientset(nil...)
 	client := kubeClient.CoreV1()
 
-	err := CreateMetal3PasswordSecrets(client, testNamespace)
+	err := CreateIronicPasswordSecret(client, testNamespace)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	// Check if Mariadb password exists
-	_, err = client.Secrets(testNamespace).Get(context.Background(), baremetalSecretName, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		t.Errorf("Error creating Mariadb password.")
-	}
 	// Check if Ironic secret exits
-	_, err = client.Secrets(testNamespace).Get(context.Background(), ironicSecretName, metav1.GetOptions{})
+	secret, err := client.Secrets(testNamespace).Get(context.Background(), ironicSecretName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		t.Errorf("Error creating Ironic secret.")
 	}
+	assert.True(t, strings.Compare(secret.StringData[ironicUsernameKey], ironicUsername) == 0, "ironic password created incorrectly")
+	return
+}
+
+func TestCreateInspectorPasswordSecret(t *testing.T) {
+	kubeClient := fakekube.NewSimpleClientset(nil...)
+	client := kubeClient.CoreV1()
+
+	err := CreateInspectorPasswordSecret(client, testNamespace)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
 	// Check if Ironic Inspector secret exits
-	_, err = client.Secrets(testNamespace).Get(context.Background(), inspectorSecretName, metav1.GetOptions{})
+	secret, err := client.Secrets(testNamespace).Get(context.Background(), inspectorSecretName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		t.Errorf("Error creating Ironic Inspector secret.")
 	}
+	assert.True(t, strings.Compare(secret.StringData[ironicUsernameKey], inspectorUsername) == 0, "inspector password created incorrectly")
 	return
 }

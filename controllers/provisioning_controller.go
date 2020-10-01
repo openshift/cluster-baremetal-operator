@@ -141,8 +141,14 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 	//Create Secrets needed for Metal3 deployment
-	if err := provisioning.CreateMetal3PasswordSecrets(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "unable to create one or more Secrets")
+	if err := provisioning.CreateMariadbPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create Mariadb password")
+	}
+	if err := provisioning.CreateIronicPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create Ironic password")
+	}
+	if err := provisioning.CreateInspectorPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
 	}
 
 	return ctrl.Result{}, nil

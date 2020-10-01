@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -45,7 +44,8 @@ func generateRandomPassword() (string, error) {
 	return string(buf), nil
 }
 
-func createMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
+// CreateMariadbPasswordSecret creates a Secret for Mariadb password
+func CreateMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
 	_, err := client.Secrets(targetNamespace).Get(context.Background(), baremetalSecretName, metav1.GetOptions{})
 	if !apierrors.IsNotFound(err) {
 		return err
@@ -72,7 +72,17 @@ func createMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamesp
 	return err
 }
 
-func createIronicPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, name string, username string, configSection string) error {
+// CreateIronicPasswordSecret creates a Secret for the Ironic Password
+func CreateIronicPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
+	return createIronicSecret(client, targetNamespace, ironicSecretName, ironicUsername, "ironic")
+}
+
+// CreateInspectorPasswordSecret creates a Secret for the Ironic Inspector Password
+func CreateInspectorPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
+	return createIronicSecret(client, targetNamespace, inspectorSecretName, inspectorUsername, "inspector")
+}
+
+func createIronicSecret(client coreclientv1.SecretsGetter, targetNamespace string, name string, username string, configSection string) error {
 	_, err := client.Secrets(targetNamespace).Get(context.Background(), name, metav1.GetOptions{})
 	if !apierrors.IsNotFound(err) {
 		return err
@@ -122,18 +132,4 @@ password = %s
 		metav1.CreateOptions{},
 	)
 	return err
-}
-
-// CreateMetal3PasswordSecrets creates all Secrets that a metal3 pod would need
-func CreateMetal3PasswordSecrets(client coreclientv1.SecretsGetter, targetNamespace string) error {
-	if err := createMariadbPasswordSecret(client, targetNamespace); err != nil {
-		return errors.Wrap(err, "failed to create Mariadb password")
-	}
-	if err := createIronicPasswordSecret(client, targetNamespace, ironicSecretName, ironicUsername, "ironic"); err != nil {
-		return errors.Wrap(err, "failed to create Ironic password")
-	}
-	if err := createIronicPasswordSecret(client, targetNamespace, inspectorSecretName, inspectorUsername, "inspector"); err != nil {
-		return errors.Wrap(err, "failed to create Ironic Inspector password")
-	}
-	return nil
 }
