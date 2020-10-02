@@ -29,7 +29,7 @@ var (
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
 func ValidateBaremetalProvisioningConfig(prov *metal3iov1alpha1.Provisioning) error {
 	provisioningNetworkMode := getProvisioningNetworkMode(prov)
-	log.V(1).Info("Final Provisioning Network", "Mode", provisioningNetworkMode)
+	log.V(1).Info("provisioning network", "mode", provisioningNetworkMode)
 	switch provisioningNetworkMode {
 	case metal3iov1alpha1.ProvisioningNetworkManaged:
 		return validateManagedConfig(prov)
@@ -47,10 +47,11 @@ func getProvisioningNetworkMode(prov *metal3iov1alpha1.Provisioning) metal3iov1a
 		// Set it to the default Managed mode
 		provisioningNetworkMode = metal3iov1alpha1.ProvisioningNetworkManaged
 		if prov.Spec.ProvisioningDHCPExternal {
-			log.V(1).Info("ProvisioningDHCPExternal is being deprecated in favor of ProvisioningNetwork and will be removed in the next release")
+			log.V(1).Info("provisioningDHCPExternal is deprecated and will be removed in the next release. Use provisioningNetwork instead.")
 			provisioningNetworkMode = metal3iov1alpha1.ProvisioningNetworkUnmanaged
+		} else {
+			log.V(1).Info("provisioningNetwork and provisioningDHCPExternal not set, defaulting to managed network")
 		}
-		log.V(1).Info("ProvisioningNetwork config not provided. Using ProvisioningDHCPExternal to set its value")
 	}
 	return provisioningNetworkMode
 }

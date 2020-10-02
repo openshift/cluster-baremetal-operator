@@ -64,11 +64,8 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 		Name: "cluster",
 	}, infra)
 	if err != nil {
-		r.Log.Error(err, "unable to determine Platform")
-		return false, err
+		return false, errors.Wrap(err, "unable to determine Platform")
 	}
-
-	r.Log.V(1).Info("reconciling", "platform", infra.Status.Platform)
 
 	// Disable ourselves on platforms other than bare metal
 	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
@@ -76,6 +73,7 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 		return false, nil
 	}
 
+	r.Log.V(1).Info("enabled", "platform", infra.Status.Platform)
 	return true, nil
 }
 
@@ -91,11 +89,9 @@ func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3io
 	instance := &metal3iov1alpha1.Provisioning{}
 	if err := r.Client.Get(ctx, req.NamespacedName, instance); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.Log.V(1).Info("Provisioning CR not found")
 			return nil, nil
 		}
-		r.Log.Error(err, "unable to read Provisioning CR")
-		return nil, err
+		return nil, errors.Wrap(err, "unable to read Provisioning CR")
 	}
 	return instance, nil
 }
@@ -128,6 +124,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if baremetalConfig == nil {
 		// Provisioning configuration not available at this time.
 		// Cannot proceed wtih metal3 deployment.
+		r.Log.V(1).Info("Provisioning CR not found")
 		return ctrl.Result{}, nil
 	}
 	if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalConfig); err != nil {
