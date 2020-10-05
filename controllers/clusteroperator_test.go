@@ -60,8 +60,6 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 }
 
 func TestGetOrCreateClusterOperator(t *testing.T) {
-	var namespace = "openshift-machine-api"
-
 	var defaultConditions = []osconfigv1.ClusterOperatorStatusCondition{
 		setStatusCondition(
 			osconfigv1.OperatorProgressing,
@@ -126,14 +124,8 @@ func TestGetOrCreateClusterOperator(t *testing.T) {
 					Name: clusterOperatorName,
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
-					Conditions: defaultConditions,
-					RelatedObjects: []osconfigv1.ObjectReference{
-						{
-							Group:    "",
-							Resource: "namespaces",
-							Name:     namespace,
-						},
-					},
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
 				},
 			},
 		},

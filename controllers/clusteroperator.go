@@ -56,6 +56,12 @@ func relatedObjects() []osconfigv1.ObjectReference {
 			Resource: "namespaces",
 			Name:     ComponentNamespace,
 		},
+		{
+			Group:     "metal3.io",
+			Resource:  "baremetalhosts",
+			Name:      "baremetalhosts.metal3.io",
+			Namespace: ComponentNamespace,
+		},
 	}
 }
 
