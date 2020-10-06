@@ -2,41 +2,37 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	configv1 "github.com/openshift/api/config/v1"
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
+	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
+
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
-	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
 func TestUpdateCOStatusDisabled(t *testing.T) {
 	tCases := []struct {
 		name               string
 		expectedConditions []osconfigv1.ClusterOperatorStatusCondition
-		expected           bool
 	}{
-		{
-			name: "Incorrect Condition",
-			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
-				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, "", ""),
-			},
-			expected: false,
-		},
 		{
 			name: "Correct Condition",
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, "", ""),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, "UnsupportedPlatform", "Operator is non-functional"),
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
 			},
-			expected: true,
 		},
 	}
 
@@ -45,19 +41,15 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {
-		err := reconciler.updateCOStatusDisabled()
+		err := reconciler.updateCOStatus(ReasonUnsupported, "Operator is non-functional", "")
 		if err != nil {
 			t.Error(err)
 		}
 		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
-		for _, expectedCondition := range tc.expectedConditions {
-			ok := v1helpers.IsStatusConditionPresentAndEqual(
-				gotCO.Status.Conditions, expectedCondition.Type, expectedCondition.Status,
-			)
-			if !ok {
-				assert.Regexp(t, tc.expected, ok)
-			}
+		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
+		if diff != "" {
+			t.Fatal(diff)
 		}
 	}
 }
@@ -187,6 +179,37 @@ func normalizeTransitionTimes(got, expected osconfigv1.ClusterOperatorStatus) {
 	}
 }
 
+// getStatusConditionsDiff this is based on v1helpers.GetStatusDiff except it
+// is focused on comparing the conditions better and nothing else.
+func getStatusConditionsDiff(oldConditions []configv1.ClusterOperatorStatusCondition, newConditions []configv1.ClusterOperatorStatusCondition) string {
+	messages := []string{}
+	for _, newCondition := range newConditions {
+		existingStatusCondition := v1helpers.FindStatusCondition(oldConditions, newCondition.Type)
+		if existingStatusCondition == nil {
+			messages = append(messages, fmt.Sprintf("%s set to %s (%q)", newCondition.Type, newCondition.Status, newCondition.Message))
+			continue
+		}
+		if existingStatusCondition.Status != newCondition.Status {
+			messages = append(messages, fmt.Sprintf("%s changed from %s to %s (%q)", existingStatusCondition.Type, existingStatusCondition.Status, newCondition.Status, newCondition.Message))
+			continue
+		}
+		if existingStatusCondition.Message != newCondition.Message {
+			messages = append(messages, fmt.Sprintf("%s message changed from %q to %q", existingStatusCondition.Type, existingStatusCondition.Message, newCondition.Message))
+		}
+		if existingStatusCondition.Reason != newCondition.Reason {
+			messages = append(messages, fmt.Sprintf("%s reason changed from %q to %q", existingStatusCondition.Type, existingStatusCondition.Reason, newCondition.Reason))
+		}
+	}
+	for _, oldCondition := range oldConditions {
+		// This should not happen. It means we removed old condition entirely instead of just changing its status
+		if c := v1helpers.FindStatusCondition(newConditions, oldCondition.Type); c == nil {
+			messages = append(messages, fmt.Sprintf("%s was removed", oldCondition.Type))
+		}
+	}
+
+	return strings.Join(messages, ",")
+}
+
 func TestUpdateCOStatusDegraded(t *testing.T) {
 	baremetalCR := &metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
@@ -199,13 +222,9 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 	}
 
 	tCases := []struct {
-		name                       string
-		spec                       metal3iov1alpha1.ProvisioningSpec
-		degradedReason             string
-		expectedConditions         []osconfigv1.ClusterOperatorStatusCondition
-		expectedDegradedMessage    string
-		expectedProgressingMessage string
-		expectedMatch              bool
+		name               string
+		spec               metal3iov1alpha1.ProvisioningSpec
+		expectedConditions []osconfigv1.ClusterOperatorStatusCondition
 	}{
 		{
 			name: "Incorrect Config",
@@ -217,16 +236,13 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 				ProvisioningOSDownloadURL: "",
 				ProvisioningNetwork:       "Managed",
 			},
-			degradedReason: "Incorrect Config",
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
-				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "Incorrect Config", "Operator is Degraded"),
-				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, "ProvisioningOSDownloadURL is required but is empty", "Operator is Degraded while Progressing"),
-				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "InvalidConfiguration", "ProvisioningOSDownloadURL is required but is empty"),
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, "InvalidConfiguration", "Unable to apply Provisioning CR: invalid configuration"),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
+				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
 				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 			},
-			expectedDegradedMessage:    "Operator is Degraded",
-			expectedProgressingMessage: "Operator is Degraded while Progressing",
-			expectedMatch:              true,
 		},
 	}
 
@@ -237,30 +253,16 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 	for _, tc := range tCases {
 		baremetalCR.Spec = tc.spec
 		if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalCR); err != nil {
-			err = reconciler.updateCOStatusDegraded(tc.degradedReason, err.Error())
+			err = reconciler.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
 			if err != nil {
 				t.Error(err)
 			}
 		}
 		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
-		for _, expectedCondition := range tc.expectedConditions {
-			ok := v1helpers.IsStatusConditionPresentAndEqual(
-				gotCO.Status.Conditions, expectedCondition.Type, expectedCondition.Status,
-			)
-			if !ok {
-				assert.Regexp(t, tc.expectedMatch, ok)
-			}
-		}
-		for _, condition := range gotCO.Status.Conditions {
-			if condition.Type == osconfigv1.OperatorDegraded {
-				assert.Regexp(t, condition.Reason, tc.degradedReason)
-				assert.Regexp(t, condition.Message, tc.expectedDegradedMessage)
-			}
-			if condition.Type == osconfigv1.OperatorProgressing {
-				assert.Contains(t, condition.Reason, "ProvisioningOSDownloadURL")
-				assert.Regexp(t, condition.Message, tc.expectedProgressingMessage)
-			}
+		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
+		if diff != "" {
+			t.Fatal(diff)
 		}
 	}
 }

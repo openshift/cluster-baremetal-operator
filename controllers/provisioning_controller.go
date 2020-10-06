@@ -112,7 +112,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 	if !enabled {
 		// set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatusDisabled()
+		err = r.updateCOStatus(ReasonUnsupported, "Operator is non-functional", "")
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -136,7 +136,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Provisioning configuration is not valid.
 		// Requeue request.
 		r.Log.Error(err, "invalid config in Provisioning CR")
-		err = r.updateCOStatusDegraded("invalid config in Provisioning CR", err.Error())
+		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
 		}
@@ -151,7 +151,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Provisioning configuration is not valid.
 		// Requeue request.
 		r.Log.Error(err, "invalid contents in images Config Map")
-		co_err := r.updateCOStatusDegraded("invalid contents in images Config Map", err.Error())
+		co_err := r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "invalid contents in images Config Map")
 		if co_err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, co_err)
 		}
