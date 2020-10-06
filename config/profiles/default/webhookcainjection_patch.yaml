@@ -1,15 +1,22 @@
-# This patch add annotation to admission webhook config and
-# the variables $(CERTIFICATE_NAMESPACE) and $(CERTIFICATE_NAME) will be substituted by kustomize.
-apiVersion: admissionregistration.k8s.io/v1beta1
-kind: MutatingWebhookConfiguration
-metadata:
-  name: mutating-webhook-configuration
-  annotations:
-    cert-manager.io/inject-ca-from: $(CERTIFICATE_NAMESPACE)/$(CERTIFICATE_NAME)
----
+# This patch add annotation to admission webhook config
+#apiVersion: admissionregistration.k8s.io/v1beta1
+#kind: MutatingWebhookConfiguration
+#metadata:
+#  name: mutating-webhook-configuration
+#  annotations:
+#    service.beta.openshift.io/inject-cabundle: "true"
+#---
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: ValidatingWebhookConfiguration
 metadata:
   name: validating-webhook-configuration
   annotations:
-    cert-manager.io/inject-ca-from: $(CERTIFICATE_NAMESPACE)/$(CERTIFICATE_NAME)
+    service.beta.openshift.io/inject-cabundle: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster-baremetal-webhook-service
+  namespace: openshift-machine-api
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: cluster-baremetal-webhook-server-cert

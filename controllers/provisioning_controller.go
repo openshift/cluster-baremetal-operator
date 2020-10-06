@@ -18,6 +18,8 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/stew/slice"
@@ -46,8 +48,6 @@ const (
 	ComponentNamespace = "openshift-machine-api"
 	// ComponentName is the full name of CBO
 	ComponentName = "cluster-baremetal-operator"
-	// BaremetalProvisioningCR is the name of the provisioning resource
-	BaremetalProvisioningCR = "provisioning-configuration"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
@@ -61,6 +61,7 @@ type ProvisioningReconciler struct {
 	KubeClient     kubernetes.Interface
 	ReleaseVersion string
 	ImagesFilename string
+	WebHookEnabled bool
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -82,6 +83,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;update;patch;create
 
 func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	ctx := context.Background()
@@ -99,16 +101,12 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	return true, nil
 }
 
-func (r *ProvisioningReconciler) readProvisioningCR(namespacedName types.NamespacedName) (*metal3iov1alpha1.Provisioning, error) {
+func (r *ProvisioningReconciler) readProvisioningCR() (*metal3iov1alpha1.Provisioning, error) {
 	ctx := context.Background()
 
-	// provisioning.metal3.io is a singleton
-	if namespacedName.Name != BaremetalProvisioningCR {
-		klog.Info("ignoring invalid CR", "name", namespacedName.Name)
-		return nil, nil
-	}
 	// Fetch the Provisioning instance
 	instance := &metal3iov1alpha1.Provisioning{}
+	namespacedName := types.NamespacedName{Name: metal3iov1alpha1.ProvisioningSingletonName, Namespace: ""}
 	if err := r.Client.Get(ctx, namespacedName, instance); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, nil
@@ -121,12 +119,29 @@ func (r *ProvisioningReconciler) readProvisioningCR(namespacedName types.Namespa
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	//log := r.Log.WithValues("provisioning", req.NamespacedName)
+	// provisioning.metal3.io is a singleton
+	// Note: this check is here to make sure that the early startup configuration
+	// is correct. For day 2 operatations the webhook will validate this.
+	if req.Name != metal3iov1alpha1.ProvisioningSingletonName {
+		klog.Info("ignoring invalid CR", "name", req.Name)
+		return ctrl.Result{}, nil
+	}
 
 	// Make sure ClusterOperator exists
 	err := r.ensureClusterOperator(nil)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	result := ctrl.Result{}
+	if !r.WebHookEnabled {
+		if provisioning.WebhookDependenciesReady(r.OSClient) {
+			klog.Info("restarting to enable the webhook")
+			os.Exit(1)
+		}
+		// Keep checking for our webhook dependencies to be ready, so we can
+		// enable the webhook.
+		result.RequeueAfter = 5 * time.Minute
 	}
 
 	enabled, err := r.isEnabled()
@@ -141,7 +156,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			"unable to put %q ClusterOperator in Disabled state", clusterOperatorName)
 	}
 
-	baremetalConfig, err := r.readProvisioningCR(req.NamespacedName)
+	baremetalConfig, err := r.readProvisioningCR()
 	if err != nil {
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
@@ -150,7 +165,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Provisioning configuration not available at this time.
 		// Cannot proceed wtih metal3 deployment.
 		klog.Info("Provisioning CR not found")
-		return ctrl.Result{}, nil
+		return result, nil
 	}
 
 	// Make sure ClusterOperator's ownership is updated
@@ -196,7 +211,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 	if deleted {
-		return ctrl.Result{}, errors.Wrapf(
+		return result, errors.Wrapf(
 			r.updateCOStatus(ReasonComplete, "all Metal3 resources deleted", ""),
 			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
 	}
@@ -219,7 +234,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 		// Temporarily not requeuing request
-		return ctrl.Result{}, nil
+		return result, nil
 	}
 
 	//Create Secrets needed for Metal3 deployment
@@ -248,8 +263,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			return ctrl.Result{}, err
 		}
 		if updated {
-			err = r.Client.Status().Update(context.Background(), baremetalConfig)
-			return ctrl.Result{Requeue: true}, err
+			return result, r.Client.Status().Update(context.Background(), baremetalConfig)
 		}
 	}
 
@@ -299,7 +313,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return result, nil
 }
 
 func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, proxy *osconfigv1.Proxy) *provisioning.ProvisioningInfo {
@@ -390,8 +404,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// If Platform is BareMetal, we could still be missing the Provisioning CR
 	if enabled {
-		namespacedName := types.NamespacedName{Name: BaremetalProvisioningCR}
-		baremetalConfig, err := r.readProvisioningCR(namespacedName)
+		baremetalConfig, err := r.readProvisioningCR()
 		if err != nil || baremetalConfig == nil {
 			err = r.updateCOStatus(ReasonComplete, "Provisioning CR not found on BareMetal Platform; marking operator as available", "")
 			if err != nil {

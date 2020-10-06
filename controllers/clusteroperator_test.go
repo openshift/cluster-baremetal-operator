@@ -232,7 +232,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 					APIVersion: "v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: BaremetalProvisioningCR,
+					Name: metal3iov1alpha1.ProvisioningSingletonName,
 				},
 			})
 			if err != nil {
@@ -302,7 +302,7 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: BaremetalProvisioningCR,
+			Name: metal3iov1alpha1.ProvisioningSingletonName,
 		},
 	}
 

@@ -33,6 +33,9 @@ const (
 
 	// ProvisioningFinalizer is required for proper handling of deletion
 	ProvisioningFinalizer = "provisioning.metal3.io"
+
+	// ProvisioningSingletonName is the name of the provisioning resource
+	ProvisioningSingletonName = "provisioning-configuration"
 )
 
 // ProvisioningSpec defines the desired state of Provisioning
