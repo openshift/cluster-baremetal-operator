@@ -28,6 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	metaliov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -51,6 +52,7 @@ func init() {
 		setupLog.Error(err, "Error adding k8s client to scheme.")
 		os.Exit(1)
 	}
+	_ = metaliov1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 	// The following is needed to read the Infrastructure CR
 	if err := osconfigv1.Install(scheme); err != nil {
@@ -94,6 +96,10 @@ func main() {
 		EventRecorder: recorder,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Provisioning")
+		os.Exit(1)
+	}
+	if err = (&metaliov1alpha1.Provisioning{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "Provisioning")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
