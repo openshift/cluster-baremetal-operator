@@ -18,8 +18,9 @@ package provisioning
 import (
 	"fmt"
 
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 var (

@@ -12,6 +12,11 @@ GOBIN=$(shell go env GOPATH)/bin
 else
 GOBIN=$(shell go env GOBIN)
 endif
+ifeq (/,${HOME})
+GOLANGCI_LINT_CACHE=/tmp/golangci-lint-cache/
+else
+GOLANGCI_LINT_CACHE=${HOME}/.cache/golangci-lint
+endif
 
 # Set VERBOSE to -v to make tests produce more output
 VERBOSE ?= ""
@@ -19,18 +24,18 @@ VERBOSE ?= ""
 all: manager
 
 # Run tests
-test: generate fmt vet manifests
+test: generate lint manifests
 	go test $(VERBOSE) ./... -coverprofile cover.out
 
 # Alias for CI
 unit: test
 
 # Build manager binary
-manager: generate fmt vet
+manager: generate lint
 	go build -o bin/manager main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet manifests
+run: generate lint manifests
 	go run ./main.go
 
 # Install CRDs into a cluster
@@ -48,24 +53,30 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
-manifests: 
+manifests:
 	hack/gen-crd.sh
 
 # Run go fmt against code
+.PHONY: fmt
 fmt:
-	hack/go-fmt.sh
 
 # Run go lint against code
-lint:
-	golint -set_exit_status -min_confidence 0.3 $(shell go list -f '{{ .ImportPath }}' ./...)
+.PHONY: lint
+lint: $(GOBIN)/golangci-lint
+	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOBIN)/golangci-lint run
+
+$(GOBIN)/golangci-lint:
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) v1.31.0
 
 # Run go vet against code
-vet:
-	go vet ./...
+.PHONY: vet
+vet: lint
 
 # Generate code
-generate: 
+.PHONY: generate
+generate: $(GOBIN)/golangci-lint
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
+	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOBIN)/golangci-lint run --fix
 
 # Build the docker image
 docker-build: test
@@ -75,7 +86,7 @@ docker-build: test
 docker-push:
 	docker push ${IMG}
 
-vendor: vet
+vendor: lint
 	go mod tidy
 	go mod vendor
 	go mod verify
