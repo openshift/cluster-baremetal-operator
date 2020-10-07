@@ -19,8 +19,8 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	// we need to add the openshift/api to the scheme to be able to read
 	// the infrastructure CR
-	configv1.Install(scheme)
-	metal3iov1alpha1.AddToScheme(scheme)
+	_ = configv1.Install(scheme)
+	_ = metal3iov1alpha1.AddToScheme(scheme)
 	return scheme
 }
 

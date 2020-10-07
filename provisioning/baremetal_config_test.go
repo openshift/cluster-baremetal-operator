@@ -19,9 +19,10 @@ import (
 	"strings"
 	"testing"
 
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 const testBaremetalProvisioningCR = "test-provisioning-configuration"

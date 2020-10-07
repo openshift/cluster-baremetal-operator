@@ -3,14 +3,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/pkg/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // StatusReason is a MixedCaps string representing the reason for a
@@ -112,15 +111,6 @@ func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 		Reason:             reason,
 		Message:            message,
 	}
-}
-
-// getOperandVersions returns current version
-func getOperandVersions() []osconfigv1.OperandVersion {
-	operandVersions := []osconfigv1.OperandVersion{}
-	if releaseVersion := os.Getenv("RELEASE_VERSION"); len(releaseVersion) > 0 {
-		operandVersions = append(operandVersions, osconfigv1.OperandVersion{Name: "operator", Version: releaseVersion})
-	}
-	return operandVersions
 }
 
 //syncStatus applies the new condition to the CBO ClusterOperator object.

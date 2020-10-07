@@ -45,7 +45,10 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {
-		reconciler.updateCOStatusDisabled()
+		err := reconciler.updateCOStatusDisabled()
+		if err != nil {
+			t.Error(err)
+		}
 		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
 		for _, expectedCondition := range tc.expectedConditions {
@@ -242,7 +245,10 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 	for _, tc := range tCases {
 		baremetalCR.Spec = tc.spec
 		if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalCR); err != nil {
-			reconciler.updateCOStatusDegraded(tc.degradedReason, err.Error())
+			err = reconciler.updateCOStatusDegraded(tc.degradedReason, err.Error())
+			if err != nil {
+				t.Error(err)
+			}
 		}
 		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
