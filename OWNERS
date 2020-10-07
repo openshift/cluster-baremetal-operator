@@ -9,3 +9,7 @@ approvers:
  - zaneb
  - kirankt
  - andfasano
+
+# Bugzilla Information
+component: "Bare Metal Hardware Provisioning"
+subcomponent: "cluster-baremetal-operator"
