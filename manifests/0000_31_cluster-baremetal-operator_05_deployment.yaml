@@ -21,6 +21,7 @@ spec:
       serviceAccountName: cluster-baremetal-operator
       containers:
       - name: cluster-baremetal-operator
+        image: registry.svc.ci.openshift.org/openshift:cluster-baremetal-operator
         env:
         - name: RELEASE_VERSION
           value: "0.0.1-snapshot"
