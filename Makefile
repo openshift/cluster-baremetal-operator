@@ -63,7 +63,7 @@ fmt:
 # Run go lint against code
 .PHONY: lint
 lint: $(GOBIN)/golangci-lint
-	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOBIN)/golangci-lint run
+	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOBIN)/golangci-lint run --exclude=G101
 
 $(GOBIN)/golangci-lint:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) v1.31.0
@@ -76,7 +76,7 @@ vet: lint
 .PHONY: generate
 generate: $(GOBIN)/golangci-lint
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
-	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOBIN)/golangci-lint run --fix
+	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOBIN)/golangci-lint run --fix --exclude=G101
 
 # Build the docker image
 docker-build: test
