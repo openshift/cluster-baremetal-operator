@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,6 +51,7 @@ type ProvisioningReconciler struct {
 	Scheme        *runtime.Scheme
 	Log           logr.Logger
 	OSClient      osclientset.Interface
+	kubeClient    kubernetes.Interface
 	EventRecorder record.EventRecorder
 }
 
@@ -137,6 +139,16 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		}
 		// Temporarily not requeuing request
 		return ctrl.Result{}, nil
+	}
+	//Create Secrets needed for Metal3 deployment
+	if err := provisioning.CreateMariadbPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create Mariadb password")
+	}
+	if err := provisioning.CreateIronicPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create Ironic password")
+	}
+	if err := provisioning.CreateInspectorPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
 	}
 
 	return ctrl.Result{}, nil
