@@ -71,6 +71,11 @@ func main() {
 		o.Development = true
 	}))
 
+	releaseVersion := os.Getenv("RELEASE_VERSION")
+	if releaseVersion == "" {
+		ctrl.Log.Info("Environment variable RELEASE_VERSION not provided")
+	}
+
 	config := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:             scheme,
@@ -87,11 +92,12 @@ func main() {
 	recorder := record.NewBroadcaster().NewRecorder(clientgoscheme.Scheme, v1.EventSource{Component: controllers.ComponentName})
 
 	if err = (&controllers.ProvisioningReconciler{
-		Client:        mgr.GetClient(),
-		Log:           ctrl.Log.WithName("controllers").WithName("Provisioning"),
-		Scheme:        mgr.GetScheme(),
-		OSClient:      osClient,
-		EventRecorder: recorder,
+		Client:         mgr.GetClient(),
+		Log:            ctrl.Log.WithName("controllers").WithName("Provisioning"),
+		Scheme:         mgr.GetScheme(),
+		OSClient:       osClient,
+		EventRecorder:  recorder,
+		ReleaseVersion: releaseVersion,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Provisioning")
 		os.Exit(1)

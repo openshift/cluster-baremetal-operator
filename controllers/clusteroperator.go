@@ -64,6 +64,21 @@ func relatedObjects() []osconfigv1.ObjectReference {
 	}
 }
 
+// operandVersions returns the current list of OperandVersions for the
+// ClusterOperator objects's status.
+func (r *ProvisioningReconciler) operandVersions() []osconfigv1.OperandVersion {
+	operandVersions := []osconfigv1.OperandVersion{}
+
+	if r.ReleaseVersion != "" {
+		operandVersions = append(operandVersions, osconfigv1.OperandVersion{
+			Name:    "operator",
+			Version: r.ReleaseVersion,
+		})
+	}
+
+	return operandVersions
+}
+
 // createClusterOperator creates the ClusterOperator and updates its status.
 func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOperator, error) {
 	defaultCO := &osconfigv1.ClusterOperator{
@@ -77,9 +92,9 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 		Status: osconfigv1.ClusterOperatorStatus{
 			Conditions:     defaultStatusConditions(),
 			RelatedObjects: relatedObjects(),
+			Versions:       r.operandVersions(),
 		},
 	}
-	//operatorv1helpers.SetOperandVersion(&defaultCO.Status.Versions, osconfigv1.OperandVersion{Name: "operator", Version: os.Getenv("RELEASE_VERSION")})
 
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
 	if err != nil {

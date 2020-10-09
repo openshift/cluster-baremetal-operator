@@ -47,12 +47,13 @@ const (
 type ProvisioningReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	Client        client.Client
-	Scheme        *runtime.Scheme
-	Log           logr.Logger
-	OSClient      osclientset.Interface
-	kubeClient    kubernetes.Interface
-	EventRecorder record.EventRecorder
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	Log            logr.Logger
+	OSClient       osclientset.Interface
+	EventRecorder  record.EventRecorder
+	kubeClient     kubernetes.Interface
+	ReleaseVersion string
 }
 
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
