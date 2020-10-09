@@ -36,6 +36,10 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        volumeMounts:
+        - name: images
+        mountPath: /etc/cluster-baremetal-operator/images
+        readOnly: true
       nodeSelector:
         node-role.kubernetes.io/master: ""
       restartPolicy: Always
@@ -54,3 +58,7 @@ spec:
         operator: "Exists"
         effect: "NoExecute"
         tolerationSeconds: 120
+      volumes:
+      - name: images
+        configMap:
+          name: cluster-baremetal-operator-images

@@ -41,6 +41,8 @@ const (
 	ComponentName = "cluster-baremetal-operator"
 	// BaremetalProvisioningCR is the name of the provisioning resource
 	BaremetalProvisioningCR = "provisioning-configuration"
+	// ContainerImagesFile volume mounted file containing the images configmap
+	ContainerImagesFile = "/etc/cluster-baremetal-operator/images/images.json"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
@@ -141,6 +143,21 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Temporarily not requeuing request
 		return ctrl.Result{}, nil
 	}
+
+	// Read container images from Config Map
+	var containerImages Images
+	if err := GetContainerImages(&containerImages, ContainerImagesFile); err != nil {
+		// Images config map is not valid
+		// Provisioning configuration is not valid.
+		// Requeue request.
+		r.Log.Error(err, "invalid contents in images Config Map")
+		co_err := r.updateCOStatusDegraded("invalid contents in images Config Map", err.Error())
+		if co_err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, co_err)
+		}
+		return ctrl.Result{}, err
+	}
+
 	//Create Secrets needed for Metal3 deployment
 	if err := provisioning.CreateMariadbPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Mariadb password")
