@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	baremetalSecretName = "metal3-mariadb-password"
+	baremetalSecretName = "metal3-mariadb-password" // #nosec
 	baremetalSecretKey  = "password"
 	ironicUsernameKey   = "username"
 	ironicPasswordKey   = "password"
