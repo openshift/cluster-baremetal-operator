@@ -24,12 +24,22 @@ const (
 
 	// ReasonEmpty is an empty StatusReason
 	ReasonEmpty StatusReason = ""
-	// ReasonComplete is an empty StatusReason
+
+	// ReasonComplete the deployment of required resources is complete
 	ReasonComplete StatusReason = "DeployComplete"
-	// ReasonSyncing is an complete StatusReason
+
+	// ReasonSyncing means that resources are deploying
 	ReasonSyncing StatusReason = "SyncingResources"
-	// ReasonSyncFailed is an failed StatusReason
-	ReasonSyncFailed StatusReason = "SyncingFailed"
+
+	// ReasonInvalidConfiguration indicates that the configuration is invalid
+	ReasonInvalidConfiguration StatusReason = "InvalidConfiguration"
+
+	// ReasonDeployTimedOut indicates that the deployment timedOut
+	ReasonDeployTimedOut StatusReason = "DeployTimedOut"
+
+	// ReasonDeplymentCrashLooping indicates that the deployment is crashlooping
+	ReasonDeplymentCrashLooping StatusReason = "DeploymentCrashLooping"
+
 	// ReasonUnsupported is an unsupported StatusReason
 	ReasonUnsupported StatusReason = "UnsupportedPlatform"
 )
@@ -144,40 +154,32 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 	return err
 }
 
-// updateCOStatusDisabled updates the ClusterOperator's status to Disabled
-func (r *ProvisioningReconciler) updateCOStatusDisabled() error {
-	disabledMessage := "Operator is non functional"
-	availableMessage := "Operator is available while being disabled"
+func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
 
 	co, err := r.getOrCreateClusterOperator()
 	if err != nil {
 		r.Log.Error(err, "failed to get or create ClusterOperator")
 		return err
 	}
-
-	conds := []osconfigv1.ClusterOperatorStatusCondition{
-		setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonUnsupported), availableMessage),
-		setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(ReasonUnsupported), disabledMessage),
-	}
-
-	return r.syncStatus(co, conds)
-}
-
-// updateCOStatusDegraded updates the ClusterOperator's Degraded
-// degradedReason should contain the current reason for the Operator to be marked in that state
-func (r *ProvisioningReconciler) updateCOStatusDegraded(degradedReason string, detailedError string) error {
-	degradedMessage := "Operator is Degraded"
-	progressingMessage := "Operator is Degraded while Progressing"
-
-	co, err := r.getOrCreateClusterOperator()
-	if err != nil {
-		return err
-	}
-
-	conds := []osconfigv1.ClusterOperatorStatusCondition{
-		setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, degradedReason, degradedMessage),
-		setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, detailedError, progressingMessage),
-		setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
+	conds := defaultStatusConditions()
+	switch newReason {
+	case ReasonUnsupported:
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
+	case ReasonSyncing:
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
+	case ReasonComplete:
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
+	case ReasonInvalidConfiguration, ReasonDeployTimedOut:
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
+	case ReasonDeplymentCrashLooping:
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
 	}
 
 	return r.syncStatus(co, conds)
