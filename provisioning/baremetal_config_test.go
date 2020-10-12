@@ -16,6 +16,7 @@ limitations under the License.
 package provisioning
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -256,6 +257,108 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			if tc.expectedError {
 				assert.True(t, strings.Contains(err.Error(), tc.expectedMsg))
 			}
+			return
+		})
+	}
+}
+
+func TestGetMetal3DeploymentConfig(t *testing.T) {
+	managedSpec := metal3iov1alpha1.ProvisioningSpec{
+		ProvisioningInterface:     "eth0",
+		ProvisioningIP:            "172.30.20.3",
+		ProvisioningNetworkCIDR:   "172.30.20.0/24",
+		ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
+		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+		ProvisioningNetwork:       "Managed",
+	}
+	unmanagedSpec := metal3iov1alpha1.ProvisioningSpec{
+		ProvisioningInterface:     "ensp0",
+		ProvisioningIP:            "172.30.20.3",
+		ProvisioningNetworkCIDR:   "172.30.20.0/24",
+		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+		ProvisioningNetwork:       "Unmanaged",
+	}
+	disabledSpec := metal3iov1alpha1.ProvisioningSpec{
+		ProvisioningInterface:     "",
+		ProvisioningIP:            "172.30.20.3",
+		ProvisioningNetworkCIDR:   "172.30.20.0/24",
+		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+		ProvisioningNetwork:       "Disabled",
+	}
+
+	tCases := []struct {
+		name          string
+		configName    string
+		spec          metal3iov1alpha1.ProvisioningSpec
+		expectedValue string
+	}{
+		{
+			name:          "Managed ProvisioningIPCIDR",
+			configName:    provisioningIP,
+			spec:          managedSpec,
+			expectedValue: "172.30.20.3/24",
+		},
+		{
+			name:          "Managed ProvisioningInterface",
+			configName:    provisioningInterface,
+			spec:          managedSpec,
+			expectedValue: "eth0",
+		},
+		{
+			name:          "Unmanaged DeployKernelUrl",
+			configName:    deployKernelUrl,
+			spec:          unmanagedSpec,
+			expectedValue: "http://172.30.20.3:6180/images/ironic-python-agent.kernel",
+		},
+		{
+			name:          "Unmanaged DeployRamdiskUrl",
+			configName:    deployRamdiskUrl,
+			spec:          unmanagedSpec,
+			expectedValue: "http://172.30.20.3:6180/images/ironic-python-agent.initramfs",
+		},
+		{
+			name:          "Disabled IronicEndpoint",
+			configName:    ironicEndpoint,
+			spec:          disabledSpec,
+			expectedValue: "http://172.30.20.3:6385/v1/",
+		},
+		{
+			name:          "Disabled InspectorEndpoint",
+			configName:    ironicInspectorEndpoint,
+			spec:          disabledSpec,
+			expectedValue: "http://172.30.20.3:5050/v1/",
+		},
+		{
+			name:          "Unmanaged HttpPort",
+			configName:    httpPort,
+			spec:          unmanagedSpec,
+			expectedValue: "6180",
+		},
+		{
+			name:          "Managed DHCPRange",
+			configName:    dhcpRange,
+			spec:          managedSpec,
+			expectedValue: "172.30.20.11, 172.30.20.101",
+		},
+		{
+			name:          "Disabled DHCPRange",
+			configName:    dhcpRange,
+			spec:          disabledSpec,
+			expectedValue: "",
+		},
+		{
+			name:          "Disabled RhcosImageUrl",
+			configName:    machineImageUrl,
+			spec:          disabledSpec,
+			expectedValue: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+		},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing tc : %s", tc.name)
+			actualvalue := getMetal3DeploymentConfig(tc.configName, &tc.spec)
+			assert.NotNil(t, actualvalue)
+			assert.Equal(t, tc.expectedValue, *actualvalue, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, tc.expectedValue, *actualvalue))
 			return
 		})
 	}
