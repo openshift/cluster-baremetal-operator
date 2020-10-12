@@ -37,8 +37,8 @@ const (
 	// ReasonDeployTimedOut indicates that the deployment timedOut
 	ReasonDeployTimedOut StatusReason = "DeployTimedOut"
 
-	// ReasonDeplymentCrashLooping indicates that the deployment is crashlooping
-	ReasonDeplymentCrashLooping StatusReason = "DeploymentCrashLooping"
+	// ReasonDeploymentCrashLooping indicates that the deployment is crashlooping
+	ReasonDeploymentCrashLooping StatusReason = "DeploymentCrashLooping"
 
 	// ReasonUnsupported is an unsupported StatusReason
 	ReasonUnsupported StatusReason = "UnsupportedPlatform"
@@ -176,7 +176,7 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
-	case ReasonDeplymentCrashLooping:
+	case ReasonDeploymentCrashLooping:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
