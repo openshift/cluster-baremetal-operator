@@ -24,12 +24,28 @@ import (
 )
 
 const (
-	baremetalSharedVolume = "metal3-shared"
+	baremetalSharedVolume      = "metal3-shared"
+	metal3AuthRootDir          = "/auth"
+	ironicCredentialsVolume    = "metal3-ironic-basic-auth"
+	inspectorCredentialsVolume = "metal3-inspector-basic-auth"
+	htpasswdEnvVar             = "HTTP_BASIC_HTPASSWD" // #nosec
 )
 
 var sharedVolumeMount = corev1.VolumeMount{
 	Name:      baremetalSharedVolume,
 	MountPath: "/shared",
+}
+
+var ironicCredentialsMount = corev1.VolumeMount{
+	Name:      ironicCredentialsVolume,
+	MountPath: metal3AuthRootDir + "/ironic",
+	ReadOnly:  true,
+}
+
+var inspectorCredentialsMount = corev1.VolumeMount{
+	Name:      inspectorCredentialsVolume,
+	MountPath: metal3AuthRootDir + "/ironic-inspector",
+	ReadOnly:  true,
 }
 
 func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
@@ -46,16 +62,44 @@ func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.Prov
 	}
 }
 
+func setMariadbPassword() corev1.EnvVar {
+	return corev1.EnvVar{
+		Name: "MARIADB_PASSWORD",
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: baremetalSecretName,
+				},
+				Key: baremetalSecretKey,
+			},
+		},
+	}
+}
+
+func setIronicHtpasswdHash(name string, secretName string) corev1.EnvVar {
+	return corev1.EnvVar{
+		Name: name,
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: secretName,
+				},
+				Key: ironicHtpasswdKey,
+			},
+		},
+	}
+}
+
 func newMetal3InitContainers(images *Images, config *metal3iov1alpha1.ProvisioningSpec) []corev1.Container {
 	initContainers := []corev1.Container{
-		createInitContainerIpaDownloader(images, config),
+		createInitContainerIpaDownloader(images),
 		createInitContainerMachineOsDownloader(images, config),
 		createInitContainerStaticIpSet(images, config),
 	}
 	return initContainers
 }
 
-func createInitContainerIpaDownloader(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createInitContainerIpaDownloader(images *Images) corev1.Container {
 	initContainer := corev1.Container{
 		Name:            "metal3-ipa-downloader",
 		Image:           images.IpaDownloader,
@@ -102,4 +146,208 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 		},
 	}
 	return initContainer
+}
+
+func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSpec) []corev1.Container {
+	containers := []corev1.Container{
+		createContainerMetal3BaremetalOperator(images, config),
+		createContainerMetal3Mariadb(images),
+		createContainerMetal3Httpd(images, config),
+		createContainerMetal3IronicConductor(images, config),
+		createContainerMetal3IronicApi(images, config),
+		createContainerMetal3IronicInspector(images, config),
+		createContainerMetal3StaticIpManager(images, config),
+	}
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
+		containers = append(containers, createContainerMetal3Dnsmasq(images, config))
+	}
+	return containers
+}
+
+func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	container := corev1.Container{
+		Name:  "metal3-baremetal-operator",
+		Image: images.BaremetalOperator,
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "metrics",
+				ContainerPort: 60000,
+			},
+		},
+		Command:         []string{"/baremetal-operator"},
+		ImagePullPolicy: "IfNotPresent",
+		VolumeMounts: []corev1.VolumeMount{
+			ironicCredentialsMount,
+			inspectorCredentialsMount,
+		},
+		Env: []corev1.EnvVar{
+			{
+				Name: "WATCH_NAMESPACE",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.namespace",
+					},
+				},
+			},
+			{
+				Name: "POD_NAME",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.name",
+					},
+				},
+			},
+			{
+				Name:  "OPERATOR_NAME",
+				Value: "baremetal-operator",
+			},
+			buildEnvVar(deployKernelUrl, config),
+			buildEnvVar(deployRamdiskUrl, config),
+			buildEnvVar(ironicEndpoint, config),
+			buildEnvVar(ironicInspectorEndpoint, config),
+			{
+				Name:  "METAL3_AUTH_ROOT_DIR",
+				Value: metal3AuthRootDir,
+			},
+		},
+	}
+	return container
+}
+
+func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	container := corev1.Container{
+		Name:            "metal3-dnsmasq",
+		Image:           images.Ironic,
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Command:      []string{"/bin/rundnsmasq"},
+		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Env: []corev1.EnvVar{
+			buildEnvVar(httpPort, config),
+			buildEnvVar(provisioningInterface, config),
+			buildEnvVar(dhcpRange, config),
+		},
+	}
+	return container
+}
+
+func createContainerMetal3Mariadb(images *Images) corev1.Container {
+	container := corev1.Container{
+		Name:            "metal3-mariadb",
+		Image:           images.Ironic,
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Command:      []string{"/bin/runmariadb"},
+		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Env: []corev1.EnvVar{
+			setMariadbPassword(),
+		},
+	}
+	return container
+}
+
+func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	container := corev1.Container{
+		Name:            "metal3-httpd",
+		Image:           images.Ironic,
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Command:      []string{"/bin/runhttpd"},
+		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Env: []corev1.EnvVar{
+			buildEnvVar(httpPort, config),
+			buildEnvVar(provisioningIP, config),
+			buildEnvVar(provisioningInterface, config),
+		},
+	}
+	return container
+}
+
+func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	container := corev1.Container{
+		Name:            "metal3-ironic-conductor",
+		Image:           images.Ironic,
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Command: []string{"/bin/runironic-conductor"},
+		VolumeMounts: []corev1.VolumeMount{
+			sharedVolumeMount,
+			inspectorCredentialsMount,
+		},
+		Env: []corev1.EnvVar{
+			setMariadbPassword(),
+			buildEnvVar(httpPort, config),
+			buildEnvVar(provisioningIP, config),
+			buildEnvVar(provisioningInterface, config),
+		},
+	}
+	return container
+}
+
+func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	container := corev1.Container{
+		Name:            "metal3-ironic-api",
+		Image:           images.Ironic,
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Command:      []string{"/bin/runironic-api"},
+		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Env: []corev1.EnvVar{
+			setMariadbPassword(),
+			buildEnvVar(httpPort, config),
+			buildEnvVar(provisioningIP, config),
+			buildEnvVar(provisioningInterface, config),
+			setIronicHtpasswdHash(htpasswdEnvVar, ironicSecretName),
+		},
+	}
+	return container
+}
+
+func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	container := corev1.Container{
+		Name:            "metal3-ironic-inspector",
+		Image:           images.IronicInspector,
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			sharedVolumeMount,
+			ironicCredentialsMount,
+		},
+		Env: []corev1.EnvVar{
+			buildEnvVar(provisioningIP, config),
+			buildEnvVar(provisioningInterface, config),
+			setIronicHtpasswdHash(htpasswdEnvVar, inspectorSecretName),
+		},
+	}
+	return container
+}
+
+func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+
+	container := corev1.Container{
+		Name:            "metal3-static-ip-manager",
+		Image:           images.StaticIpManager,
+		Command:         []string{"/refresh-static-ip"},
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Env: []corev1.EnvVar{
+			buildEnvVar(provisioningIP, config),
+			buildEnvVar(provisioningInterface, config),
+		},
+	}
+	return container
 }

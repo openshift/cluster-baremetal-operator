@@ -124,7 +124,7 @@ func TestNewMetal3InitContainers(t *testing.T) {
 		expectedContainers []corev1.Container
 	}{
 		{
-			name: "test1",
+			name: "valid config",
 			expectedContainers: []corev1.Container{
 				{
 					Name:  "metal3-ipa-downloader",
@@ -149,4 +149,66 @@ func TestNewMetal3InitContainers(t *testing.T) {
 		})
 	}
 
+}
+
+func TestNewMetal3Containers(t *testing.T) {
+	managedSpec := metal3iov1alpha1.ProvisioningSpec{
+		ProvisioningInterface:     "eth0",
+		ProvisioningIP:            "172.30.20.3",
+		ProvisioningNetworkCIDR:   "172.30.20.0/24",
+		ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
+		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+		ProvisioningNetwork:       "Managed",
+	}
+	unmanagedSpec := metal3iov1alpha1.ProvisioningSpec{
+		ProvisioningInterface:     "ensp0",
+		ProvisioningIP:            "172.30.20.3",
+		ProvisioningNetworkCIDR:   "172.30.20.0/24",
+		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+		ProvisioningNetwork:       "Unmanaged",
+	}
+	disabledSpec := metal3iov1alpha1.ProvisioningSpec{
+		ProvisioningInterface:     "",
+		ProvisioningIP:            "172.30.20.3",
+		ProvisioningNetworkCIDR:   "172.30.20.0/24",
+		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+		ProvisioningNetwork:       "Disabled",
+	}
+
+	images := Images{
+		BaremetalOperator:   expectedBaremetalOperator,
+		Ironic:              expectedIronic,
+		IronicInspector:     expectedIronicInspector,
+		IpaDownloader:       expectedIronicIpaDownloader,
+		MachineOsDownloader: expectedMachineOsDownloader,
+		StaticIpManager:     expectedIronicStaticIpManager,
+	}
+	tCases := []struct {
+		name               string
+		config             metal3iov1alpha1.ProvisioningSpec
+		expectedContainers int
+	}{
+		{
+			name:               "ManagedSpec",
+			config:             managedSpec,
+			expectedContainers: 8,
+		},
+		{
+			name:               "UnmanagedSpec",
+			config:             unmanagedSpec,
+			expectedContainers: 8,
+		},
+		{
+			name:               "DisabledSpec",
+			config:             disabledSpec,
+			expectedContainers: 7,
+		},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing tc : %s", tc.name)
+			actualContainers := newMetal3Containers(&images, &tc.config)
+			assert.Equal(t, tc.expectedContainers, len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, tc.expectedContainers, len(actualContainers)))
+		})
+	}
 }
