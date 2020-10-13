@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package provisioning
 
 import (
 	"encoding/json"
@@ -23,19 +23,18 @@ import (
 )
 
 type Images struct {
-	BaremetalOperator            string `json:"baremetalOperator"`
-	BaremetalIronic              string `json:"baremetalIronic"`
-	BaremetalIronicInspector     string `json:"baremetalIronicInspector"`
-	BaremetalIpaDownloader       string `json:"baremetalIpaDownloader"`
-	BaremetalMachineOsDownloader string `json:"baremetalMachineOsDownloader"`
-	BaremetalStaticIpManager     string `json:"baremetalStaticIpManager"`
+	BaremetalOperator   string `json:"baremetalOperator"`
+	Ironic              string `json:"baremetalIronic"`
+	IronicInspector     string `json:"baremetalIronicInspector"`
+	IpaDownloader       string `json:"baremetalIpaDownloader"`
+	MachineOsDownloader string `json:"baremetalMachineOsDownloader"`
+	StaticIpManager     string `json:"baremetalStaticIpManager"`
 }
 
 func GetContainerImages(containerImages *Images, imagesFilePath string) error {
 	//read images.json file
 	jsonData, err := ioutil.ReadFile(filepath.Clean(imagesFilePath))
 	if err != nil {
-		// TODO: Not sure if this error msg should show the path and file name of the mounted file.
 		return fmt.Errorf("unable to read file %s", imagesFilePath)
 	}
 	if err := json.Unmarshal(jsonData, containerImages); err != nil {

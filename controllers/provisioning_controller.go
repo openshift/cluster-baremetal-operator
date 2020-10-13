@@ -145,8 +145,8 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	// Read container images from Config Map
-	var containerImages Images
-	if err := GetContainerImages(&containerImages, ContainerImagesFile); err != nil {
+	var containerImages provisioning.Images
+	if err := provisioning.GetContainerImages(&containerImages, ContainerImagesFile); err != nil {
 		// Images config map is not valid
 		// Provisioning configuration is not valid.
 		// Requeue request.
