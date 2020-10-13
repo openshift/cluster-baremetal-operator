@@ -1,4 +1,4 @@
-package controllers
+package provisioning
 
 import (
 	"testing"
@@ -44,11 +44,11 @@ func TestGetContainerImages(t *testing.T) {
 			}
 			if tc.expectedImages {
 				if containerImages.BaremetalOperator != expectedBaremetalOperator ||
-					containerImages.BaremetalIronic != expectedIronic ||
-					containerImages.BaremetalIronicInspector != expectedIronicInspector ||
-					containerImages.BaremetalIpaDownloader != expectedIronicIpaDownloader ||
-					containerImages.BaremetalMachineOsDownloader != expectedMachineOsDownloader ||
-					containerImages.BaremetalStaticIpManager != expectedIronicStaticIpManager {
+					containerImages.Ironic != expectedIronic ||
+					containerImages.IronicInspector != expectedIronicInspector ||
+					containerImages.IpaDownloader != expectedIronicIpaDownloader ||
+					containerImages.MachineOsDownloader != expectedMachineOsDownloader ||
+					containerImages.StaticIpManager != expectedIronicStaticIpManager {
 					t.Errorf("failed GetContainerImages. One or more Baremetal container images do not match the expected images.")
 				}
 			}
