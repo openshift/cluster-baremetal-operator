@@ -1,0 +1,2 @@
+resources:
+- cluster-baremetal-operator.yaml

@@ -21,7 +21,7 @@ endif
 # Set VERBOSE to -v to make tests produce more output
 VERBOSE ?= ""
 
-all: manager
+all: cluster-baremetal-operator
 
 # Run tests
 test: generate lint manifests
@@ -30,9 +30,9 @@ test: generate lint manifests
 # Alias for CI
 unit: test
 
-# Build manager binary
-manager: generate lint
-	go build -o bin/manager main.go
+# Build cluster-baremetal-operator binary
+cluster-baremetal-operator: generate lint
+	go build -o bin/cluster-baremetal-operator main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate lint manifests
@@ -48,7 +48,7 @@ uninstall: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	cd config/manager && kustomize edit set image controller=${IMG}
+	cd config/cluster-baremetal-operator && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
