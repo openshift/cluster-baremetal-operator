@@ -1,14 +1,15 @@
 # See the OWNERS docs at https://go.k8s.io/owners
 
 approvers:
+ - andfasano
+ - asalkeld
  - dhellmann
  - hardys
  - markmc
+ - kirankt
  - sadasu
  - stbenjam
  - zaneb
- - kirankt
- - andfasano
 
 # Bugzilla Information
 component: "Bare Metal Hardware Provisioning"
