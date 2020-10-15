@@ -29,9 +29,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
+	osoperatorv1 "github.com/openshift/api/operator/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
+	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
 
 const (
@@ -56,6 +60,8 @@ type ProvisioningReconciler struct {
 	EventRecorder  record.EventRecorder
 	kubeClient     kubernetes.Interface
 	ReleaseVersion string
+
+	Generations []osoperatorv1.GenerationStatus
 }
 
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
@@ -167,6 +173,19 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 	if err := provisioning.CreateInspectorPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
+	}
+
+	metal3Deployment := provisioning.NewMetal3Deployment(ComponentNamespace, &containerImages, &baremetalConfig.Spec)
+	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, r.Generations)
+
+	deployment, updated, err := resourceapply.ApplyDeployment(r.kubeClient.AppsV1(),
+		events.NewLoggingEventRecorder(ComponentName), metal3Deployment, expectedGeneration)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to apply Metal3 deployment: %v", err)
+	}
+
+	if updated {
+		resourcemerge.SetDeploymentGeneration(&r.Generations, deployment)
 	}
 
 	return ctrl.Result{}, nil
