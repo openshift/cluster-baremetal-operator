@@ -18,17 +18,22 @@ package provisioning
 import (
 	"k8s.io/utils/pointer"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 const (
+	baremetalDeploymentName    = "metal3"
 	baremetalSharedVolume      = "metal3-shared"
 	metal3AuthRootDir          = "/auth"
 	ironicCredentialsVolume    = "metal3-ironic-basic-auth"
 	inspectorCredentialsVolume = "metal3-inspector-basic-auth"
 	htpasswdEnvVar             = "HTTP_BASIC_HTPASSWD" // #nosec
+	mariadbPwdEnvVar           = "MARIADB_PASSWORD"    // #nosec
+	cboOwnedAnnotation         = "baremetal.openshift.io/owned"
 )
 
 var sharedVolumeMount = corev1.VolumeMount{
@@ -64,7 +69,7 @@ func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.Prov
 
 func setMariadbPassword() corev1.EnvVar {
 	return corev1.EnvVar{
-		Name: "MARIADB_PASSWORD",
+		Name: mariadbPwdEnvVar,
 		ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{
@@ -350,4 +355,119 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		},
 	}
 	return container
+}
+
+func newMetal3Volumes() []corev1.Volume {
+	volumes := []corev1.Volume{
+		{
+			Name: baremetalSharedVolume,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: ironicCredentialsVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: ironicSecretName,
+					Items: []corev1.KeyToPath{
+						{Key: ironicUsernameKey, Path: ironicUsernameKey},
+						{Key: ironicPasswordKey, Path: ironicPasswordKey},
+						{Key: ironicConfigKey, Path: ironicConfigKey},
+					},
+				},
+			},
+		},
+		{
+			Name: inspectorCredentialsVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: inspectorSecretName,
+					Items: []corev1.KeyToPath{
+						{Key: ironicUsernameKey, Path: ironicUsernameKey},
+						{Key: ironicPasswordKey, Path: ironicPasswordKey},
+						{Key: ironicConfigKey, Path: ironicConfigKey},
+					},
+				},
+			},
+		},
+	}
+	return volumes
+}
+
+func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec) *corev1.PodTemplateSpec {
+	initContainers := newMetal3InitContainers(images, config)
+	containers := newMetal3Containers(images, config)
+	volumes := newMetal3Volumes()
+	tolerations := []corev1.Toleration{
+		{
+			Key:    "node-role.kubernetes.io/master",
+			Effect: corev1.TaintEffectNoSchedule,
+		},
+		{
+			Key:      "CriticalAddonsOnly",
+			Operator: corev1.TolerationOpExists,
+		},
+		{
+			Key:               "node.kubernetes.io/not-ready",
+			Effect:            corev1.TaintEffectNoExecute,
+			Operator:          corev1.TolerationOpExists,
+			TolerationSeconds: pointer.Int64Ptr(120),
+		},
+		{
+			Key:               "node.kubernetes.io/unreachable",
+			Effect:            corev1.TaintEffectNoExecute,
+			Operator:          corev1.TolerationOpExists,
+			TolerationSeconds: pointer.Int64Ptr(120),
+		},
+	}
+
+	return &corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"api":     "clusterapi",
+				"k8s-app": "controller",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Volumes:           volumes,
+			InitContainers:    initContainers,
+			Containers:        containers,
+			HostNetwork:       true,
+			PriorityClassName: "system-node-critical",
+			NodeSelector:      map[string]string{"node-role.kubernetes.io/master": ""},
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: pointer.BoolPtr(false),
+			},
+			ServiceAccountName: "cluster-baremetal-operator",
+			Tolerations:        tolerations,
+		},
+	}
+}
+
+func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec) *appsv1.Deployment {
+	replicas := int32(1)
+	template := newMetal3PodTemplateSpec(images, config)
+
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      baremetalDeploymentName,
+			Namespace: targetNamespace,
+			Annotations: map[string]string{
+				cboOwnedAnnotation: "",
+			},
+			Labels: map[string]string{
+				"k8s-app": "controller",
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"k8s-app": "controller",
+				},
+			},
+			Template: *template,
+		},
+	}
 }
