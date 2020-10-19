@@ -54,7 +54,7 @@ type ProvisioningReconciler struct {
 	Log            logr.Logger
 	OSClient       osclientset.Interface
 	EventRecorder  record.EventRecorder
-	kubeClient     kubernetes.Interface
+	KubeClient     kubernetes.Interface
 	ReleaseVersion string
 }
 
@@ -159,13 +159,13 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	//Create Secrets needed for Metal3 deployment
-	if err := provisioning.CreateMariadbPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+	if err := provisioning.CreateMariadbPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Mariadb password")
 	}
-	if err := provisioning.CreateIronicPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+	if err := provisioning.CreateIronicPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Ironic password")
 	}
-	if err := provisioning.CreateInspectorPasswordSecret(r.kubeClient.CoreV1(), ComponentNamespace); err != nil {
+	if err := provisioning.CreateInspectorPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
 	}
 
