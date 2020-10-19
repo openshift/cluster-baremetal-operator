@@ -38,8 +38,8 @@ spec:
             memory: 50Mi
         volumeMounts:
         - name: images
-        mountPath: /etc/cluster-baremetal-operator/images
-        readOnly: true
+          mountPath: /etc/cluster-baremetal-operator/images
+          readOnly: true
       nodeSelector:
         node-role.kubernetes.io/master: ""
       restartPolicy: Always
