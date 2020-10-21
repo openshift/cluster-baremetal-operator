@@ -21,6 +21,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
@@ -90,6 +91,7 @@ func main() {
 
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 	recorder := record.NewBroadcaster().NewRecorder(clientgoscheme.Scheme, v1.EventSource{Component: controllers.ComponentName})
+	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
 	if err = (&controllers.ProvisioningReconciler{
 		Client:         mgr.GetClient(),
@@ -97,6 +99,7 @@ func main() {
 		Scheme:         mgr.GetScheme(),
 		OSClient:       osClient,
 		EventRecorder:  recorder,
+		KubeClient:     kubeClient,
 		ReleaseVersion: releaseVersion,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Provisioning")
