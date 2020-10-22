@@ -4,6 +4,8 @@ kind: ConfigMap
 metadata:
   name: cluster-baremetal-operator-images
   namespace: openshift-machine-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
 data:
   images.json: >
     {
