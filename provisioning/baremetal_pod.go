@@ -53,6 +53,53 @@ var inspectorCredentialsMount = corev1.VolumeMount{
 	ReadOnly:  true,
 }
 
+var mariadbPassword = corev1.EnvVar{
+	Name: mariadbPwdEnvVar,
+	ValueFrom: &corev1.EnvVarSource{
+		SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: baremetalSecretName,
+			},
+			Key: baremetalSecretKey,
+		},
+	},
+}
+
+var metal3Volumes = []corev1.Volume{
+	{
+		Name: baremetalSharedVolume,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	},
+	{
+		Name: ironicCredentialsVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: ironicSecretName,
+				Items: []corev1.KeyToPath{
+					{Key: ironicUsernameKey, Path: ironicUsernameKey},
+					{Key: ironicPasswordKey, Path: ironicPasswordKey},
+					{Key: ironicConfigKey, Path: ironicConfigKey},
+				},
+			},
+		},
+	},
+	{
+		Name: inspectorCredentialsVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: inspectorSecretName,
+				Items: []corev1.KeyToPath{
+					{Key: ironicUsernameKey, Path: ironicUsernameKey},
+					{Key: ironicPasswordKey, Path: ironicPasswordKey},
+					{Key: ironicConfigKey, Path: ironicConfigKey},
+				},
+			},
+		},
+	},
+}
+
 func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
 	value := getMetal3DeploymentConfig(name, baremetalProvisioningConfig)
 	if value != nil {
@@ -64,20 +111,6 @@ func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.Prov
 		return corev1.EnvVar{
 			Name: name,
 		}
-	}
-}
-
-func setMariadbPassword() corev1.EnvVar {
-	return corev1.EnvVar{
-		Name: mariadbPwdEnvVar,
-		ValueFrom: &corev1.EnvVarSource{
-			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: baremetalSecretName,
-				},
-				Key: baremetalSecretKey,
-			},
-		},
 	}
 }
 
@@ -249,7 +282,7 @@ func createContainerMetal3Mariadb(images *Images) corev1.Container {
 		Command:      []string{"/bin/runmariadb"},
 		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
 		Env: []corev1.EnvVar{
-			setMariadbPassword(),
+			mariadbPassword,
 		},
 	}
 	return container
@@ -288,7 +321,7 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			inspectorCredentialsMount,
 		},
 		Env: []corev1.EnvVar{
-			setMariadbPassword(),
+			mariadbPassword,
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
@@ -308,7 +341,7 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 		Command:      []string{"/bin/runironic-api"},
 		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
 		Env: []corev1.EnvVar{
-			setMariadbPassword(),
+			mariadbPassword,
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
@@ -357,48 +390,9 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 	return container
 }
 
-func newMetal3Volumes() []corev1.Volume {
-	volumes := []corev1.Volume{
-		{
-			Name: baremetalSharedVolume,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		},
-		{
-			Name: ironicCredentialsVolume,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: ironicSecretName,
-					Items: []corev1.KeyToPath{
-						{Key: ironicUsernameKey, Path: ironicUsernameKey},
-						{Key: ironicPasswordKey, Path: ironicPasswordKey},
-						{Key: ironicConfigKey, Path: ironicConfigKey},
-					},
-				},
-			},
-		},
-		{
-			Name: inspectorCredentialsVolume,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: inspectorSecretName,
-					Items: []corev1.KeyToPath{
-						{Key: ironicUsernameKey, Path: ironicUsernameKey},
-						{Key: ironicPasswordKey, Path: ironicPasswordKey},
-						{Key: ironicConfigKey, Path: ironicConfigKey},
-					},
-				},
-			},
-		},
-	}
-	return volumes
-}
-
 func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec) *corev1.PodTemplateSpec {
 	initContainers := newMetal3InitContainers(images, config)
 	containers := newMetal3Containers(images, config)
-	volumes := newMetal3Volumes()
 	tolerations := []corev1.Toleration{
 		{
 			Key:    "node-role.kubernetes.io/master",
@@ -430,7 +424,7 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 			},
 		},
 		Spec: corev1.PodSpec{
-			Volumes:           volumes,
+			Volumes:           metal3Volumes,
 			InitContainers:    initContainers,
 			Containers:        containers,
 			HostNetwork:       true,
