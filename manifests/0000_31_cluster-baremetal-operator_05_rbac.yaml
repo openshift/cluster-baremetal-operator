@@ -1,0 +1,175 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-baremetal-operator
+  namespace: openshift-machine-api
+rules:
+
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - watch
+      - list
+      - patch
+
+  - apiGroups:
+      - metal3.io
+    resources:
+      - baremetalhosts
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+
+  - apiGroups:
+      - metal3.io
+    resources:
+      - baremetalhosts/status
+      - baremetalhosts/finalizers
+    verbs:
+      - update
+
+  - apiGroups:
+      - security.openshift.io
+    resourceNames:
+      - hostnetwork
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - use
+
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-baremetal-operator
+rules:
+
+  - apiGroups:
+    - config.openshift.io
+    resources:
+    - infrastructures
+    verbs:
+    - get
+    - list
+    - watch
+
+# the baremetal pod deployment uses hostNetwork, hostPort, and privileged
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - use
+    resourceNames:
+      - privileged
+
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - clusteroperators
+      - clusteroperators/status
+    verbs:
+      - create
+      - get
+      - update
+
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - infrastructures
+      - infrastructures/status
+    verbs:
+      - get
+
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - watch
+      - list
+      - patch
+
+  - apiGroups:
+      - metal3.io
+    resources:
+      - provisionings
+    verbs:
+      - get
+      - list
+      - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-baremetal-operator
+  namespace: openshift-machine-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-baremetal-operator
+subjects:
+  - kind: ServiceAccount
+    name: cluster-baremetal-operator
+    namespace: openshift-machine-api
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-baremetal-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-baremetal-operator
+subjects:
+  - kind: ServiceAccount
+    name: cluster-baremetal-operator
+    namespace: openshift-machine-api
