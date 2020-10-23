@@ -16,11 +16,13 @@ limitations under the License.
 package provisioning
 
 import (
-	"k8s.io/utils/pointer"
+	"context"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+	"k8s.io/utils/pointer"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
@@ -464,4 +466,12 @@ func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 			Template: *template,
 		},
 	}
+}
+
+func GetExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, targetNamespace string) (bool, error) {
+	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
+	if existing != nil && err == nil {
+		return true, nil
+	}
+	return false, err
 }
