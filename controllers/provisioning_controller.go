@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osoperatorv1 "github.com/openshift/api/operator/v1"
@@ -167,13 +168,13 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	//Create Secrets needed for Metal3 deployment
-	if err := provisioning.CreateMariadbPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace); err != nil {
+	if err := provisioning.CreateMariadbPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Mariadb password")
 	}
-	if err := provisioning.CreateIronicPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace); err != nil {
+	if err := provisioning.CreateIronicPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Ironic password")
 	}
-	if err := provisioning.CreateInspectorPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace); err != nil {
+	if err := provisioning.CreateInspectorPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
 	}
 
@@ -195,6 +196,11 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// Proceed with creating a new Metal3 deployment
 	metal3Deployment := provisioning.NewMetal3Deployment(ComponentNamespace, &containerImages, &baremetalConfig.Spec)
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, r.Generations)
+
+	err = controllerutil.SetControllerReference(baremetalConfig, metal3Deployment, r.Scheme)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to set controllerReference on deployment: %v", err)
+	}
 
 	deployment, updated, err := resourceapply.ApplyDeployment(r.KubeClient.AppsV1(),
 		events.NewLoggingEventRecorder(ComponentName), metal3Deployment, expectedGeneration)

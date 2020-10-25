@@ -7,11 +7,14 @@ import (
 	"math/big"
 
 	"golang.org/x/crypto/bcrypt"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 const (
@@ -45,7 +48,7 @@ func generateRandomPassword() (string, error) {
 }
 
 // CreateMariadbPasswordSecret creates a Secret for Mariadb password
-func CreateMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
+func CreateMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
 	_, err := client.Secrets(targetNamespace).Get(context.Background(), baremetalSecretName, metav1.GetOptions{})
 	if !apierrors.IsNotFound(err) {
 		return err
@@ -56,33 +59,38 @@ func CreateMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamesp
 	if err != nil {
 		return err
 	}
-	_, err = client.Secrets(targetNamespace).Create(
-		context.Background(),
-		&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      baremetalSecretName,
-				Namespace: targetNamespace,
-			},
-			StringData: map[string]string{
-				baremetalSecretKey: password,
-			},
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      baremetalSecretName,
+			Namespace: targetNamespace,
 		},
-		metav1.CreateOptions{},
-	)
+		StringData: map[string]string{
+			baremetalSecretKey: password,
+		},
+	}
+
+	err = controllerutil.SetControllerReference(baremetalConfig, secret, scheme)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.Secrets(targetNamespace).Create(context.Background(), secret, metav1.CreateOptions{})
+
 	return err
 }
 
 // CreateIronicPasswordSecret creates a Secret for the Ironic Password
-func CreateIronicPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
-	return createIronicSecret(client, targetNamespace, ironicSecretName, ironicUsername, "ironic")
+func CreateIronicPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
+	return createIronicSecret(client, targetNamespace, ironicSecretName, ironicUsername, "ironic", baremetalConfig, scheme)
 }
 
 // CreateInspectorPasswordSecret creates a Secret for the Ironic Inspector Password
-func CreateInspectorPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
-	return createIronicSecret(client, targetNamespace, inspectorSecretName, inspectorUsername, "inspector")
+func CreateInspectorPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
+	return createIronicSecret(client, targetNamespace, inspectorSecretName, inspectorUsername, "inspector", baremetalConfig, scheme)
 }
 
-func createIronicSecret(client coreclientv1.SecretsGetter, targetNamespace string, name string, username string, configSection string) error {
+func createIronicSecret(client coreclientv1.SecretsGetter, targetNamespace string, name string, username string, configSection string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
 	_, err := client.Secrets(targetNamespace).Get(context.Background(), name, metav1.GetOptions{})
 	if !apierrors.IsNotFound(err) {
 		return err
@@ -110,26 +118,29 @@ func createIronicSecret(client coreclientv1.SecretsGetter, targetNamespace strin
 	// to httpd and this would prevent triggering the workarounds.
 	hash[2] = 'y'
 
-	_, err = client.Secrets(targetNamespace).Create(
-		context.Background(),
-		&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: targetNamespace,
-			},
-			StringData: map[string]string{
-				ironicUsernameKey: username,
-				ironicPasswordKey: password,
-				ironicHtpasswdKey: fmt.Sprintf("%s:%s", username, hash),
-				ironicConfigKey: fmt.Sprintf(`[%s]
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: targetNamespace,
+		},
+		StringData: map[string]string{
+			ironicUsernameKey: username,
+			ironicPasswordKey: password,
+			ironicHtpasswdKey: fmt.Sprintf("%s:%s", username, hash),
+			ironicConfigKey: fmt.Sprintf(`[%s]
 auth_type = http_basic
 username = %s
 password = %s
 `,
-					configSection, username, password),
-			},
+				configSection, username, password),
 		},
-		metav1.CreateOptions{},
-	)
+	}
+
+	err = controllerutil.SetControllerReference(baremetalConfig, secret, scheme)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.Secrets(targetNamespace).Create(context.Background(), secret, metav1.CreateOptions{})
 	return err
 }
