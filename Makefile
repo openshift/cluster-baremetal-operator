@@ -3,13 +3,8 @@
 IMG ?= controller:latest
 # Controller-gen tool
 CONTROLLER_GEN ?= go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go
+BIN_DIR := bin
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
 ifeq (/,${HOME})
 GOLANGCI_LINT_CACHE=/tmp/golangci-lint-cache/
 else
@@ -60,11 +55,11 @@ fmt:
 
 # Run go lint against code
 .PHONY: lint
-lint: $(GOBIN)/golangci-lint
-	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOBIN)/golangci-lint run
+lint: $(BIN_DIR)/golangci-lint
+	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(BIN_DIR)/golangci-lint run
 
-$(GOBIN)/golangci-lint:
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) v1.31.0
+$(BIN_DIR)/golangci-lint:
+	go build -o "${BIN_DIR}/golangci-lint" ./vendor/github.com/golangci/golangci-lint/cmd/golangci-lint
 
 # Run go vet against code
 .PHONY: vet
@@ -72,9 +67,9 @@ vet: lint
 
 # Generate code
 .PHONY: generate
-generate: $(GOBIN)/golangci-lint
+generate: $(BIN_DIR)/golangci-lint
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
-	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOBIN)/golangci-lint run --fix
+	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(BIN_DIR)/golangci-lint run --fix
 
 # Build the docker image
 docker-build: test
