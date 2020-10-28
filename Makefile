@@ -1,17 +1,16 @@
-
-# Image URL to use all building/pushing image targets
-IMG ?= controller:latest
-# Controller-gen tool
-CONTROLLER_GEN ?= go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
-BIN_DIR := bin
-
-IMAGES_JSON := /etc/cluster-baremetal-operator/images/images.json
-
 ifeq (/,${HOME})
 GOLANGCI_LINT_CACHE=/tmp/golangci-lint-cache/
 else
 GOLANGCI_LINT_CACHE=${HOME}/.cache/golangci-lint
 endif
+
+# Image URL to use all building/pushing image targets
+IMG ?= controller:latest
+# Controller-gen tool
+CONTROLLER_GEN ?= go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go
+GOLANGCI_LINT ?= GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) go run vendor/github.com/golangci/golangci-lint/cmd/golangci-lint/main.go
+
+IMAGES_JSON := /etc/cluster-baremetal-operator/images/images.json
 
 # Set VERBOSE to -v to make tests produce more output
 VERBOSE ?= ""
@@ -57,11 +56,8 @@ fmt:
 
 # Run go lint against code
 .PHONY: lint
-lint: $(BIN_DIR)/golangci-lint
-	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(BIN_DIR)/golangci-lint run
-
-$(BIN_DIR)/golangci-lint:
-	go build -o "${BIN_DIR}/golangci-lint" ./vendor/github.com/golangci/golangci-lint/cmd/golangci-lint
+lint:
+	$(GOLANGCI_LINT) run
 
 # Run go vet against code
 .PHONY: vet
@@ -72,7 +68,7 @@ vet: lint
 generate: $(BIN_DIR)/golangci-lint
 	go generate -x ./...
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
-	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(BIN_DIR)/golangci-lint run --fix
+	$(GOLANGCI_LINT) run --fix
 
 # Build the docker image
 docker-build: test
