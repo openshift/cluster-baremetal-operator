@@ -17,6 +17,7 @@ package provisioning
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -24,8 +25,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
 
 const (
@@ -567,7 +571,7 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 	}
 }
 
-func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, selector *metav1.LabelSelector) *appsv1.Deployment {
+func newMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, selector *metav1.LabelSelector) *appsv1.Deployment {
 	if selector == nil {
 		selector = &metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -583,7 +587,6 @@ func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 			break
 		}
 	}
-
 	template := newMetal3PodTemplateSpec(images, config, k8sAppLabel)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -612,4 +615,49 @@ func CheckExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, target
 		return existing.Spec.Selector, maoOwned, nil
 	}
 	return nil, false, err
+}
+
+func EnsureMetal3Deployment(info *ProvisioningInfo, selector *metav1.LabelSelector) (updated bool, err error) {
+	// Create metal3 deployment object based on current baremetal configuration
+	// It will be created with the cboOwnedAnnotation
+	metal3Deployment := newMetal3Deployment(info.Namespace, info.Images, &info.ProvConfig.Spec, selector)
+
+	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
+
+	err = controllerutil.SetControllerReference(info.ProvConfig, metal3Deployment, info.Scheme)
+	if err != nil {
+		err = fmt.Errorf("unable to set controllerReference on deployment: %w", err)
+		return
+	}
+
+	deployment, updated, err := resourceapply.ApplyDeployment(info.Client.AppsV1(),
+		info.EventRecorder, metal3Deployment, expectedGeneration)
+	if err != nil {
+		err = fmt.Errorf("unable to apply Metal3 deployment: %w", err)
+		return
+	}
+
+	if updated {
+		resourcemerge.SetDeploymentGeneration(&info.ProvConfig.Status.Generations, deployment)
+	}
+	return
+}
+
+func getDeploymentCondition(deployment *appsv1.Deployment) appsv1.DeploymentConditionType {
+	for _, cond := range deployment.Status.Conditions {
+		if cond.Status == corev1.ConditionTrue {
+			return cond.Type
+		}
+	}
+	return appsv1.DeploymentProgressing
+}
+
+// Provide the current state of metal3 deployment
+func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DeploymentConditionType, error) {
+	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
+	if err != nil || existing == nil {
+		// There were errors accessing the deployment.
+		return appsv1.DeploymentReplicaFailure, err
+	}
+	return getDeploymentCondition(existing), nil
 }
