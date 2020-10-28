@@ -266,3 +266,50 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateCOStatusAvailable(t *testing.T) {
+	tCases := []struct {
+		name               string
+		msg                string
+		expectedConditions []osconfigv1.ClusterOperatorStatusCondition
+	}{
+		{
+			name: "Existing Metal3 Deployment",
+			msg:  "found existing Metal3 deployment",
+			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(ReasonComplete), ""),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonComplete), "found existing Metal3 deployment"),
+				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
+			},
+		},
+		{
+			name: "New Metal3 Deployment",
+			msg:  "new Metal3 deployment completed",
+			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(ReasonComplete), ""),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonComplete), "new Metal3 deployment completed"),
+				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
+			},
+		},
+	}
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	co, _ := reconciler.createClusterOperator()
+	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+
+	for _, tc := range tCases {
+		err := reconciler.updateCOStatus(ReasonComplete, tc.msg, "")
+		if err != nil {
+			t.Error(err)
+		}
+		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+
+		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
+		if diff != "" {
+			t.Fatal(diff)
+		}
+	}
+}
