@@ -8,6 +8,5 @@ RUN make cluster-baremetal-operator
 FROM registry.svc.ci.openshift.org/ocp/4.6:base
 COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/bin/cluster-baremetal-operator /usr/bin/cluster-baremetal-operator
 COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/manifests /manifests
-# Uncomment when ready for the release so that CVO could manage the operator
-# LABEL io.openshift.release.operator=true
+LABEL io.openshift.release.operator=true
 ENTRYPOINT ["/usr/bin/cluster-baremetal-operator"]
