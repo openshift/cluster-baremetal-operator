@@ -6,9 +6,13 @@ endif
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
-# Controller-gen tool
+
 CONTROLLER_GEN ?= go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go
+CRD_OPTIONS="crd:trivialVersions=true,crdVersions=v1"
 GOLANGCI_LINT ?= GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) go run vendor/github.com/golangci/golangci-lint/cmd/golangci-lint/main.go
+KUSTOMIZE ?= go run sigs.k8s.io/kustomize/kustomize/v3
+MANIFEST_PROFILE ?= default
+TMP_DIR := $(shell mktemp -d -t manifests-$(date +%Y-%m-%d-%H-%M-%S)-XXXXXXXXXX)
 
 IMAGES_JSON := /etc/cluster-baremetal-operator/images/images.json
 
@@ -34,21 +38,37 @@ run: generate lint manifests
 
 # Install CRDs into a cluster
 install: manifests
-	kustomize build config/crd | kubectl apply -f -
+	kubectl apply -f manifests/0000_31_cluster-baremetal-operator_02_metal3provisioning.crd.yaml
 
 # Uninstall CRDs from a cluster
 uninstall: manifests
-	kustomize build config/crd | kubectl delete -f -
+	kubectl delete -f manifests/0000_31_cluster-baremetal-operator_02_metal3provisioning.crd.yaml
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
-	cd config/cluster-baremetal-operator && kustomize edit set image controller=${IMG}
-	kustomize build config/default | kubectl apply -f -
+deploy: generate
+	cd config/cluster-baremetal-operator && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/profiles/$(MANIFEST_PROFILE) | kubectl apply -f -
+
+# this is to just get the order right
+RBAC_LIST = rbac.authorization.k8s.io_v1_role_cluster-baremetal-operator.yaml \
+	rbac.authorization.k8s.io_v1_clusterrole_cluster-baremetal-operator.yaml \
+	rbac.authorization.k8s.io_v1_rolebinding_cluster-baremetal-operator.yaml \
+	rbac.authorization.k8s.io_v1_clusterrolebinding_cluster-baremetal-operator.yaml
 
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
-manifests:
-	hack/gen-crd.sh
+manifests: generate
+	$(KUSTOMIZE) build config/profiles/$(MANIFEST_PROFILE) -o $(TMP_DIR)/
+	ls $(TMP_DIR)
+	# now rename/join the output files into the files we expect
+	mv $(TMP_DIR)/apiextensions.k8s.io_v1_customresourcedefinition_provisionings.metal3.io.yaml manifests/0000_31_cluster-baremetal-operator_02_metal3provisioning.crd.yaml
+	mv $(TMP_DIR)/apps_v1_deployment_cluster-baremetal-operator.yaml manifests/0000_31_cluster-baremetal-operator_06_deployment.yaml
+	rm -f manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml
+	for rbac in $(RBAC_LIST) ; do \
+	cat $(TMP_DIR)/$${rbac} >> manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml ;\
+	echo '---' >> manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml ;\
+	done
+	rm -rf $(TMP_DIR)
 
 # Run go fmt against code
 .PHONY: fmt
@@ -65,8 +85,10 @@ vet: lint
 
 # Generate code
 .PHONY: generate
-generate: $(BIN_DIR)/golangci-lint
+generate:
 	go generate -x ./...
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=cluster-baremetal-operator webhook paths=./... output:crd:artifacts:config=config/crd/bases
+	sed -i '/^    controller-gen.kubebuilder.io\/version: (devel)/d' config/crd/bases/*
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 	$(GOLANGCI_LINT) run --fix
 

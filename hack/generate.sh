@@ -12,7 +12,7 @@ eval "$(go env)"
 cd "${GOPATH}"/src/github.com/openshift/cluster-baremetal-operator
 export XDG_CACHE_HOME="/tmp/.cache"
 
-INPUT_FILES="config/crd/bases/*.yaml"
+INPUT_FILES="manifests/*.yaml"
 cksum $INPUT_FILES > "$ARTIFACTS/lint.cksums.before"
 make manifests
 cksum $INPUT_FILES > "$ARTIFACTS/lint.cksums.after"
