@@ -79,6 +79,8 @@ func relatedObjects() []osconfigv1.ObjectReference {
 func (r *ProvisioningReconciler) operandVersions() []osconfigv1.OperandVersion {
 	operandVersions := []osconfigv1.OperandVersion{}
 
+	r.Log.V(1).Info("Release version", "version", r.ReleaseVersion)
+
 	if r.ReleaseVersion != "" {
 		operandVersions = append(operandVersions, osconfigv1.OperandVersion{
 			Name:    "operator",
@@ -148,6 +150,11 @@ func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, conds []osconfigv1.ClusterOperatorStatusCondition) error {
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
+	}
+
+	if len(co.Status.Versions) < 1 {
+		r.Log.Info("updating ClusterOperator Status Versions field")
+		co.Status.Versions = r.operandVersions()
 	}
 
 	_, err := r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
