@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Controller-gen tool
-CONTROLLER_GEN ?= go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go
+CONTROLLER_GEN ?= go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 BIN_DIR := bin
 
 ifeq (/,${HOME})
