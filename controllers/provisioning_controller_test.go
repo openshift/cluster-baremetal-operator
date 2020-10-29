@@ -7,6 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -19,8 +20,8 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	// we need to add the openshift/api to the scheme to be able to read
 	// the infrastructure CR
-	_ = configv1.Install(scheme)
-	_ = metal3iov1alpha1.AddToScheme(scheme)
+	utilruntime.Must(configv1.AddToScheme(scheme))
+	utilruntime.Must(metal3iov1alpha1.AddToScheme(scheme))
 	return scheme
 }
 

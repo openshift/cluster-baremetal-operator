@@ -7,6 +7,7 @@ package tools
 
 import (
 	_ "github.com/golangci/golangci-lint/cmd/golangci-lint"
-	// Need this for code generation
+	// Need these for code generation
+	_ "github.com/go-bindata/go-bindata/go-bindata"
 	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
 )

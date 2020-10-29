@@ -141,6 +141,12 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		r.Log.V(1).Info("Provisioning CR not found")
 		return ctrl.Result{}, nil
 	}
+
+	err = r.ensureClusterOperator(baremetalConfig)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalConfig); err != nil {
 		// Provisioning configuration is not valid.
 		// Requeue request.
@@ -225,5 +231,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&osconfigv1.ClusterOperator{}).
 		Complete(r)
 }

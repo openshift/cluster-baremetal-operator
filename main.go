@@ -52,6 +52,12 @@ func init() {
 		setupLog.Error(err, "Error adding k8s client to scheme.")
 		os.Exit(1)
 	}
+
+	if err := osconfigv1.AddToScheme(scheme); err != nil {
+		setupLog.Error(err, "Error adding k8s client to scheme.")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:scheme
 	// The following is needed to read the Infrastructure CR
 	if err := osconfigv1.Install(scheme); err != nil {
