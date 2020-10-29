@@ -183,6 +183,10 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 	if exists {
 		r.Log.V(1).Info("metal3 deployment already exists")
+		err = r.updateCOStatus(ReasonComplete, "found existing Metal3 deployment", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -198,6 +202,10 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 	if updated {
 		resourcemerge.SetDeploymentGeneration(&r.Generations, deployment)
+	}
+	err = r.updateCOStatus(ReasonComplete, "new Metal3 deployment completed", "")
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
 	}
 
 	return ctrl.Result{}, nil
