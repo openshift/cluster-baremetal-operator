@@ -79,8 +79,6 @@ func relatedObjects() []osconfigv1.ObjectReference {
 func (r *ProvisioningReconciler) operandVersions() []osconfigv1.OperandVersion {
 	operandVersions := []osconfigv1.OperandVersion{}
 
-	r.Log.V(1).Info("Release version", "version", r.ReleaseVersion)
-
 	if r.ReleaseVersion != "" {
 		operandVersions = append(operandVersions, osconfigv1.OperandVersion{
 			Name:    "operator",
