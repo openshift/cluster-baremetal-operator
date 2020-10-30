@@ -150,6 +150,11 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
 	}
 
+	if len(co.Status.Versions) < 1 {
+		r.Log.Info("updating ClusterOperator Status Versions field")
+		co.Status.Versions = r.operandVersions()
+	}
+
 	_, err := r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
 	return err
 }
