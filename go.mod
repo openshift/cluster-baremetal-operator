@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-baremetal-operator
 
-go 1.13
+go 1.15
 
 require (
 	github.com/go-logr/logr v0.2.1-0.20200730175230-ee2de8da5be6
