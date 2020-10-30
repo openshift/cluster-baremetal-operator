@@ -67,7 +67,7 @@ type ProvisioningReconciler struct {
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 
-func (r *ProvisioningReconciler) isEnabled() (bool, error) {
+func (r *ProvisioningReconciler) isEnabled() (bool, string, error) {
 	ctx := context.Background()
 
 	infra := &osconfigv1.Infrastructure{}
@@ -75,17 +75,21 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 		Name: "cluster",
 	}, infra)
 	if err != nil {
-		return false, errors.Wrap(err, "unable to determine Platform")
+		err = errors.Wrap(err, "unable to determine Platform")
+		return false, err.Error(), err
 	}
 
 	// Disable ourselves on platforms other than bare metal
 	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
 		r.Log.V(1).Info("disabled", "platform", infra.Status.Platform)
-		return false, nil
+		if infra.Status.Platform == "" {
+			return false, "unable to determine Platform: status.platform empty", nil
+		}
+		return false, fmt.Sprintf("Operator has no role on platform %s", infra.Status.Platform), nil
 	}
 
 	r.Log.V(1).Info("enabled", "platform", infra.Status.Platform)
-	return true, nil
+	return true, "", nil
 }
 
 func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3iov1alpha1.Provisioning, error) {
@@ -112,13 +116,13 @@ func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3io
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//log := r.Log.WithValues("provisioning", req.NamespacedName)
 
-	enabled, err := r.isEnabled()
+	enabled, msg, err := r.isEnabled()
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
 	}
 	if !enabled {
 		// set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Operator is non-functional", "")
+		err = r.updateCOStatus(ReasonUnsupported, msg, "")
 		if err != nil {
 			return ctrl.Result{}, err
 		}

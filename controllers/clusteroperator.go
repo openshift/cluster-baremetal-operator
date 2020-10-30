@@ -22,8 +22,8 @@ const (
 	// OperatorDisabled represents a Disabled ClusterStatusConditionTypes
 	OperatorDisabled osconfigv1.ClusterStatusConditionType = "Disabled"
 
-	// ReasonEmpty is an empty StatusReason
-	ReasonEmpty StatusReason = ""
+	// ReasonAsExpected is a status reason for the happy state, when we have nothing else to say.
+	ReasonAsExpected StatusReason = "AsExpected"
 
 	// ReasonComplete the deployment of required resources is complete
 	ReasonComplete StatusReason = "DeployComplete"
@@ -170,7 +170,7 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 	switch newReason {
 	case ReasonUnsupported:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonUnsupported), msg))
 	case ReasonSyncing:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
@@ -179,7 +179,7 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
 	case ReasonInvalidConfiguration, ReasonDeployTimedOut:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonAsExpected), "FIXME: are we really available here?"))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
 	case ReasonDeploymentCrashLooping:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))

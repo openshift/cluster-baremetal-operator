@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	configv1 "github.com/openshift/api/config/v1"
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -28,23 +29,30 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 			name: "Correct Condition",
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
 				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
-				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "UnsupportedPlatform", "Operator is non-functional ??"),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, "UnsupportedPlatform", "Operator is non-functional"),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "UnsupportedPlatform", "Operator has no role on platform None"),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, "UnsupportedPlatform", "Operator has no role on platform None"),
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
 			},
 		},
 	}
 
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+		Status: osconfigv1.InfrastructureStatus{
+			Platform: osconfigv1.NonePlatformType,
+		},
+	})
 	co, _ := reconciler.createClusterOperator()
 	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := reconciler.updateCOStatus(ReasonUnsupported, "Operator is non-functional", "")
+			_, err := reconciler.Reconcile(ctrl.Request{})
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 			gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
@@ -243,7 +251,7 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
 				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "InvalidConfiguration", "ProvisioningOSDownloadURL is required but is empty"),
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, "InvalidConfiguration", "Unable to apply Provisioning CR: invalid configuration"),
-				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "AsExpected", "FIXME: are we really available here?"),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
 				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 			},
