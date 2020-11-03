@@ -30,7 +30,7 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 			name: "Correct Condition",
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
 				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
-				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "AsExpected", "Operational"),
 				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, "UnsupportedPlatform", "Operator is non-functional"),
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),

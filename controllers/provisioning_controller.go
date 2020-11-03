@@ -81,11 +81,11 @@ type ProvisioningReconciler struct {
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 
-func (r *ProvisioningReconciler) isEnabled() (bool, error) {
+func IsEnabled(runtimeClient client.Client) (bool, error) {
 	ctx := context.Background()
 
 	infra := &osconfigv1.Infrastructure{}
-	err := r.Client.Get(ctx, client.ObjectKey{
+	err := runtimeClient.Get(ctx, client.ObjectKey{
 		Name: "cluster",
 	}, infra)
 	if err != nil {
@@ -94,11 +94,9 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 
 	// Disable ourselves on platforms other than bare metal
 	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
-		r.Log.V(1).Info("disabled", "platform", infra.Status.Platform)
 		return false, nil
 	}
 
-	r.Log.V(1).Info("enabled", "platform", infra.Status.Platform)
 	return true, nil
 }
 
@@ -126,13 +124,13 @@ func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3io
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//log := r.Log.WithValues("provisioning", req.NamespacedName)
 
-	enabled, err := r.isEnabled()
+	enabled, err := IsEnabled(r.OSClient)
 	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
+		return ctrl.Result{}, errors.Wrap(err, "unable to determine Infrastructure Platform type")
 	}
 	if !enabled {
 		// set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Operator is non-functional", "")
+		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
 		if err != nil {
 			return ctrl.Result{}, err
 		}

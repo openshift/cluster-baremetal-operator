@@ -103,6 +103,21 @@ func main() {
 	recorder := record.NewBroadcaster().NewRecorder(clientgoscheme.Scheme, v1.EventSource{Component: controllers.ComponentName})
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
+	// Check the Platform Type to determine the state of the CO
+	enabled, err := controllers.IsEnabled(mgr.GetClient())
+	if err != nil {
+		setupLog.Error(err, "unable to determine Infrastructure Platform type")
+		os.Exit(1)
+	}
+	if !enabled {
+		//Set ClusterOperator status to disabled=true, available=true
+		err = controllers.SetCOInDisabledState(osClient, releaseVersion)
+		if err != nil {
+			setupLog.Error(err, "unable to set Baremetal CO to disabled")
+			os.Exit(1)
+		}
+	}
+
 	if err = (&controllers.ProvisioningReconciler{
 		Client:         mgr.GetClient(),
 		Log:            ctrl.Log.WithName("controllers").WithName("Provisioning"),

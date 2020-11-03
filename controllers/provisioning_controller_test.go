@@ -87,7 +87,7 @@ func TestReconcile(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
 			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.infra)
-			enabled, err := reconciler.isEnabled()
+			enabled, err := IsEnabled(reconciler.Client)
 			if tc.expectedError && err == nil {
 				t.Error("should have produced an error")
 				return
