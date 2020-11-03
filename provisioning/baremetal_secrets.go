@@ -49,7 +49,15 @@ func generateRandomPassword() (string, error) {
 
 // CreateMariadbPasswordSecret creates a Secret for Mariadb password
 func CreateMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	_, err := client.Secrets(targetNamespace).Get(context.Background(), baremetalSecretName, metav1.GetOptions{})
+	existing, err := client.Secrets(targetNamespace).Get(context.Background(), baremetalSecretName, metav1.GetOptions{})
+	if err == nil && len(existing.ObjectMeta.OwnerReferences) == 0 {
+		err = controllerutil.SetControllerReference(baremetalConfig, existing, scheme)
+		if err != nil {
+			return err
+		}
+		_, err = client.Secrets(targetNamespace).Update(context.Background(), existing, metav1.UpdateOptions{})
+		return err
+	}
 	if !apierrors.IsNotFound(err) {
 		return err
 	}
@@ -91,7 +99,16 @@ func CreateInspectorPasswordSecret(client coreclientv1.SecretsGetter, targetName
 }
 
 func createIronicSecret(client coreclientv1.SecretsGetter, targetNamespace string, name string, username string, configSection string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	_, err := client.Secrets(targetNamespace).Get(context.Background(), name, metav1.GetOptions{})
+	existing, err := client.Secrets(targetNamespace).Get(context.Background(), name, metav1.GetOptions{})
+	if err == nil && len(existing.ObjectMeta.OwnerReferences) == 0 {
+		err = controllerutil.SetControllerReference(baremetalConfig, existing, scheme)
+		if err != nil {
+			return err
+		}
+		_, err = client.Secrets(targetNamespace).Update(context.Background(), existing, metav1.UpdateOptions{})
+		return err
+	}
+
 	if !apierrors.IsNotFound(err) {
 		return err
 	}
