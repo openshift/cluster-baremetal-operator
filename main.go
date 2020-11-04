@@ -100,11 +100,8 @@ func main() {
 	}
 
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
-	recorder := record.NewBroadcaster().NewRecorder(clientgoscheme.Scheme, v1.EventSource{Component: controllers.ComponentName})
-	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
-
 	// Check the Platform Type to determine the state of the CO
-	enabled, err := controllers.IsEnabled(mgr.GetClient())
+	enabled, err := controllers.IsEnabled(osClient)
 	if err != nil {
 		setupLog.Error(err, "unable to determine Infrastructure Platform type")
 		os.Exit(1)
@@ -117,6 +114,9 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	recorder := record.NewBroadcaster().NewRecorder(clientgoscheme.Scheme, v1.EventSource{Component: controllers.ComponentName})
+	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
 	if err = (&controllers.ProvisioningReconciler{
 		Client:         mgr.GetClient(),

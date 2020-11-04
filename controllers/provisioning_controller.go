@@ -24,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
@@ -81,13 +82,10 @@ type ProvisioningReconciler struct {
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 
-func IsEnabled(runtimeClient client.Client) (bool, error) {
+func IsEnabled(osClient osclientset.Interface) (bool, error) {
 	ctx := context.Background()
 
-	infra := &osconfigv1.Infrastructure{}
-	err := runtimeClient.Get(ctx, client.ObjectKey{
-		Name: "cluster",
-	}, infra)
+	infra, err := osClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
 		return false, errors.Wrap(err, "unable to determine Platform")
 	}
