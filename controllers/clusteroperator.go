@@ -245,6 +245,7 @@ func SetCOInDisabledState(osClient osclientset.Interface, version string) error 
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
 	}
 	co.Status.Versions = operandVersions(version)
+	co.Status.RelatedObjects = relatedObjects()
 
 	_, err = osClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
 	return err
