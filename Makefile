@@ -68,6 +68,7 @@ vet: lint
 # Generate code
 .PHONY: generate
 generate: $(BIN_DIR)/golangci-lint
+	go generate -x ./...
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 	GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(BIN_DIR)/golangci-lint run --fix
 

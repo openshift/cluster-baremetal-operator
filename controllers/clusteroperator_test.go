@@ -7,16 +7,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 
 	configv1 "github.com/openshift/api/config/v1"
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
-	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
-
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
+	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
 func TestUpdateCOStatusDisabled(t *testing.T) {
@@ -54,7 +56,7 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateClusterOperator(t *testing.T) {
+func TestEnsureClusterOperator(t *testing.T) {
 	var defaultConditions = []osconfigv1.ClusterOperatorStatusCondition{
 		setStatusCondition(
 			osconfigv1.OperatorProgressing,
@@ -117,10 +119,23 @@ func TestGetOrCreateClusterOperator(t *testing.T) {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterOperatorName,
+					Annotations: map[string]string{
+						"include.release.openshift.io/self-managed-high-availability": "true",
+					},
+					OwnerReferences: []v1.OwnerReference{
+						{
+							APIVersion:         "metal3.io/v1alpha1",
+							Kind:               "Provisioning",
+							Name:               "provisioning-configuration",
+							Controller:         pointer.BoolPtr(true),
+							BlockOwnerDeletion: pointer.BoolPtr(true),
+						},
+					},
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
 					Conditions:     defaultConditions,
 					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
 				},
 			},
 		},
@@ -129,6 +144,9 @@ func TestGetOrCreateClusterOperator(t *testing.T) {
 			existingCO: &osconfigv1.ClusterOperator{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterOperatorName,
+					Annotations: map[string]string{
+						"include.release.openshift.io/self-managed-high-availability": "true",
+					},
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
 					Conditions: conditions,
@@ -137,33 +155,62 @@ func TestGetOrCreateClusterOperator(t *testing.T) {
 			expectedCO: &osconfigv1.ClusterOperator{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterOperatorName,
+					Annotations: map[string]string{
+						"include.release.openshift.io/self-managed-high-availability": "true",
+					},
+					OwnerReferences: []v1.OwnerReference{
+						{
+							APIVersion:         "metal3.io/v1alpha1",
+							Kind:               "Provisioning",
+							Name:               "provisioning-configuration",
+							Controller:         pointer.BoolPtr(true),
+							BlockOwnerDeletion: pointer.BoolPtr(true),
+						},
+					},
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
-					Conditions: conditions,
+					Conditions:     conditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
 				},
 			},
 		},
 	}
-
 	for _, tc := range testCases {
-		var osClient *fakeconfigclientset.Clientset
-		if tc.existingCO != nil {
-			osClient = fakeconfigclientset.NewSimpleClientset(tc.existingCO)
-		} else {
-			osClient = fakeconfigclientset.NewSimpleClientset()
-		}
-		reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
-		reconciler.OSClient = osClient
+		t.Run(tc.name, func(t *testing.T) {
+			var osClient *fakeconfigclientset.Clientset
+			if tc.existingCO != nil {
+				osClient = fakeconfigclientset.NewSimpleClientset(tc.existingCO)
+			} else {
+				osClient = fakeconfigclientset.NewSimpleClientset()
+			}
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+			reconciler.OSClient = osClient
+			reconciler.ReleaseVersion = "test-version"
 
-		co, err := reconciler.getOrCreateClusterOperator()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		normalizeTransitionTimes(co.Status, tc.expectedCO.Status)
+			err := reconciler.ensureClusterOperator(&metal3iov1alpha1.Provisioning{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Provisioning",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: BaremetalProvisioningCR,
+				},
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			co, err := reconciler.getClusterOperator()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-		if !equality.Semantic.DeepEqual(co, tc.expectedCO) {
-			t.Errorf("got: %v, expected: %v", co, tc.expectedCO)
-		}
+			normalizeTransitionTimes(co.Status, tc.expectedCO.Status)
+
+			if !equality.Semantic.DeepEqual(co, tc.expectedCO) {
+				t.Error(cmp.Diff(tc.expectedCO, co))
+			}
+		})
 	}
 }
 

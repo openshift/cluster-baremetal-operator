@@ -1,6 +1,7 @@
 package provisioning
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -8,13 +9,31 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	fakekube "k8s.io/client-go/kubernetes/fake"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	faketesting "k8s.io/client-go/testing"
+
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 const testNamespace = "test-namespce"
+
+var (
+	scheme = runtime.NewScheme()
+)
+
+func init() {
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		os.Exit(1)
+	}
+
+	if err := metal3iov1alpha1.AddToScheme(scheme); err != nil {
+		os.Exit(1)
+	}
+}
 
 func TestGenerateRandomPassword(t *testing.T) {
 	pwd1, err := generateRandomPassword()
@@ -33,6 +52,15 @@ func TestGenerateRandomPassword(t *testing.T) {
 }
 
 func TestCreateMariadbPasswordSecret(t *testing.T) {
+	baremetalCR := &metal3iov1alpha1.Provisioning{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Provisioning",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+	}
 
 	cases := []struct {
 		name          string
@@ -73,7 +101,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 
 			switch tc.name {
 			case "new-mariadb-secret":
-				err := CreateMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace)
+				err := CreateMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
 				assert.Equal(t, tc.expectedError, err)
 
 				if tc.expectedError == nil {
@@ -83,7 +111,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 					// created and the old one returned.
 					if tc.testRecreate {
 						original := secret.(*v1.Secret).StringData[baremetalSecretKey]
-						err := CreateMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace)
+						err := CreateMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
 						assert.Equal(t, tc.expectedError, err)
 						newSecret, _ := kubeClient.Tracker().Get(secretsResource, testNamespace, "metal3-mariadb-password")
 						recreated := newSecret.(*v1.Secret).StringData[baremetalSecretKey]
@@ -91,7 +119,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 					}
 				}
 			case "new-ironic-secret":
-				err := CreateIronicPasswordSecret(kubeClient.CoreV1(), testNamespace)
+				err := CreateIronicPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return
@@ -103,7 +131,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 				}
 				assert.True(t, strings.Compare(secret.(*v1.Secret).StringData[ironicUsernameKey], ironicUsername) == 0, "ironic password created incorrectly")
 			case "new-inspector-secret":
-				err := CreateInspectorPasswordSecret(kubeClient.CoreV1(), testNamespace)
+				err := CreateInspectorPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return

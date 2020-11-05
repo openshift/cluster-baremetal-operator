@@ -1,14 +1,20 @@
 package controllers
 
+//go:generate go run -mod=vendor ../vendor/github.com/go-bindata/go-bindata/go-bindata/ -nometadata -pkg $GOPACKAGE -ignore=bindata.go  ../manifests/0000_31_cluster-baremetal-operator_07_clusteroperator.cr.yaml
+//go:generate gofmt -s -l -w bindata.go
+
 import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
@@ -91,38 +97,70 @@ func (r *ProvisioningReconciler) operandVersions() []osconfigv1.OperandVersion {
 
 // createClusterOperator creates the ClusterOperator and updates its status.
 func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOperator, error) {
-	defaultCO := &osconfigv1.ClusterOperator{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ClusterOperator",
-			APIVersion: "config.openshift.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterOperatorName,
-		},
-		Status: osconfigv1.ClusterOperatorStatus{
-			Conditions:     defaultStatusConditions(),
-			RelatedObjects: relatedObjects(),
-			Versions:       r.operandVersions(),
-		},
-	}
-
-	co, err := r.OSClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
+	b, err := Asset("../manifests/0000_31_cluster-baremetal-operator_07_clusteroperator.cr.yaml")
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("failed to create ClusterOperator %s",
-			clusterOperatorName))
+		return nil, err
 	}
-	r.Log.V(1).Info("created ClusterOperator", "name", clusterOperatorName)
 
-	co.Status = defaultCO.Status
-	return r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
+	codecs := serializer.NewCodecFactory(r.Scheme)
+	obj, _, err := codecs.UniversalDeserializer().Decode(b, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultCO, ok := obj.(*osconfigv1.ClusterOperator)
+	if !ok {
+		return nil, fmt.Errorf("could not convert deserialized asset into ClusterOperoator")
+	}
+
+	return r.OSClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
 }
 
-// getOrCreateClusterOperator gets the existing CO, failing which it creates a new CO.
-func (r *ProvisioningReconciler) getOrCreateClusterOperator() (*osconfigv1.ClusterOperator, error) {
-	existing, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+// ensureClusterOperator makes sure that the CO exists
+func (r *ProvisioningReconciler) ensureClusterOperator(baremetalConfig *metal3iov1alpha1.Provisioning) error {
+	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if k8serrors.IsNotFound(err) {
-		return r.createClusterOperator()
+		co, err = r.createClusterOperator()
 	}
+	if err != nil {
+		return err
+	}
+
+	// if the CO has been created with the manifest then we need to update the ownership
+	if len(co.ObjectMeta.OwnerReferences) == 0 {
+		err = controllerutil.SetControllerReference(baremetalConfig, co, r.Scheme)
+		if err != nil {
+			return err
+		}
+
+		co, err = r.OSClient.ConfigV1().ClusterOperators().Update(context.Background(), co, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+	}
+
+	needsUpadate := false
+	if !equality.Semantic.DeepEqual(co.Status.RelatedObjects, relatedObjects()) {
+		needsUpadate = true
+		co.Status.RelatedObjects = relatedObjects()
+	}
+	if !equality.Semantic.DeepEqual(co.Status.Versions, r.operandVersions()) {
+		needsUpadate = true
+		co.Status.Versions = r.operandVersions()
+	}
+	if len(co.Status.Conditions) == 0 {
+		needsUpadate = true
+		co.Status.Conditions = defaultStatusConditions()
+	}
+
+	if needsUpadate {
+		_, err = r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
+	}
+	return err
+}
+
+func (r *ProvisioningReconciler) getClusterOperator() (*osconfigv1.ClusterOperator, error) {
+	existing, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
@@ -161,7 +199,7 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 
 func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
 
-	co, err := r.getOrCreateClusterOperator()
+	co, err := r.getClusterOperator()
 	if err != nil {
 		r.Log.Error(err, "failed to get or create ClusterOperator")
 		return err

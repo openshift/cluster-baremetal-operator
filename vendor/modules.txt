@@ -32,6 +32,10 @@ github.com/fatih/color
 github.com/fsnotify/fsnotify
 # github.com/ghodss/yaml v1.0.0
 github.com/ghodss/yaml
+# github.com/go-bindata/go-bindata v3.1.2+incompatible
+## explicit
+github.com/go-bindata/go-bindata
+github.com/go-bindata/go-bindata/go-bindata
 # github.com/go-critic/go-critic v0.5.2
 github.com/go-critic/go-critic/checkers
 github.com/go-critic/go-critic/checkers/internal/astwalk
@@ -148,6 +152,7 @@ github.com/golangci/revgrep
 # github.com/golangci/unconvert v0.0.0-20180507085042-28b1c447d1f4
 github.com/golangci/unconvert
 # github.com/google/go-cmp v0.5.2
+## explicit
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags

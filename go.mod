@@ -3,9 +3,11 @@ module github.com/openshift/cluster-baremetal-operator
 go 1.15
 
 require (
+	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/go-logr/logr v0.2.1-0.20200730175230-ee2de8da5be6
 	github.com/go-logr/zapr v0.2.0 // indirect
 	github.com/golangci/golangci-lint v1.32.0
+	github.com/google/go-cmp v0.5.2
 	github.com/openshift/api v0.0.0-20200827090112-c05698d102cf
 	github.com/openshift/client-go v0.0.0-20200827190008-3062137373b5
 	github.com/openshift/library-go v0.0.0-20200910214143-887092e305c1
