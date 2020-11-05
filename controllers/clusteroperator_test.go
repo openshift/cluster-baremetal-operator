@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,6 +55,7 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 			t.Fatal(diff)
 		}
 	}
+	_ = reconciler.OSClient.ConfigV1().ClusterOperators().Delete(context.Background(), clusterOperatorName, metav1.DeleteOptions{})
 }
 
 func TestEnsureClusterOperator(t *testing.T) {
@@ -359,4 +361,44 @@ func TestUpdateCOStatusAvailable(t *testing.T) {
 			t.Fatal(diff)
 		}
 	}
+}
+
+func TestSetCOInDisabledState(t *testing.T) {
+	tCases := []struct {
+		name               string
+		releaseVersion     string
+		expectedConditions []osconfigv1.ClusterOperatorStatusCondition
+	}{
+		{
+			name:           "Disabled State",
+			releaseVersion: "Test",
+			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(ReasonUnsupported), "Nothing to do on this Platform"),
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+			},
+		},
+	}
+
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	co, _ := reconciler.createClusterOperator()
+	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+
+	for _, tc := range tCases {
+		err := SetCOInDisabledState(reconciler.OSClient, tc.releaseVersion)
+		if err != nil {
+			t.Error(err)
+		}
+		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+
+		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
+		if diff != "" {
+			t.Fatal(diff)
+		}
+		assert.Equal(t, operandVersions(tc.releaseVersion), gotCO.Status.Versions, fmt.Sprintf("%s : releaseVersion in CO incorrect. Excpected : %s", tc.name, tc.releaseVersion))
+
+	}
+	_ = reconciler.OSClient.ConfigV1().ClusterOperators().Delete(context.Background(), clusterOperatorName, metav1.DeleteOptions{})
 }

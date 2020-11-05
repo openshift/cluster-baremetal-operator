@@ -32,6 +32,9 @@ const (
 	// ReasonEmpty is an empty StatusReason
 	ReasonEmpty StatusReason = ""
 
+	// ReasonEmpty is an empty StatusReason
+	ReasonExpected StatusReason = "AsExpected"
+
 	// ReasonComplete the deployment of required resources is complete
 	ReasonComplete StatusReason = "DeployComplete"
 
@@ -238,8 +241,8 @@ func SetCOInDisabledState(osClient osclientset.Interface, version string) error 
 	}
 
 	conds := defaultStatusConditions()
-	v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, "Operator on Standby", "Unsupported Platform"))
-	v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
+	v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(ReasonUnsupported), "Nothing to do on this Platform"))
+	v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"))
 
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
