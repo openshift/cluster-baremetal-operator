@@ -54,6 +54,13 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
 		},
 		{
+			// All fields are specified as they should in IPv6
+			name:          "ValidManagedIPv6",
+			spec:          managedProvisioning().ProvisioningIP("fd00:1101::3").ProvisioningNetworkCIDR("fd00:1101::/64").ProvisioningDHCPRange("fd00:1101::a,fd00:1101::ffff:ffff:ffff:fffe").build(),
+			expectedError: false,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+		},
+		{
 			// ProvisioningNetwork is not specified and ProvisioningDHCPExternal is the default value
 			name:          "ImpliedManaged",
 			spec:          managedProvisioning().ProvisioningNetwork("").build(),
@@ -66,7 +73,103 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 			spec:          managedProvisioning().ProvisioningInterface("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
-			expectedMsg:   "ProvisioningInterface",
+			expectedMsg:   "provisioningInterface",
+		},
+		{
+			// Provisioning IP is in the DHCP Range
+			name:          "InvalidManagedProvisioningIPInDHCPRange",
+			spec:          managedProvisioning().ProvisioningIP("172.30.20.20").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "value must be outside of the provisioningDHCPRange",
+		},
+		{
+			// Provisioning IP in DHCP Range with IPv6
+			name:          "InvalidManagedProvisioningIPInDHCPRangeIPv6",
+			spec:          managedProvisioning().ProvisioningIP("fd00:1101::b").ProvisioningNetworkCIDR("fd00:1101::/64").ProvisioningDHCPRange("fd00:1101::a,fd00:1101::ffff:ffff:ffff:fffe").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "value must be outside of the provisioningDHCPRange",
+		},
+		{
+			// OSDownloadURL Image must end in qcow2.gz or qcow2.xz
+			name:          "InvalidManagedDownloadURLSuffix",
+			spec:          managedProvisioning().ProvisioningOSDownloadURL("http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.zip?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "OS image and must end in",
+		},
+		{
+			// ProvisioningIP is not in the NetworkCIDR
+			name:          "InvalidManagedProvisioningIPCIDR",
+			spec:          managedProvisioning().ProvisioningIP("172.30.30.3").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "is not in the range defined by the provisioningNetworkCIDR",
+		},
+		{
+			// ProvisioningIP is not in the NetworkCIDR IPv6
+			name:          "InvalidManagedProvisioningIPCIDRIPv6",
+			spec:          managedProvisioning().ProvisioningIP("fd00:1102::3").ProvisioningNetworkCIDR("fd00:1101::/64").ProvisioningDHCPRange("fd00:1101::a,fd00:1101::ffff:ffff:ffff:fffe").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "is not in the range defined by the provisioningNetworkCIDR",
+		},
+		{
+			// DHCPRange is invalid
+			name:          "InvalidManagedDHCPRangeIPIncorrect",
+			spec:          managedProvisioning().ProvisioningDHCPRange("172.30.20.11, 172.30.20.xxx").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "could not parse provisioningDHCPRange",
+		},
+		{
+			// DHCPRange is not properly formatted
+			name:          "InvalidManagedIncorrectDHCPRange",
+			spec:          managedProvisioning().ProvisioningDHCPRange("172.30.20.11:172.30.30.100").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "not a valid provisioningDHCPRange",
+		},
+		{
+			// DHCPRange is not properly formatted IPv6
+			name:          "InvalidManagedIncorrectDHCPRangeIPv6",
+			spec:          managedProvisioning().ProvisioningIP("fd00:1102::3").ProvisioningNetworkCIDR("fd00:1101::/64").ProvisioningDHCPRange("fd00:1101::a,fd00:1101::ffff:ffff:ffff:fffef").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "is not in the range defined by the provisioningNetworkCIDR",
+		},
+		{
+			// OS URL has invalid checksum
+			name:          "InvalidManagedNoChecksumURL",
+			spec:          managedProvisioning().ProvisioningOSDownloadURL("http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=sputnik").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "the sha256 parameter in the provisioningOSDownloadURL",
+		},
+		{
+			// DHCPRange is not part of the network CIDR
+			name:          "InvalidManagedDHCPRangeOutsideCIDR",
+			spec:          managedProvisioning().ProvisioningDHCPRange("172.30.30.11, 172.30.30.100").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "is not part of the provisioningNetworkCIDR",
+		},
+		{
+			// DHCP Range is not set
+			name:          "InvalidManagedDHCPRangeNotSet",
+			spec:          managedProvisioning().ProvisioningDHCPRange("").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "provisioningDHCPRange is required in Managed mode",
+		},
+		{
+			// OS URL is not http/https
+			name:          "InvalidManagedURLNotHttp",
+			spec:          managedProvisioning().ProvisioningOSDownloadURL("gopher://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "unsupported scheme",
 		},
 	}
 	for _, tc := range tCases {
@@ -120,12 +223,27 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
 		},
 		{
+			//ProvisioningDHCPRange is set and should be ignored
+			name:          "ValidUnmanagedIgnoreDHCPRange",
+			spec:          unmanagedProvisioning().ProvisioningDHCPRange("172.30.10.11,172.30.10.30").ProvisioningDHCPExternal(true).build(),
+			expectedError: false,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
+		},
+		{
 			// ProvisioningInterface is missing
 			name:          "InvalidUnmanaged",
 			spec:          unmanagedProvisioning().ProvisioningInterface("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
-			expectedMsg:   "ProvisioningInterface",
+			expectedMsg:   "provisioningInterface",
+		},
+		{
+			// Invalid provisioning IP.
+			name:          "InvalidUnmanagedBadIP",
+			spec:          unmanagedProvisioning().ProvisioningIP("172.30.20.500").ProvisioningDHCPExternal(true).build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
+			expectedMsg:   "provisioningIP",
 		},
 	}
 	for _, tc := range tCases {
@@ -179,11 +297,11 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
 		},
 		{
-			name:          "InvalidDisabledNoCIDRWithIP",
-			spec:          disabledProvisioning().ProvisioningNetworkCIDR("").build(),
+			name:          "InvalidDisabledBadDownloadURL",
+			spec:          disabledProvisioning().ProvisioningOSDownloadURL("http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.zip?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
-			expectedMsg:   "provisioningNetworkCIDR",
+			expectedMsg:   "provisioningOSDownloadURL",
 		},
 		{
 			// Missing ProvisioningOSDownloadURL
@@ -191,7 +309,23 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			spec:          disabledProvisioning().ProvisioningOSDownloadURL("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
-			expectedMsg:   "ProvisioningOSDownloadURL",
+			expectedMsg:   "provisioningOSDownloadURL",
+		},
+		{
+			// IP and CIDR set with bad CIDR
+			name:          "InvalidDisabledBadCIDR",
+			spec:          disabledProvisioning().ProvisioningIP("172.22.0.3").ProvisioningNetworkCIDR("172.22.0.0/33").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
+			expectedMsg:   "could not parse provisioningNetworkCIDR",
+		},
+		{
+			// Only IP is set and not CIDR
+			name:          "InvalidDisabledOnlyIP",
+			spec:          disabledProvisioning().ProvisioningIP("172.22.0.3").ProvisioningNetworkCIDR("").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
+			expectedMsg:   "provisioningNetworkCIDR",
 		},
 	}
 	for _, tc := range tCases {
