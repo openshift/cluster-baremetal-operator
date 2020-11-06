@@ -317,12 +317,12 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 				ProvisioningInterface:     "eth0",
 				ProvisioningIP:            "172.30.20.3",
 				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
+				ProvisioningDHCPRange:     "172.30.20.11,172.30.20.101",
 				ProvisioningOSDownloadURL: "",
 				ProvisioningNetwork:       "Managed",
 			},
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
-				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "InvalidConfiguration", "ProvisioningOSDownloadURL is required but is empty"),
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "InvalidConfiguration", "provisioningOSDownloadURL is required but is empty"),
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, "InvalidConfiguration", "Unable to apply Provisioning CR: invalid configuration"),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
@@ -337,8 +337,13 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 
 	for _, tc := range tCases {
 		baremetalCR.Spec = tc.spec
-		if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalCR); err != nil {
-			err = reconciler.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
+		if errs := provisioning.ValidateBaremetalProvisioningConfig(baremetalCR); len(errs) > 0 {
+			var errorstring string
+			for _, err := range errs {
+				errorstring = err.Error() + "\n" + errorstring
+			}
+			errorstring = strings.TrimSuffix(errorstring, "\n")
+			err := reconciler.updateCOStatus(ReasonInvalidConfiguration, errorstring, "Unable to apply Provisioning CR: invalid configuration")
 			if err != nil {
 				t.Error(err)
 			}

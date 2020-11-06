@@ -74,21 +74,101 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 			spec:          managedProvisioning().ProvisioningInterface("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
-			expectedMsg:   "ProvisioningInterface",
+			expectedMsg:   "provisioningInterface",
+		},
+		{
+			// Provisioning IP is in the DHCP Range
+			name:          "InvalidManagedProvisioningIPInDHCPRange",
+			spec:          managedProvisioning().ProvisioningIP("172.30.20.20").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "value must be outside of the provisioningDHCPRange",
+		},
+		{
+			// OSDownloadURL Image must end in qcow2.gz or qcow2.xz
+			name:          "InvalidManagedDownloadURLSuffix",
+			spec:          managedProvisioning().ProvisioningOSDownloadURL("http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.zip?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "OS image and must end in",
+		},
+		{
+			// ProvisioningIP is not in the NetworkCIDR
+			name:          "InvalidManagedProvisioningIPCIDR",
+			spec:          managedProvisioning().ProvisioningIP("172.30.30.3").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "is not in the range defined by the provisioningNetworkCIDR",
+		},
+		{
+			// DHCPRange is invalid
+			name:          "InvalidManagedDHCPRangeIPIncorrect",
+			spec:          managedProvisioning().ProvisioningDHCPRange("172.30.20.11, 172.30.20.xxx").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "could not parse provisioningDHCPRange",
+		},
+		{
+			// DHCPRange is not properly formatted
+			name:          "InvalidManagedIncorrectDHCPRange",
+			spec:          managedProvisioning().ProvisioningDHCPRange("172.30.20.11:172.30.30.100").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "not a valid provisioningDHCPRange",
+		},
+		{
+			// OS URL has invalid checksum
+			name:          "InvalidManagedNoChecksumURL",
+			spec:          managedProvisioning().ProvisioningOSDownloadURL("http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=sputnik").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "the sha256 parameter in the provisioningOSDownloadURL",
+		},
+		{
+			// DHCPRange is not part of the network CIDR
+			name:          "InvalidManagedDHCPRangeOutsideCIDR",
+			spec:          managedProvisioning().ProvisioningDHCPRange("172.30.30.11, 172.30.30.100").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "is not part of the provisioningNetworkCIDR",
+		},
+		{
+			// DHCP Range is not set
+			name:          "InvalidManagedDHCPRangeNotSet",
+			spec:          managedProvisioning().ProvisioningDHCPRange("").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "provisioningDHCPRange is required in Managed mode",
+		},
+		{
+			// OS URL is not http/https
+			name:          "InvalidManagedURLNotHttp",
+			spec:          managedProvisioning().ProvisioningOSDownloadURL("gopher://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+			expectedMsg:   "unsupported scheme",
 		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = *tc.spec
-			err := ValidateBaremetalProvisioningConfig(baremetalCR)
-			if !tc.expectedError && err != nil {
-				t.Errorf("unexpected error: %v", err)
+			errs := ValidateBaremetalProvisioningConfig(baremetalCR)
+			if !tc.expectedError && len(errs) > 0 {
+				t.Errorf("unexpected errors: %v", errs)
 				return
 			}
 			assert.Equal(t, tc.expectedMode, getProvisioningNetworkMode(baremetalCR), "enabled results did not match")
+			var errorstring string
+			for _, err := range errs {
+				errorstring = err.Error() + "\n" + errorstring
+			}
+			errorstring = strings.TrimSuffix(errorstring, "\n")
 			if tc.expectedError {
-				assert.True(t, strings.Contains(err.Error(), tc.expectedMsg))
+				assert.True(t, strings.Contains(errorstring, tc.expectedMsg))
+				if !strings.Contains(errorstring, tc.expectedMsg) {
+					t.Errorf("unexpected errors: %v", errs)
+				}
 			}
 			return
 		})
@@ -128,26 +208,46 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
 		},
 		{
+			//ProvisioningDHCPRange is set and should be ignored
+			name:          "ValidUnmanagedIgnoreDHCPRange",
+			spec:          unmanagedProvisioning().ProvisioningDHCPRange("172.30.10.11,172.30.10.30").ProvisioningDHCPExternal(true).build(),
+			expectedError: false,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
+		},
+		{
 			// ProvisioningInterface is missing
 			name:          "InvalidUnmanaged",
 			spec:          unmanagedProvisioning().ProvisioningInterface("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
-			expectedMsg:   "ProvisioningInterface",
+			expectedMsg:   "provisioningInterface",
+		},
+		{
+			// Invalid provisioning IP.
+			name:          "InvalidUnmanagedBadIP",
+			spec:          unmanagedProvisioning().ProvisioningIP("172.30.20.500").ProvisioningDHCPExternal(true).build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
+			expectedMsg:   "provisioningIP",
 		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = *tc.spec
-			err := ValidateBaremetalProvisioningConfig(baremetalCR)
-			if !tc.expectedError && err != nil {
-				t.Errorf("unexpected error: %v", err)
+			errs := ValidateBaremetalProvisioningConfig(baremetalCR)
+			if !tc.expectedError && len(errs) > 0 {
+				t.Errorf("unexpected errors: %v", errs)
 				return
 			}
 			assert.Equal(t, tc.expectedMode, getProvisioningNetworkMode(baremetalCR), "enabled results did not match")
+			var errorstring string
+			for _, err := range errs {
+				errorstring = err.Error() + "\n" + errorstring
+			}
+			errorstring = strings.TrimSuffix(errorstring, "\n")
 			if tc.expectedError {
-				assert.True(t, strings.Contains(err.Error(), tc.expectedMsg))
+				assert.True(t, strings.Contains(errorstring, tc.expectedMsg))
 			}
 			return
 		})
@@ -199,21 +299,26 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			spec:          disabledProvisioning().ProvisioningOSDownloadURL("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
-			expectedMsg:   "ProvisioningOSDownloadURL",
+			expectedMsg:   "provisioningOSDownloadURL",
 		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = *tc.spec
-			err := ValidateBaremetalProvisioningConfig(baremetalCR)
-			if !tc.expectedError && err != nil {
-				t.Errorf("unexpected error: %v", err)
+			errs := ValidateBaremetalProvisioningConfig(baremetalCR)
+			if !tc.expectedError && len(errs) > 0 {
+				t.Errorf("unexpected errors: %v", errs)
 				return
 			}
 			assert.Equal(t, tc.expectedMode, getProvisioningNetworkMode(baremetalCR), "enabled results did not match")
+			var errorstring string
+			for _, err := range errs {
+				errorstring = err.Error() + "\n" + errorstring
+			}
+			errorstring = strings.TrimSuffix(errorstring, "\n")
 			if tc.expectedError {
-				assert.True(t, strings.Contains(err.Error(), tc.expectedMsg))
+				assert.True(t, strings.Contains(errorstring, tc.expectedMsg))
 			}
 			return
 		})

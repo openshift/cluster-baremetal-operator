@@ -16,8 +16,11 @@ limitations under the License.
 package provisioning
 
 import (
+	"bytes"
 	"fmt"
 	"net"
+	"net/url"
+	"strings"
 
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -45,18 +48,62 @@ var (
 )
 
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
-func ValidateBaremetalProvisioningConfig(prov *metal3iov1alpha1.Provisioning) error {
+func ValidateBaremetalProvisioningConfig(prov *metal3iov1alpha1.Provisioning) []error {
 	provisioningNetworkMode := getProvisioningNetworkMode(prov)
 	log.V(1).Info("provisioning network", "mode", provisioningNetworkMode)
-	switch provisioningNetworkMode {
-	case metal3iov1alpha1.ProvisioningNetworkManaged:
-		return validateManagedConfig(prov)
-	case metal3iov1alpha1.ProvisioningNetworkUnmanaged:
-		return validateUnmanagedConfig(prov)
-	case metal3iov1alpha1.ProvisioningNetworkDisabled:
-		return validateDisabledConfig(prov)
+
+	/*
+	   Managed:
+	   "ProvisioningInterface"
+	   "ProvisioningIP"
+	   "ProvisioningNetworkCIDR"
+	   "ProvisioningDHCPRange"
+	   "ProvisioningOSDownloadURL"
+
+	   Unmanaged:
+	   "ProvisioningInterface"
+	   "ProvisioningIP"
+	   "ProvisioningNetworkCIDR"
+	   "ProvisioningOSDownloadURL"
+
+	   Disabled:
+	   "ProvisioningIP"
+	   "ProvisioningNetworkCIDR"
+	   "ProvisioningOSDownloadURL"
+	*/
+
+	var errs []error
+
+	// They all use provisioningOSDownloadURL
+	if err := validateProvisioningOSDownloadURL(prov.Spec.ProvisioningOSDownloadURL); err != nil {
+		errs = append(errs, err...)
 	}
-	return nil
+
+	// Ignore DHCPRange in all but Managed mode.
+	dhcpRange := prov.Spec.ProvisioningDHCPRange
+	if provisioningNetworkMode != metal3iov1alpha1.ProvisioningNetworkManaged {
+		dhcpRange = ""
+	}
+
+	// They all use the provisioning network settings, except DHCPRange.  We'll
+	// verify that below
+	if err := validateProvisioningNetworkSettings(prov.Spec.ProvisioningIP, prov.Spec.ProvisioningNetworkCIDR, dhcpRange); err != nil {
+		errs = append(errs, err...)
+	}
+
+	if provisioningNetworkMode == metal3iov1alpha1.ProvisioningNetworkManaged || provisioningNetworkMode == metal3iov1alpha1.ProvisioningNetworkUnmanaged {
+		if err := validateProvisioningInterface(prov.Spec.ProvisioningInterface); err != nil {
+			errs = append(errs, err...)
+		}
+	}
+
+	if provisioningNetworkMode == metal3iov1alpha1.ProvisioningNetworkManaged {
+		if prov.Spec.ProvisioningDHCPRange == "" {
+			errs = append(errs, fmt.Errorf("provisioningDHCPRange is required in Managed mode but is not set"))
+		}
+	}
+
+	return errs
 }
 
 func getProvisioningNetworkMode(prov *metal3iov1alpha1.Provisioning) metal3iov1alpha1.ProvisioningNetwork {
@@ -74,60 +121,120 @@ func getProvisioningNetworkMode(prov *metal3iov1alpha1.Provisioning) metal3iov1a
 	return provisioningNetworkMode
 }
 
-func validateManagedConfig(prov *metal3iov1alpha1.Provisioning) error {
-	for _, toTest := range []struct {
-		Name  string
-		Value string
-	}{
+func validateProvisioningOSDownloadURL(uri string) []error {
+	var errs []error
 
-		{Name: "ProvisioningInterface", Value: prov.Spec.ProvisioningInterface},
-		{Name: "ProvisioningIP", Value: prov.Spec.ProvisioningIP},
-		{Name: "ProvisioningNetworkCIDR", Value: prov.Spec.ProvisioningNetworkCIDR},
-		{Name: "ProvisioningDHCPRange", Value: prov.Spec.ProvisioningDHCPRange},
-		{Name: "ProvisioningOSDownloadURL", Value: prov.Spec.ProvisioningOSDownloadURL},
-	} {
-		if toTest.Value == "" {
-			return fmt.Errorf("%s is required but is empty", toTest.Name)
-		}
+	if uri == "" {
+		errs = append(errs, fmt.Errorf("provisioningOSDownloadURL is required but is empty"))
+		return errs
 	}
-	return nil
+
+	parsedURL, err := url.ParseRequestURI(uri)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("the provisioningOSDownloadURL provided: %q is invalid", uri))
+		// If it's not a valid URI lets just return.
+		return errs
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		errs = append(errs, fmt.Errorf("unsupported scheme %q in provisioningOSDownloadURL %s", parsedURL.Scheme, uri))
+		// Again it's not worth it if it's not http(s)
+		return errs
+	}
+	var sha256Checksum string
+	if sha256Checksums, ok := parsedURL.Query()["sha256"]; ok {
+		sha256Checksum = sha256Checksums[0]
+	}
+	if sha256Checksum == "" {
+		errs = append(errs, fmt.Errorf("the sha256 parameter in the provisioningOSDownloadURL %q is missing", uri))
+	}
+	if len(sha256Checksum) != 64 {
+		errs = append(errs, fmt.Errorf("the sha256 parameter in the provisioningOSDownloadURL %q is invalid", uri))
+	}
+	if !strings.HasSuffix(parsedURL.Path, ".qcow2.gz") && !strings.HasSuffix(parsedURL.Path, ".qcow2.xz") {
+		errs = append(errs, fmt.Errorf("the provisioningOSDownloadURL provided: %q is an OS image and must end in .qcow2.gz or .qcow2.xz", uri))
+	}
+
+	return errs
 }
 
-func validateUnmanagedConfig(prov *metal3iov1alpha1.Provisioning) error {
-	for _, toTest := range []struct {
-		Name  string
-		Value string
-	}{
+func validateProvisioningInterface(iface string) []error {
+	// Unfortunately there seems to be nothing you can really do to verify
+	// the ProvisioningInterface as it's not necessarily on this machine
+	// and could be almost anything.
+	var errs []error
 
-		{Name: "ProvisioningInterface", Value: prov.Spec.ProvisioningInterface},
-		{Name: "ProvisioningIP", Value: prov.Spec.ProvisioningIP},
-		{Name: "ProvisioningNetworkCIDR", Value: prov.Spec.ProvisioningNetworkCIDR},
-		{Name: "ProvisioningOSDownloadURL", Value: prov.Spec.ProvisioningOSDownloadURL},
-	} {
-		if toTest.Value == "" {
-			return fmt.Errorf("%s is required but is empty", toTest.Name)
-		}
+	if iface == "" {
+		errs = append(errs, fmt.Errorf("provisioningInterface is required but is not set"))
 	}
-	return nil
+	return errs
 }
 
-func validateDisabledConfig(prov *metal3iov1alpha1.Provisioning) error {
-	for _, toTest := range []struct {
-		Name  string
-		Value string
-	}{
-		{Name: "ProvisioningOSDownloadURL", Value: prov.Spec.ProvisioningOSDownloadURL},
-	} {
-		if toTest.Value == "" {
-			return fmt.Errorf("%s is required but is empty", toTest.Name)
+func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange string) []error {
+	// provisioningIP and networkCIDR are always set.  DHCP range is optional
+	// depending on mode.
+	var errs []error
+
+	// Verify provisioning ip and get it into net format for future tests.
+	provisioningIP := net.ParseIP(ip)
+	if provisioningIP == nil {
+		errs = append(errs, fmt.Errorf("could not parse provisioningIP %q", ip))
+		return errs
+	}
+
+	// Verify Network CIDR
+	_, provisioningCIDR, err := net.ParseCIDR(cidr)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("could not parse provisioningNetworkCIDR %q", cidr))
+		// Similar thing.. need this to be valid for further tests.
+		return errs
+	}
+
+	// Ensure provisioning IP is in the network CIDR
+	if !provisioningCIDR.Contains(provisioningIP) {
+		errs = append(errs, fmt.Errorf("provisioningIP %q is not in the range defined by the provisioningNetworkCIDR %q", ip, cidr))
+	}
+
+	// DHCP Range might not be set in which case we're done here.
+	if dhcpRange == "" {
+		return errs
+	}
+
+	// We want to allow a space after the ',' if the user likes it.
+	dhcpRange = strings.ReplaceAll(dhcpRange, ", ", ",")
+
+	// Test DHCP Range.
+	dhcpRangeSplit := strings.Split(dhcpRange, ",")
+	if len(dhcpRangeSplit) != 2 {
+		errs = append(errs, fmt.Errorf("%q is not a valid provisioningDHCPRange.  DHCP range format: start_ip,end_ip", dhcpRange))
+		return errs
+	}
+
+	for _, ip := range dhcpRangeSplit {
+		// Ensure IP is valid
+		dhcpIP := net.ParseIP(ip)
+		if dhcpIP == nil {
+			errs = append(errs, fmt.Errorf("could not parse provisioningDHCPRange, %q is not a valid IP", ip))
+			// Can't really do further tests without valid IPs
+			return errs
+		}
+
+		// Validate IP is in the provisioning network
+		if !provisioningCIDR.Contains(dhcpIP) {
+			errs = append(errs, fmt.Errorf("invalid provisioningDHCPRange, IP %q is not part of the provisioningNetworkCIDR %q", dhcpIP, cidr))
 		}
 	}
 
-	if prov.Spec.ProvisioningNetworkCIDR == "" && prov.Spec.ProvisioningIP != "" {
-		return fmt.Errorf("provisioningNetworkCIDR is required when specifying a provisioningIP")
+	// Ensure provisioning IP is not in the DHCP range
+	start := net.ParseIP(dhcpRangeSplit[0])
+	end := net.ParseIP(dhcpRangeSplit[1])
+
+	if start != nil && end != nil {
+		if bytes.Compare(provisioningIP, start) >= 0 && bytes.Compare(provisioningIP, end) <= 0 {
+			errs = append(errs, fmt.Errorf("invalid provisioningIP %q, value must be outside of the provisioningDHCPRange %q", provisioningIP, dhcpRange))
+		}
 	}
 
-	return nil
+	return errs
 }
 
 func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
