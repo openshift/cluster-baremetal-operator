@@ -5,6 +5,8 @@ IMG ?= controller:latest
 CONTROLLER_GEN ?= go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 BIN_DIR := bin
 
+IMAGES_JSON := /etc/cluster-baremetal-operator/images/images.json
+
 ifeq (/,${HOME})
 GOLANGCI_LINT_CACHE=/tmp/golangci-lint-cache/
 else
@@ -29,7 +31,7 @@ cluster-baremetal-operator: generate lint
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate lint manifests
-	go run ./main.go
+	go run ./main.go -images-json $(IMAGES_JSON)
 
 # Install CRDs into a cluster
 install: manifests
