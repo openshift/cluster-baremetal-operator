@@ -48,8 +48,6 @@ const (
 	ComponentName = "cluster-baremetal-operator"
 	// BaremetalProvisioningCR is the name of the provisioning resource
 	BaremetalProvisioningCR = "provisioning-configuration"
-	// ContainerImagesFile volume mounted file containing the images configmap
-	ContainerImagesFile = "/etc/cluster-baremetal-operator/images/images.json"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
@@ -63,6 +61,7 @@ type ProvisioningReconciler struct {
 	EventRecorder  record.EventRecorder
 	KubeClient     kubernetes.Interface
 	ReleaseVersion string
+	ImagesFilename string
 
 	Generations []osoperatorv1.GenerationStatus
 }
@@ -161,7 +160,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 	// Read container images from Config Map
 	var containerImages provisioning.Images
-	if err := provisioning.GetContainerImages(&containerImages, ContainerImagesFile); err != nil {
+	if err := provisioning.GetContainerImages(&containerImages, r.ImagesFilename); err != nil {
 		// Images config map is not valid
 		// Provisioning configuration is not valid.
 		// Requeue request.
