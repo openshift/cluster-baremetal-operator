@@ -32,7 +32,7 @@ const (
 	// ReasonEmpty is an empty StatusReason
 	ReasonEmpty StatusReason = ""
 
-	// ReasonEmpty is an empty StatusReason
+	// ReasonExpected indicates that the operator is behaving as expected
 	ReasonExpected StatusReason = "AsExpected"
 
 	// ReasonComplete the deployment of required resources is complete

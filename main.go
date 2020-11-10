@@ -103,14 +103,14 @@ func main() {
 	// Check the Platform Type to determine the state of the CO
 	enabled, err := controllers.IsEnabled(osClient)
 	if err != nil {
-		setupLog.Error(err, "unable to determine Infrastructure Platform type")
+		setupLog.Error(err, "could not determine whether to run")
 		os.Exit(1)
 	}
 	if !enabled {
 		//Set ClusterOperator status to disabled=true, available=true
 		err = controllers.SetCOInDisabledState(osClient, releaseVersion)
 		if err != nil {
-			setupLog.Error(err, "unable to set Baremetal CO to disabled")
+			setupLog.Error(err, "unable to set baremetal ClusterOperator to Disabled")
 			os.Exit(1)
 		}
 	}

@@ -124,13 +124,13 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 	enabled, err := IsEnabled(r.OSClient)
 	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "unable to determine Infrastructure Platform type")
+		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
 	}
 	if !enabled {
 		// set ClusterOperator status to disabled=true, available=true
 		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %v", clusterOperatorName, err)
 		}
 
 		// We're disabled; don't requeue
