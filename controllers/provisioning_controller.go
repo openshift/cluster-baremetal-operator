@@ -149,6 +149,34 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
+	// examine DeletionTimestamp to determine if object is under deletion
+	if baremetalConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !containsString(baremetalConfig.ObjectMeta.Finalizers,
+			metal3iov1alpha1.ProvisioningFinalizer) {
+			// Add finalizer becasue it doesn't already exist
+			baremetalConfig.ObjectMeta.Finalizers = append(baremetalConfig.ObjectMeta.Finalizers,
+				metal3iov1alpha1.ProvisioningFinalizer)
+			if err := r.Client.Update(context.Background(), baremetalConfig); err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
+			}
+		}
+	} else {
+		// The Provisioning object is being deleted
+		if containsString(baremetalConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
+			// Add any specific deletion logic here
+
+			// Remove our finalizer from the list and update it.
+			baremetalConfig.ObjectMeta.Finalizers = removeString(baremetalConfig.ObjectMeta.Finalizers,
+				metal3iov1alpha1.ProvisioningFinalizer)
+			if err := r.Client.Update(context.Background(), baremetalConfig); err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
+			}
+		}
+	}
+
 	err = r.ensureClusterOperator(baremetalConfig)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -194,7 +222,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// If Metal3 Deployment already exists, do nothing.
 	exists, err := provisioning.GetExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
 	if err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, errors.Wrap(err, "failed to to find existing Metal3 Deployment")
+		return ctrl.Result{}, errors.Wrap(err, "failed to find existing Metal3 Deployment")
 	}
 
 	if exists {
@@ -245,4 +273,25 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Complete(r)
+}
+
+// Helper function to check presence of string in a slice of strings
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// Helper function to remove string from a slice of strings
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
 }
