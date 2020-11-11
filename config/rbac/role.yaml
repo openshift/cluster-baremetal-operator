@@ -14,14 +14,42 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - config.openshift.io
   resources:
   - clusteroperators
   - clusteroperators/status
   verbs:
   - create
+  - delete
   - get
+  - list
+  - patch
   - update
+  - watch
 - apiGroups:
   - config.openshift.io
   resources:
@@ -44,6 +72,18 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - provisionings/finalizers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - metal3.io
