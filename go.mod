@@ -20,4 +20,5 @@ require (
 	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
 	sigs.k8s.io/controller-runtime v0.6.0
 	sigs.k8s.io/controller-tools v0.3.0
+	sigs.k8s.io/kustomize/kustomize/v3 v3.8.5
 )

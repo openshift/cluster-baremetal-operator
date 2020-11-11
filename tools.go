@@ -10,4 +10,5 @@ import (
 	// Need these for code generation
 	_ "github.com/go-bindata/go-bindata/go-bindata"
 	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
+	_ "sigs.k8s.io/kustomize/kustomize/v3"
 )
