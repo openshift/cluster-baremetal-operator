@@ -7,7 +7,9 @@ metadata:
   name: cluster-baremetal-operator
   namespace: openshift-machine-api
 rules:
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - configmaps
   verbs:
   - create
@@ -17,7 +19,9 @@ rules:
   - patch
   - update
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - create
@@ -71,7 +75,9 @@ metadata:
   creationTimestamp: null
   name: cluster-baremetal-operator
 rules:
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - events
   verbs:
   - create
