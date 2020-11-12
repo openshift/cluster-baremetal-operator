@@ -85,10 +85,10 @@ type ProvisioningReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 
-func IsEnabled(osClient osclientset.Interface) (bool, error) {
+func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	ctx := context.Background()
 
-	infra, err := osClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
+	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
 		return false, errors.Wrap(err, "unable to determine Platform")
 	}
@@ -125,7 +125,7 @@ func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3io
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//log := r.Log.WithValues("provisioning", req.NamespacedName)
 
-	enabled, err := IsEnabled(r.OSClient)
+	enabled, err := r.isEnabled()
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
 	}
@@ -270,6 +270,19 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
+
+	// Check the Platform Type to determine the state of the CO
+	enabled, err := r.isEnabled()
+	if err != nil {
+		return errors.Wrap(err, "could not determine whether to run")
+	}
+	if !enabled {
+		//Set ClusterOperator status to disabled=true, available=true
+		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
+		if err != nil {
+			return errors.Wrap(err, "unable to set baremetal ClusterOperator to Disabled")
+		}
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).

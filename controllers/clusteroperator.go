@@ -14,7 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
-	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
@@ -230,26 +229,4 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 	}
 
 	return r.syncStatus(co, conds)
-}
-
-func SetCOInDisabledState(osClient osclientset.Interface, version string) error {
-	//The CVO should have created the CO
-	co, err := osClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
-
-	if err != nil {
-		return fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
-	}
-
-	conds := defaultStatusConditions()
-	v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(ReasonUnsupported), "Nothing to do on this Platform"))
-	v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"))
-
-	for _, c := range conds {
-		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
-	}
-	co.Status.Versions = operandVersions(version)
-	co.Status.RelatedObjects = relatedObjects()
-
-	_, err = osClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
-	return err
 }
