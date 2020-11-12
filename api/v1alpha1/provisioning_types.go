@@ -30,6 +30,9 @@ const (
 	ProvisioningNetworkManaged   ProvisioningNetwork = "Managed"
 	ProvisioningNetworkUnmanaged ProvisioningNetwork = "Unmanaged"
 	ProvisioningNetworkDisabled  ProvisioningNetwork = "Disabled"
+
+	// ProvisioningFinalizer is required for proper handling of deletion
+	ProvisioningFinalizer = "provisioning.metal3.io"
 )
 
 // ProvisioningSpec defines the desired state of Provisioning

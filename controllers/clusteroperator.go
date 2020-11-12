@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
+	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
@@ -30,6 +31,9 @@ const (
 
 	// ReasonEmpty is an empty StatusReason
 	ReasonEmpty StatusReason = ""
+
+	// ReasonExpected indicates that the operator is behaving as expected
+	ReasonExpected StatusReason = "AsExpected"
 
 	// ReasonComplete the deployment of required resources is complete
 	ReasonComplete StatusReason = "DeployComplete"
@@ -82,13 +86,13 @@ func relatedObjects() []osconfigv1.ObjectReference {
 
 // operandVersions returns the current list of OperandVersions for the
 // ClusterOperator objects's status.
-func (r *ProvisioningReconciler) operandVersions() []osconfigv1.OperandVersion {
+func operandVersions(version string) []osconfigv1.OperandVersion {
 	operandVersions := []osconfigv1.OperandVersion{}
 
-	if r.ReleaseVersion != "" {
+	if version != "" {
 		operandVersions = append(operandVersions, osconfigv1.OperandVersion{
 			Name:    "operator",
-			Version: r.ReleaseVersion,
+			Version: version,
 		})
 	}
 
@@ -144,9 +148,9 @@ func (r *ProvisioningReconciler) ensureClusterOperator(baremetalConfig *metal3io
 		needsUpadate = true
 		co.Status.RelatedObjects = relatedObjects()
 	}
-	if !equality.Semantic.DeepEqual(co.Status.Versions, r.operandVersions()) {
+	if !equality.Semantic.DeepEqual(co.Status.Versions, operandVersions(r.ReleaseVersion)) {
 		needsUpadate = true
-		co.Status.Versions = r.operandVersions()
+		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 	if len(co.Status.Conditions) == 0 {
 		needsUpadate = true
@@ -190,7 +194,7 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 
 	if len(co.Status.Versions) < 1 {
 		r.Log.Info("updating ClusterOperator Status Versions field")
-		co.Status.Versions = r.operandVersions()
+		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 
 	_, err := r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
@@ -208,7 +212,7 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 	switch newReason {
 	case ReasonUnsupported:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
+		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"))
 	case ReasonSyncing:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
@@ -226,4 +230,26 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 	}
 
 	return r.syncStatus(co, conds)
+}
+
+func SetCOInDisabledState(osClient osclientset.Interface, version string) error {
+	//The CVO should have created the CO
+	co, err := osClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+
+	if err != nil {
+		return fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
+	}
+
+	conds := defaultStatusConditions()
+	v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(ReasonUnsupported), "Nothing to do on this Platform"))
+	v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"))
+
+	for _, c := range conds {
+		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
+	}
+	co.Status.Versions = operandVersions(version)
+	co.Status.RelatedObjects = relatedObjects()
+
+	_, err = osClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
+	return err
 }

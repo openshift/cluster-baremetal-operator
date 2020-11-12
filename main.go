@@ -100,6 +100,21 @@ func main() {
 	}
 
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
+	// Check the Platform Type to determine the state of the CO
+	enabled, err := controllers.IsEnabled(osClient)
+	if err != nil {
+		setupLog.Error(err, "could not determine whether to run")
+		os.Exit(1)
+	}
+	if !enabled {
+		//Set ClusterOperator status to disabled=true, available=true
+		err = controllers.SetCOInDisabledState(osClient, releaseVersion)
+		if err != nil {
+			setupLog.Error(err, "unable to set baremetal ClusterOperator to Disabled")
+			os.Exit(1)
+		}
+	}
+
 	recorder := record.NewBroadcaster().NewRecorder(clientgoscheme.Scheme, v1.EventSource{Component: controllers.ComponentName})
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 

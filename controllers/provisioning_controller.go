@@ -24,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
@@ -66,8 +67,8 @@ type ProvisioningReconciler struct {
 	Generations []osoperatorv1.GenerationStatus
 }
 
-// +kubebuilder:rbac:namespace=openshift-machine-api,groups=,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:namespace=openshift-machine-api,groups=,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
@@ -75,30 +76,28 @@ type ProvisioningReconciler struct {
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
-// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status,verbs=create;get;update
+// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;infrastructures/status,verbs=get
-// +kubebuilder:rbac:groups=,resources=events,verbs=create;watch;list;patch
-// +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;watch;list;patch
+// +kubebuilder:rbac:groups=metal3.io,resources=provisionings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=metal3.io,resources=provisionings/finalizers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 
-func (r *ProvisioningReconciler) isEnabled() (bool, error) {
+func IsEnabled(osClient osclientset.Interface) (bool, error) {
 	ctx := context.Background()
 
-	infra := &osconfigv1.Infrastructure{}
-	err := r.Client.Get(ctx, client.ObjectKey{
-		Name: "cluster",
-	}, infra)
+	infra, err := osClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
 		return false, errors.Wrap(err, "unable to determine Platform")
 	}
 
 	// Disable ourselves on platforms other than bare metal
 	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
-		r.Log.V(1).Info("disabled", "platform", infra.Status.Platform)
 		return false, nil
 	}
 
-	r.Log.V(1).Info("enabled", "platform", infra.Status.Platform)
 	return true, nil
 }
 
@@ -126,15 +125,15 @@ func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3io
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//log := r.Log.WithValues("provisioning", req.NamespacedName)
 
-	enabled, err := r.isEnabled()
+	enabled, err := IsEnabled(r.OSClient)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
 	}
 	if !enabled {
 		// set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Operator is non-functional", "")
+		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %v", clusterOperatorName, err)
 		}
 
 		// We're disabled; don't requeue
@@ -151,6 +150,34 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Cannot proceed wtih metal3 deployment.
 		r.Log.V(1).Info("Provisioning CR not found")
 		return ctrl.Result{}, nil
+	}
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if baremetalConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !containsString(baremetalConfig.ObjectMeta.Finalizers,
+			metal3iov1alpha1.ProvisioningFinalizer) {
+			// Add finalizer becasue it doesn't already exist
+			baremetalConfig.ObjectMeta.Finalizers = append(baremetalConfig.ObjectMeta.Finalizers,
+				metal3iov1alpha1.ProvisioningFinalizer)
+			if err := r.Client.Update(context.Background(), baremetalConfig); err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
+			}
+		}
+	} else {
+		// The Provisioning object is being deleted
+		if containsString(baremetalConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
+			// Add any specific deletion logic here
+
+			// Remove our finalizer from the list and update it.
+			baremetalConfig.ObjectMeta.Finalizers = removeString(baremetalConfig.ObjectMeta.Finalizers,
+				metal3iov1alpha1.ProvisioningFinalizer)
+			if err := r.Client.Update(context.Background(), baremetalConfig); err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
+			}
+		}
 	}
 
 	err = r.ensureClusterOperator(baremetalConfig)
@@ -198,7 +225,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// If Metal3 Deployment already exists, do nothing.
 	exists, err := provisioning.GetExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
 	if err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, errors.Wrap(err, "failed to to find existing Metal3 Deployment")
+		return ctrl.Result{}, errors.Wrap(err, "failed to find existing Metal3 Deployment")
 	}
 
 	if exists {
@@ -249,4 +276,25 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Complete(r)
+}
+
+// Helper function to check presence of string in a slice of strings
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// Helper function to remove string from a slice of strings
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
 }

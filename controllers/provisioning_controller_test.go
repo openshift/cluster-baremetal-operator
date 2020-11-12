@@ -34,7 +34,7 @@ func newFakeProvisioningReconciler(scheme *runtime.Scheme, object runtime.Object
 	}
 }
 
-func TestReconcile(t *testing.T) {
+func TestIsEnabled(t *testing.T) {
 	testCases := []struct {
 		name          string
 		infra         *configv1.Infrastructure
@@ -46,7 +46,7 @@ func TestReconcile(t *testing.T) {
 			infra: &configv1.Infrastructure{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "Infrastructure",
-					APIVersion: "apps/v1",
+					APIVersion: "config.openshift.io/v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
@@ -63,7 +63,7 @@ func TestReconcile(t *testing.T) {
 			infra: &configv1.Infrastructure{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "Infrastructure",
-					APIVersion: "apps/v1",
+					APIVersion: "config.openshift.io/v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
@@ -86,8 +86,8 @@ func TestReconcile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
-			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.infra)
-			enabled, err := reconciler.isEnabled()
+			osClient := fakeconfigclientset.NewSimpleClientset(tc.infra)
+			enabled, err := IsEnabled(osClient)
 			if tc.expectedError && err == nil {
 				t.Error("should have produced an error")
 				return

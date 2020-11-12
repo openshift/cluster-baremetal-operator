@@ -7,7 +7,9 @@ metadata:
   name: cluster-baremetal-operator
   namespace: openshift-machine-api
 rules:
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - configmaps
   verbs:
   - create
@@ -17,7 +19,9 @@ rules:
   - patch
   - update
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - create
@@ -71,12 +75,38 @@ metadata:
   creationTimestamp: null
   name: cluster-baremetal-operator
 rules:
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - events
   verbs:
   - create
   - list
   - patch
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - config.openshift.io
@@ -85,8 +115,12 @@ rules:
   - clusteroperators/status
   verbs:
   - create
+  - delete
   - get
+  - list
+  - patch
   - update
+  - watch
 - apiGroups:
   - config.openshift.io
   resources:
@@ -107,8 +141,24 @@ rules:
   resources:
   - provisionings
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - provisionings/finalizers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - metal3.io
