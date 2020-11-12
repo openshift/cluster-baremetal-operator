@@ -141,8 +141,12 @@ rules:
   resources:
   - provisionings
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - metal3.io
