@@ -86,8 +86,10 @@ func TestIsEnabled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
-			osClient := fakeconfigclientset.NewSimpleClientset(tc.infra)
-			enabled, err := IsEnabled(osClient)
+			reconciler := ProvisioningReconciler{
+				OSClient: fakeconfigclientset.NewSimpleClientset(tc.infra),
+			}
+			enabled, err := reconciler.isEnabled()
 			if tc.expectedError && err == nil {
 				t.Error("should have produced an error")
 				return
