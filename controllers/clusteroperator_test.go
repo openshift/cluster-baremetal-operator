@@ -21,29 +21,62 @@ import (
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
-func TestUpdateCOStatusDisabled(t *testing.T) {
+func TestUpdateCOStatus(t *testing.T) {
 	tCases := []struct {
 		name               string
+		reason             StatusReason
+		msg                string
+		progressMsg        string
 		expectedConditions []osconfigv1.ClusterOperatorStatusCondition
 	}{
 		{
-			name: "Correct Condition",
+			name:        "Disabled",
+			reason:      ReasonUnsupported,
+			msg:         "Operator is non-functional",
+			progressMsg: "",
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
 				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
-				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "AsExpected", "Operational"),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, "UnsupportedPlatform", "Operator is non-functional"),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(ReasonUnsupported), "Operator is non-functional"),
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+			},
+		},
+		{
+			name:        "Progressing",
+			reason:      ReasonSyncing,
+			msg:         "",
+			progressMsg: "syncing metal3 pod",
+			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonSyncing), ""),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(ReasonSyncing), "syncing metal3 pod"),
+				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+			},
+		},
+		{
+			name:        "Available",
+			reason:      ReasonComplete,
+			msg:         "metal3 pod running",
+			progressMsg: "",
+			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(ReasonComplete), ""),
+				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonComplete), "metal3 pod running"),
+				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 			},
 		},
 	}
 
 	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
-	co, _ := reconciler.createClusterOperator()
-	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {
-		err := reconciler.updateCOStatus(ReasonUnsupported, "Operator is non-functional", "")
+		co, _ := reconciler.createClusterOperator()
+		reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+
+		err := reconciler.updateCOStatus(tc.reason, tc.msg, tc.progressMsg)
 		if err != nil {
 			t.Error(err)
 		}
@@ -53,8 +86,8 @@ func TestUpdateCOStatusDisabled(t *testing.T) {
 		if diff != "" {
 			t.Fatal(diff)
 		}
+		_ = reconciler.OSClient.ConfigV1().ClusterOperators().Delete(context.Background(), clusterOperatorName, metav1.DeleteOptions{})
 	}
-	_ = reconciler.OSClient.ConfigV1().ClusterOperators().Delete(context.Background(), clusterOperatorName, metav1.DeleteOptions{})
 }
 
 func TestEnsureClusterOperator(t *testing.T) {
