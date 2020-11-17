@@ -311,6 +311,7 @@ spec:
                 description: ErrorCount records how many times the host has encoutered
                   an error since the last successful operation
                 type: integer
+                default: 0
               errorMessage:
                 description: the last error message reported by the provisioning subsystem
                 type: string
