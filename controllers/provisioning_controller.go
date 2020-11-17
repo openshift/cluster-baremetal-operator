@@ -256,6 +256,24 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{Requeue: true}, err
 	}
 
+	// Determine the status of the deployment
+	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
+	}
+	if deploymentState == appsv1.DeploymentReplicaFailure {
+		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+	}
+	if deploymentState == appsv1.DeploymentAvailable {
+		err = r.updateCOStatus(ReasonSyncing, "metal3 pod running; starting other services", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
+		}
+	}
+
 	for _, ensureResource := range []ensureFunc{
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
@@ -278,19 +296,19 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		}
 	}
 
-	// Determine the status of the deployment
-	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	// Determine the status of the DaemonSet
+	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
+		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 image cache daemonset")
 	}
-	if deploymentState == appsv1.DeploymentReplicaFailure {
-		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
+	if daemonSetState == provisioning.DaemonSetReplicaFailure {
+		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 image cache rollout taking too long", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
 		}
 	}
-	if deploymentState == appsv1.DeploymentAvailable {
-		err = r.updateCOStatus(ReasonSyncing, "metal3 pod running; starting other services", "")
+	if daemonSetState == provisioning.DaemonSetAvailable {
+		err = r.updateCOStatus(ReasonSyncing, "metal3 pod and image cache are running", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
 		}
