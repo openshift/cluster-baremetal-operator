@@ -168,3 +168,43 @@ password = %s
 	_, err = client.Secrets(targetNamespace).Create(context.Background(), secret, metav1.CreateOptions{})
 	return err
 }
+
+func DeleteMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
+	err := client.Secrets(targetNamespace).Delete(context.Background(), baremetalSecretName, metav1.DeleteOptions{})
+
+	if apierrors.IsNotFound(err) {
+		// mariadb password Secret doesn't exist. Nothing to delete
+		return nil
+	}
+	return err
+}
+
+func DeleteIronicPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
+	err := client.Secrets(targetNamespace).Delete(context.Background(), ironicSecretName, metav1.DeleteOptions{})
+
+	if apierrors.IsNotFound(err) {
+		// ironic password Secret doesn't exist. Nothing to delete
+		return nil
+	}
+	return err
+}
+
+func DeleteInspectorPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
+	err := client.Secrets(targetNamespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{})
+
+	if apierrors.IsNotFound(err) {
+		// ironic password Secret doesn't exist. Nothing to delete
+		return nil
+	}
+	return err
+}
+
+func DeleteIronicRpcPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
+	err := client.Secrets(targetNamespace).Delete(context.Background(), ironicrpcSecretName, metav1.DeleteOptions{})
+
+	if apierrors.IsNotFound(err) {
+		// ironic rpc Secret doesn't exist. Nothing to delete
+		return nil
+	}
+	return err
+}

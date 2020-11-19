@@ -121,6 +121,65 @@ func (r *ProvisioningReconciler) readProvisioningCR(namespacedName types.Namespa
 	return instance, nil
 }
 
+//Ensure Finalizer is present on the Provisioning CR when not deleted and
+//delete resources and remove Finalizer when it is
+func (r *ProvisioningReconciler) checkForCRDeletion(baremetalConfig *metal3iov1alpha1.Provisioning) (bool, error) {
+	// examine DeletionTimestamp to determine if object is under deletion
+	if baremetalConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// to registering our finalizer.
+		if !containsString(baremetalConfig.ObjectMeta.Finalizers,
+			metal3iov1alpha1.ProvisioningFinalizer) {
+			// Add finalizer becasue it doesn't already exist
+			baremetalConfig.ObjectMeta.Finalizers = append(baremetalConfig.ObjectMeta.Finalizers,
+				metal3iov1alpha1.ProvisioningFinalizer)
+			if err := r.Client.Update(context.Background(), baremetalConfig); err != nil {
+				return false, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
+			}
+		}
+		return false, nil
+	} else {
+		// The Provisioning object is being deleted
+		if containsString(baremetalConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
+			err := r.deleteMetal3Resources()
+			if err != nil {
+				return false, errors.Wrap(err, "failed to delete metal3 pod")
+			}
+			// Remove our finalizer from the list and update it.
+			baremetalConfig.ObjectMeta.Finalizers = removeString(baremetalConfig.ObjectMeta.Finalizers,
+				metal3iov1alpha1.ProvisioningFinalizer)
+			if err = r.Client.Update(context.Background(), baremetalConfig); err != nil {
+				return true, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+//Delete Secrets and the Metal3 Deployment objects
+func (r *ProvisioningReconciler) deleteMetal3Resources() error {
+	err := provisioning.DeleteMariadbPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace)
+	if err != nil {
+		r.Log.V(1).Info("could not delete mariadb password Secret")
+	}
+	err = provisioning.DeleteIronicPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace)
+	if err != nil {
+		r.Log.V(1).Info("could not delete ironic password Secret")
+	}
+	err = provisioning.DeleteInspectorPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace)
+	if err != nil {
+		r.Log.V(1).Info("could not delete ironic inspector password Secret")
+	}
+	err = provisioning.DeleteIronicRpcPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace)
+	if err != nil {
+		r.Log.V(1).Info("could not delete ironic rpc password Secret")
+	}
+
+	return provisioning.DeleteMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
+}
+
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -153,36 +212,12 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	// examine DeletionTimestamp to determine if object is under deletion
-	if baremetalConfig.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// registering our finalizer.
-		if !containsString(baremetalConfig.ObjectMeta.Finalizers,
-			metal3iov1alpha1.ProvisioningFinalizer) {
-			// Add finalizer becasue it doesn't already exist
-			baremetalConfig.ObjectMeta.Finalizers = append(baremetalConfig.ObjectMeta.Finalizers,
-				metal3iov1alpha1.ProvisioningFinalizer)
-			if err := r.Client.Update(context.Background(), baremetalConfig); err != nil {
-				return ctrl.Result{}, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
-			}
-		}
-	} else {
-		// The Provisioning object is being deleted
-		if containsString(baremetalConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
-			// Add any specific deletion logic here
-
-			// Remove our finalizer from the list and update it.
-			baremetalConfig.ObjectMeta.Finalizers = removeString(baremetalConfig.ObjectMeta.Finalizers,
-				metal3iov1alpha1.ProvisioningFinalizer)
-			if err := r.Client.Update(context.Background(), baremetalConfig); err != nil {
-				return ctrl.Result{}, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
-			}
-		}
-	}
-
 	err = r.ensureClusterOperator(baremetalConfig)
 	if err != nil {
+		return ctrl.Result{}, err
+	}
+	deleted, err := r.checkForCRDeletion(baremetalConfig)
+	if err != nil || deleted {
 		return ctrl.Result{}, err
 	}
 
