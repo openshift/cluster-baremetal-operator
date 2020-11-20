@@ -222,8 +222,8 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
 	}
 
-	// If Metal3 Deployment already exists, do nothing.
-	exists, err := provisioning.GetExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
+	// If Metal3 Deployment already exists and managed by MAO, do nothing.
+	exists, err := provisioning.MAOMetal3DeploymentExists(r.KubeClient.AppsV1(), ComponentNamespace)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, errors.Wrap(err, "failed to find existing Metal3 Deployment")
 	}
