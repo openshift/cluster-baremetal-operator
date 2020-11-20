@@ -65,12 +65,15 @@ type ProvisioningReconciler struct {
 	ImagesFilename string
 }
 
+type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
+
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
@@ -83,6 +86,7 @@ type ProvisioningReconciler struct {
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/finalizers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ProvisioningReconciler) isEnabled() (bool, error) {
@@ -255,12 +259,18 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	info := r.provisioningInfo(baremetalConfig, &containerImages)
-	updated, err = provisioning.EnsureMetal3StateService(info)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if updated {
-		return ctrl.Result{Requeue: true}, err
+	for _, ensureResource := range []ensureFunc{
+		provisioning.EnsureMetal3StateService,
+		provisioning.EnsureImageCache,
+	} {
+		updated, err := ensureResource(info)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if updated {
+			err = r.Client.Status().Update(context.Background(), baremetalConfig)
+			return ctrl.Result{Requeue: true}, err
+		}
 	}
 
 	if specChanged {
@@ -351,6 +361,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
+		Owns(&appsv1.DaemonSet{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Complete(r)
 }

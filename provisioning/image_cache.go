@@ -1,12 +1,34 @@
 package provisioning
 
 import (
+	"fmt"
+	"net"
+	"net/url"
+	"path"
+	"regexp"
+	"strconv"
+
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
+
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 const (
 	imageCacheSharedVolume = "metal3-shared-image-cache"
+	imageCacheService      = "metal3-image-cache"
+	imageCachePort         = 6181
+	imageCachePortName     = "http"
 )
+
+var fileCompressionSuffix = regexp.MustCompile(`\.[gx]z$`)
 
 func imageVolume() corev1.Volume {
 	volType := corev1.HostPathDirectoryOrCreate
@@ -24,4 +46,186 @@ func imageVolume() corev1.Volume {
 var imageVolumeMount = corev1.VolumeMount{
 	Name:      imageCacheSharedVolume,
 	MountPath: "/shared/html/images",
+}
+
+func imageCacheConfig(targetNamespace string, config metal3iov1alpha1.ProvisioningSpec) (*metal3iov1alpha1.ProvisioningSpec, error) {
+	// The download URL looks something like:
+	// https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.2/42.80.20190725.1/rhcos-42.80.20190725.1-openstack.qcow2?sha256sum=123
+	downloadURL, err := url.Parse(config.ProvisioningOSDownloadURL)
+	if err != nil {
+		return nil, err
+	}
+	imageName := path.Base(fileCompressionSuffix.ReplaceAllString(downloadURL.Path, ""))
+
+	// The first level of cache downloads the file and makes an uncompressed
+	// version of it available to this second-level cache somewhere like:
+	// http://metal3-state.openshift-machine-api:6180/images/rhcos-42.80.20190725.1-openstack.qcow2/rhcos-42.80.20190725.1-openstack.qcow2
+	// See https://github.com/openshift/ironic-rhcos-downloader for more details
+	cacheURL := url.URL{
+		Scheme: "http",
+		Host: net.JoinHostPort(fmt.Sprintf("%s.%s", stateService, targetNamespace),
+			baremetalHttpPort),
+		Path: fmt.Sprintf("/images/%s/%s", imageName, imageName),
+	}
+	config.ProvisioningOSDownloadURL = cacheURL.String()
+	return &config, nil
+}
+
+func createContainerImageCache(images *Images) corev1.Container {
+	container := corev1.Container{
+		Name:            "metal3-httpd",
+		Image:           images.Ironic,
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Command:      []string{"/bin/runhttpd"},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          imageCachePortName,
+				ContainerPort: imageCachePort,
+				HostPort:      imageCachePort,
+			},
+		},
+		Env: []corev1.EnvVar{
+			{
+				Name:  httpPort,
+				Value: strconv.Itoa(imageCachePort),
+			},
+			// The provisioning IP is not used except:
+			// - httpd cannot start until the IP is available on some interface
+			// - in the inspector.ipxe file for pointing to the IPA kernel and
+			//   initramfs images served from this container. However, in
+			//   practice we use the inspector.ipxe from the metal3 Pod anyway.
+			{
+				Name: provisioningIP,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.hostIP",
+					},
+				},
+			},
+		},
+	}
+	return container
+}
+
+func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provisioningConfig *metal3iov1alpha1.ProvisioningSpec) (*corev1.PodTemplateSpec, error) {
+	cacheConfig, err := imageCacheConfig(targetNamespace, *provisioningConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	tolerations := []corev1.Toleration{
+		{
+			Key:    "node-role.kubernetes.io/master",
+			Effect: corev1.TaintEffectNoSchedule,
+		},
+		{
+			Key:      "CriticalAddonsOnly",
+			Operator: corev1.TolerationOpExists,
+		},
+		{
+			Key:               "node.kubernetes.io/not-ready",
+			Effect:            corev1.TaintEffectNoExecute,
+			Operator:          corev1.TolerationOpExists,
+			TolerationSeconds: pointer.Int64Ptr(120),
+		},
+		{
+			Key:               "node.kubernetes.io/unreachable",
+			Effect:            corev1.TaintEffectNoExecute,
+			Operator:          corev1.TolerationOpExists,
+			TolerationSeconds: pointer.Int64Ptr(120),
+		},
+	}
+
+	return &corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"k8s-app":    metal3AppName,
+				cboLabelName: imageCacheService,
+			},
+		},
+		Spec: corev1.PodSpec{
+			NodeSelector: map[string]string{
+				"node-role.kubernetes.io/master": "",
+			},
+			Volumes: []corev1.Volume{
+				imageVolume(),
+			},
+			InitContainers: []corev1.Container{
+				createInitContainerMachineOsDownloader(images, cacheConfig),
+			},
+			Containers: []corev1.Container{
+				createContainerImageCache(images),
+			},
+			HostNetwork:       true,
+			DNSPolicy:         corev1.DNSClusterFirstWithHostNet,
+			PriorityClassName: "system-node-critical",
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: pointer.BoolPtr(false),
+			},
+			ServiceAccountName: "cluster-baremetal-operator",
+			Tolerations:        tolerations,
+		},
+	}, nil
+}
+
+func newImageCacheDaemonSet(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec) (*appsv1.DaemonSet, error) {
+	template, err := newImageCachePodTemplateSpec(targetNamespace, images, config)
+	if err != nil {
+		return nil, err
+	}
+
+	maxUnavail := intstr.FromString("100%")
+	return &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      imageCacheService,
+			Namespace: targetNamespace,
+			Labels: map[string]string{
+				"k8s-app": metal3AppName,
+			},
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Template: *template,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"k8s-app":    metal3AppName,
+					cboLabelName: imageCacheService,
+				},
+			},
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				RollingUpdate: &appsv1.RollingUpdateDaemonSet{
+					MaxUnavailable: &maxUnavail,
+				},
+			},
+		},
+	}, nil
+}
+
+func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
+	imageCacheDaemonSet, err := newImageCacheDaemonSet(info.Namespace, info.Images, &info.ProvConfig.Spec)
+	if err != nil {
+		return
+	}
+	expectedGeneration := resourcemerge.ExpectedDaemonSetGeneration(imageCacheDaemonSet, info.ProvConfig.Status.Generations)
+
+	err = controllerutil.SetControllerReference(info.ProvConfig, imageCacheDaemonSet, info.Scheme)
+	if err != nil {
+		err = fmt.Errorf("unable to set controllerReference on daemonset: %w", err)
+		return
+	}
+
+	daemonSet, updated, err := resourceapply.ApplyDaemonSet(
+		info.Client.AppsV1(),
+		info.EventRecorder,
+		imageCacheDaemonSet, expectedGeneration)
+	if err != nil {
+		err = fmt.Errorf("unable to apply image cache daemonset: %w", err)
+		return
+	}
+
+	resourcemerge.SetDaemonSetGeneration(&info.ProvConfig.Status.Generations, daemonSet)
+	return
 }

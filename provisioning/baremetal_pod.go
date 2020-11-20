@@ -29,6 +29,7 @@ import (
 )
 
 const (
+	metal3AppName              = "metal3"
 	baremetalDeploymentName    = "metal3"
 	baremetalSharedVolume      = "metal3-shared"
 	metal3AuthRootDir          = "/auth"
