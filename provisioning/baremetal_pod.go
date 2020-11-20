@@ -76,6 +76,7 @@ var metal3Volumes = []corev1.Volume{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	},
+	imageVolume(),
 	{
 		Name: ironicCredentialsVolume,
 		VolumeSource: corev1.VolumeSource{
@@ -166,7 +167,7 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Env:          []corev1.EnvVar{},
 	}
 	return initContainer
@@ -181,7 +182,7 @@ func createInitContainerMachineOsDownloader(images *Images, config *metal3iov1al
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Env: []corev1.EnvVar{
 			buildEnvVar(machineImageUrl, config),
 		},
@@ -288,8 +289,11 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command:      []string{"/bin/rundnsmasq"},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Command: []string{"/bin/rundnsmasq"},
+		VolumeMounts: []corev1.VolumeMount{
+			sharedVolumeMount,
+			imageVolumeMount,
+		},
 		Env: []corev1.EnvVar{
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningInterface, config),
@@ -332,8 +336,11 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command:      []string{"/bin/runhttpd"},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Command: []string{"/bin/runhttpd"},
+		VolumeMounts: []corev1.VolumeMount{
+			sharedVolumeMount,
+			imageVolumeMount,
+		},
 		Env: []corev1.EnvVar{
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
