@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
-	osoperatorv1 "github.com/openshift/api/operator/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
@@ -63,8 +62,6 @@ type ProvisioningReconciler struct {
 	KubeClient     kubernetes.Interface
 	ReleaseVersion string
 	ImagesFilename string
-
-	Generations []osoperatorv1.GenerationStatus
 }
 
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -244,7 +241,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 	// Proceed with creating a new Metal3 deployment
 	metal3Deployment := provisioning.NewMetal3Deployment(ComponentNamespace, &containerImages, &baremetalConfig.Spec)
-	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, r.Generations)
+	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, baremetalConfig.Status.Generations)
 
 	err = controllerutil.SetControllerReference(baremetalConfig, metal3Deployment, r.Scheme)
 	if err != nil {
@@ -258,7 +255,11 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	if updated {
-		resourcemerge.SetDeploymentGeneration(&r.Generations, deployment)
+		resourcemerge.SetDeploymentGeneration(&baremetalConfig.Status.Generations, deployment)
+		err = r.Client.Status().Update(context.Background(), baremetalConfig)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	err = r.updateCOStatus(ReasonComplete, "new Metal3 deployment completed", "")
 	if err != nil {
