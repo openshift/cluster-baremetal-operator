@@ -234,9 +234,12 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	err = r.updateCOStatus(ReasonSyncing, "", "Applying the Metal3 deployment")
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
+	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
+	if specChanged {
+		err = r.updateCOStatus(ReasonSyncing, "", "Applying the Metal3 deployment")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
+		}
 	}
 
 	// Proceed with creating or updating the Metal3 deployment
@@ -246,6 +249,14 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 	if updated {
 		return ctrl.Result{Requeue: true}, err
+	}
+
+	if specChanged {
+		baremetalConfig.Status.ObservedGeneration = baremetalConfig.Generation
+		err = r.Client.Status().Update(context.Background(), baremetalConfig)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to update observed generation: %w", err)
+		}
 	}
 
 	err = r.updateCOStatus(ReasonComplete, "new Metal3 deployment completed", "")
