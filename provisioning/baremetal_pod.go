@@ -37,6 +37,7 @@ const (
 	htpasswdEnvVar             = "HTTP_BASIC_HTPASSWD" // #nosec
 	mariadbPwdEnvVar           = "MARIADB_PASSWORD"    // #nosec
 	cboOwnedAnnotation         = "baremetal.openshift.io/owned"
+	cboLabelName               = "baremetal.openshift.io/cluster-baremetal-operator"
 )
 
 var sharedVolumeMount = corev1.VolumeMount{
@@ -340,7 +341,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		},
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          "http",
+				Name:          httpPortName,
 				ContainerPort: int32(port),
 				HostPort:      int32(port),
 			},
@@ -482,8 +483,9 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"api":     "clusterapi",
-				"k8s-app": "controller",
+				"api":        "clusterapi",
+				"k8s-app":    "controller",
+				cboLabelName: stateService,
 			},
 		},
 		Spec: corev1.PodSpec{

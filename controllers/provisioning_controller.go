@@ -71,6 +71,7 @@ type ProvisioningReconciler struct {
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
@@ -82,6 +83,7 @@ type ProvisioningReconciler struct {
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/finalizers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	ctx := context.Background()
@@ -252,6 +254,15 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{Requeue: true}, err
 	}
 
+	info := r.provisioningInfo(baremetalConfig, &containerImages)
+	updated, err = provisioning.EnsureMetal3StateService(info)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if updated {
+		return ctrl.Result{Requeue: true}, err
+	}
+
 	if specChanged {
 		baremetalConfig.Status.ObservedGeneration = baremetalConfig.Generation
 		err = r.Client.Status().Update(context.Background(), baremetalConfig)
@@ -292,6 +303,17 @@ func (r *ProvisioningReconciler) ensureMetal3Deployment(provConfig *metal3iov1al
 	return
 }
 
+func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images) *provisioning.ProvisioningInfo {
+	return &provisioning.ProvisioningInfo{
+		Client:        r.KubeClient,
+		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
+		ProvConfig:    provConfig,
+		Scheme:        r.Scheme,
+		Namespace:     ComponentNamespace,
+		Images:        images,
+	}
+}
+
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	err := r.ensureClusterOperator(nil)
@@ -328,6 +350,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Complete(r)
 }
