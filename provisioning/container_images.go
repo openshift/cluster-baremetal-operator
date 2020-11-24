@@ -31,7 +31,7 @@ type Images struct {
 	StaticIpManager     string `json:"baremetalStaticIpManager"`
 }
 
-func GetContainerImages(containerImages *Images, imagesFilePath string) error {
+func ContainerImages(containerImages *Images, imagesFilePath string) error {
 	//read images.json file
 	jsonData, err := ioutil.ReadFile(filepath.Clean(imagesFilePath))
 	if err != nil {

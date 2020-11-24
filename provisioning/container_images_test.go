@@ -14,7 +14,7 @@ var (
 	expectedIronicStaticIpManager = "registry.svc.ci.openshift.org/openshift:ironic-static-ip-manager"
 )
 
-func TestGetContainerImages(t *testing.T) {
+func TestContainerImages(t *testing.T) {
 	testCases := []struct {
 		name           string
 		imagesFile     string
@@ -38,7 +38,7 @@ func TestGetContainerImages(t *testing.T) {
 		t.Run(string(tc.name), func(t *testing.T) {
 			var containerImages Images
 
-			err := GetContainerImages(&containerImages, tc.imagesFile)
+			err := ContainerImages(&containerImages, tc.imagesFile)
 			if tc.expectedError != (err != nil) {
 				t.Errorf("ExpectedError: %v, got: %v", tc.expectedError, err)
 			}

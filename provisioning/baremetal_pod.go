@@ -468,7 +468,7 @@ func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 	}
 }
 
-func GetExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, targetNamespace string) (bool, error) {
+func ExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, targetNamespace string) (bool, error) {
 	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
 	if existing != nil && err == nil {
 		return true, nil
