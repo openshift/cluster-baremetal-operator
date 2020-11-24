@@ -147,9 +147,14 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 	if baremetalConfig == nil {
 		// Provisioning configuration not available at this time.
-		// Cannot proceed wtih metal3 deployment.
-		r.Log.V(1).Info("Provisioning CR not found")
-		return ctrl.Result{}, nil
+		// Cannot proceed with metal3 deployment.
+		err = r.updateCOStatus(ReasonUnsupported, "Provisioning CR not found", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %v", clusterOperatorName, err)
+		}
+
+		// We're disabled, but requeue in case we get a provisioning CR
+		return ctrl.Result{}, fmt.Errorf("no provisioning CR found; will remain Disabled until CR available")
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
