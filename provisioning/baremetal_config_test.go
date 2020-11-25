@@ -41,63 +41,29 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 
 	tCases := []struct {
 		name          string
-		spec          metal3iov1alpha1.ProvisioningSpec
+		spec          *metal3iov1alpha1.ProvisioningSpec
 		expectedError bool
 		expectedMode  metal3iov1alpha1.ProvisioningNetwork
 		expectedMsg   string
 	}{
 		{
 			// All fields are specified as they should including the ProvisioningNetwork
-			name: "ValidManaged",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "ensp0",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
-				ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-				ProvisioningNetwork:       "Managed",
-			},
+			name:          "ValidManaged",
+			spec:          managedProvisioning().build(),
 			expectedError: false,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
 		},
 		{
-			// ProvisioningNetwork is not specified but ProvisioningDHCPExternal is.
-			name: "ImpliedManaged",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "eth0",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
-				ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-				ProvisioningDHCPExternal:  false,
-			},
-			expectedError: false,
-			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
-		},
-		{
-			// Verifying default behavior where both ProvisioningNetwork and ProvisioningDHCPExternal are not specified.
-			name: "DefaultManaged",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "eth0",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
-				ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-			},
+			// ProvisioningNetwork is not specified and ProvisioningDHCPExternal is the default value
+			name:          "ImpliedManaged",
+			spec:          managedProvisioning().ProvisioningNetwork("").build(),
 			expectedError: false,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
 		},
 		{
 			// ProvisioningInterface is not specified.
-			name: "InvalidManaged",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
-				ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-				ProvisioningNetwork:       "Managed",
-			},
+			name:          "InvalidManaged",
+			spec:          managedProvisioning().ProvisioningInterface("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
 			expectedMsg:   "ProvisioningInterface",
@@ -106,7 +72,7 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			baremetalCR.Spec = tc.spec
+			baremetalCR.Spec = *tc.spec
 			err := ValidateBaremetalProvisioningConfig(baremetalCR)
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
@@ -134,47 +100,29 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 
 	tCases := []struct {
 		name          string
-		spec          metal3iov1alpha1.ProvisioningSpec
+		spec          *metal3iov1alpha1.ProvisioningSpec
 		expectedError bool
 		expectedMode  metal3iov1alpha1.ProvisioningNetwork
 		expectedMsg   string
 	}{
 		{
 			// All fields are specified as they should including the ProvisioningNetwork
-			name: "ValidUnmanaged",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "ensp0",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-				ProvisioningNetwork:       "Unmanaged",
-			},
+			name:          "ValidUnmanaged",
+			spec:          unmanagedProvisioning().build(),
 			expectedError: false,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
 		},
 		{
 			//ProvisioningDHCPExternal is true and ProvisioningNetwork missing
-			name: "ImpliedUnmanaged",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "ensp0",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-				ProvisioningDHCPExternal:  true,
-			},
+			name:          "ImpliedUnmanaged",
+			spec:          unmanagedProvisioning().ProvisioningNetwork("").ProvisioningDHCPExternal(true).build(),
 			expectedError: false,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
 		},
 		{
-			// All fields are specified as they should including the ProvisioningNetwork
-			name: "InvalidUnmanaged",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-				ProvisioningNetwork:       "Unmanaged",
-			},
+			// ProvisioningInterface is missing
+			name:          "InvalidUnmanaged",
+			spec:          unmanagedProvisioning().ProvisioningInterface("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkUnmanaged,
 			expectedMsg:   "ProvisioningInterface",
@@ -183,7 +131,7 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			baremetalCR.Spec = tc.spec
+			baremetalCR.Spec = *tc.spec
 			err := ValidateBaremetalProvisioningConfig(baremetalCR)
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
@@ -211,34 +159,22 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 
 	tCases := []struct {
 		name          string
-		spec          metal3iov1alpha1.ProvisioningSpec
+		spec          *metal3iov1alpha1.ProvisioningSpec
 		expectedError bool
 		expectedMode  metal3iov1alpha1.ProvisioningNetwork
 		expectedMsg   string
 	}{
 		{
 			// All fields are specified as they should including the ProvisioningNetwork
-			name: "ValidDisabled",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-				ProvisioningNetwork:       "Disabled",
-			},
+			name:          "ValidDisabled",
+			spec:          disabledProvisioning().build(),
 			expectedError: false,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
 		},
 		{
 			// Missing ProvisioningOSDownloadURL
-			name: "InvalidDisabled",
-			spec: metal3iov1alpha1.ProvisioningSpec{
-				ProvisioningInterface:     "",
-				ProvisioningIP:            "172.30.20.3",
-				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningOSDownloadURL: "",
-				ProvisioningNetwork:       "Disabled",
-			},
+			name:          "InvalidDisabled",
+			spec:          disabledProvisioning().ProvisioningOSDownloadURL("").build(),
 			expectedError: true,
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
 			expectedMsg:   "ProvisioningOSDownloadURL",
@@ -247,7 +183,7 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			baremetalCR.Spec = tc.spec
+			baremetalCR.Spec = *tc.spec
 			err := ValidateBaremetalProvisioningConfig(baremetalCR)
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
@@ -263,103 +199,173 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 }
 
 func TestGetMetal3DeploymentConfig(t *testing.T) {
-	managedSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "eth0",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Managed",
-	}
-	unmanagedSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "ensp0",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Unmanaged",
-	}
-	disabledSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Disabled",
-	}
 
 	tCases := []struct {
 		name          string
 		configName    string
-		spec          metal3iov1alpha1.ProvisioningSpec
+		spec          *metal3iov1alpha1.ProvisioningSpec
 		expectedValue string
 	}{
 		{
 			name:          "Managed ProvisioningIPCIDR",
 			configName:    provisioningIP,
-			spec:          managedSpec,
+			spec:          managedProvisioning().build(),
 			expectedValue: "172.30.20.3/24",
 		},
 		{
 			name:          "Managed ProvisioningInterface",
 			configName:    provisioningInterface,
-			spec:          managedSpec,
+			spec:          managedProvisioning().build(),
 			expectedValue: "eth0",
 		},
 		{
 			name:          "Unmanaged DeployKernelUrl",
 			configName:    deployKernelUrl,
-			spec:          unmanagedSpec,
+			spec:          unmanagedProvisioning().build(),
+			expectedValue: "http://172.30.20.3:6180/images/ironic-python-agent.kernel",
+		},
+		{
+			name:          "Disabled DeployKernelUrl",
+			configName:    deployKernelUrl,
+			spec:          disabledProvisioning().build(),
 			expectedValue: "http://172.30.20.3:6180/images/ironic-python-agent.kernel",
 		},
 		{
 			name:          "Unmanaged DeployRamdiskUrl",
 			configName:    deployRamdiskUrl,
-			spec:          unmanagedSpec,
+			spec:          unmanagedProvisioning().build(),
+			expectedValue: "http://172.30.20.3:6180/images/ironic-python-agent.initramfs",
+		},
+		{
+			name:          "Disabled DeployRamdiskUrl",
+			configName:    deployRamdiskUrl,
+			spec:          disabledProvisioning().build(),
 			expectedValue: "http://172.30.20.3:6180/images/ironic-python-agent.initramfs",
 		},
 		{
 			name:          "Disabled IronicEndpoint",
 			configName:    ironicEndpoint,
-			spec:          disabledSpec,
-			expectedValue: "http://172.30.20.3:6385/v1/",
+			spec:          disabledProvisioning().build(),
+			expectedValue: "http://localhost:6385/v1/",
 		},
 		{
 			name:          "Disabled InspectorEndpoint",
 			configName:    ironicInspectorEndpoint,
-			spec:          disabledSpec,
-			expectedValue: "http://172.30.20.3:5050/v1/",
+			spec:          disabledProvisioning().build(),
+			expectedValue: "http://localhost:5050/v1/",
 		},
 		{
 			name:          "Unmanaged HttpPort",
 			configName:    httpPort,
-			spec:          unmanagedSpec,
+			spec:          unmanagedProvisioning().build(),
 			expectedValue: "6180",
 		},
 		{
 			name:          "Managed DHCPRange",
 			configName:    dhcpRange,
-			spec:          managedSpec,
+			spec:          managedProvisioning().build(),
 			expectedValue: "172.30.20.11, 172.30.20.101",
 		},
 		{
 			name:          "Disabled DHCPRange",
 			configName:    dhcpRange,
-			spec:          disabledSpec,
+			spec:          disabledProvisioning().build(),
 			expectedValue: "",
 		},
 		{
 			name:          "Disabled RhcosImageUrl",
 			configName:    machineImageUrl,
-			spec:          disabledSpec,
+			spec:          disabledProvisioning().build(),
 			expectedValue: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
 		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualvalue := getMetal3DeploymentConfig(tc.configName, &tc.spec)
-			assert.NotNil(t, actualvalue)
-			assert.Equal(t, tc.expectedValue, *actualvalue, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, tc.expectedValue, *actualvalue))
+			actualValue := getMetal3DeploymentConfig(tc.configName, tc.spec)
+			assert.NotNil(t, actualValue)
+			assert.Equal(t, tc.expectedValue, *actualValue, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, tc.expectedValue, *actualValue))
 			return
 		})
 	}
+}
+
+type provisioningBuilder struct {
+	metal3iov1alpha1.ProvisioningSpec
+}
+
+func managedProvisioning() *provisioningBuilder {
+	return &provisioningBuilder{
+		metal3iov1alpha1.ProvisioningSpec{
+			ProvisioningInterface:     "eth0",
+			ProvisioningIP:            "172.30.20.3",
+			ProvisioningNetworkCIDR:   "172.30.20.0/24",
+			ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
+			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+			ProvisioningNetwork:       "Managed",
+		},
+	}
+}
+
+func unmanagedProvisioning() *provisioningBuilder {
+	return &provisioningBuilder{
+		metal3iov1alpha1.ProvisioningSpec{
+			ProvisioningInterface:     "ensp0",
+			ProvisioningIP:            "172.30.20.3",
+			ProvisioningNetworkCIDR:   "172.30.20.0/24",
+			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+			ProvisioningNetwork:       "Unmanaged",
+		},
+	}
+}
+
+func disabledProvisioning() *provisioningBuilder {
+	return &provisioningBuilder{
+		metal3iov1alpha1.ProvisioningSpec{
+			ProvisioningInterface:     "",
+			ProvisioningIP:            "172.30.20.3",
+			ProvisioningNetworkCIDR:   "172.30.20.0/24",
+			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+			ProvisioningNetwork:       "Disabled",
+		},
+	}
+}
+
+func (pb *provisioningBuilder) build() *metal3iov1alpha1.ProvisioningSpec {
+	return &pb.ProvisioningSpec
+}
+
+func (pb *provisioningBuilder) ProvisioningInterface(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningInterface = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningIP(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningIP = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningDHCPExternal(value bool) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningDHCPExternal = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningNetworkCIDR(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningNetworkCIDR = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningDHCPRange(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningDHCPRange = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningNetwork(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningNetwork = metal3iov1alpha1.ProvisioningNetwork(value)
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningOSDownloadURL(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningOSDownloadURL = value
+	return pb
 }
