@@ -218,6 +218,9 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if err := provisioning.CreateIronicPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Ironic password")
 	}
+	if err := provisioning.CreateIronicRpcPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to create Ironic rpc password")
+	}
 	if err := provisioning.CreateInspectorPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
 	}
