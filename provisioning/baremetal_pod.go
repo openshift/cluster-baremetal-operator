@@ -109,10 +109,19 @@ func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.Prov
 			Name:  name,
 			Value: *value,
 		}
-	} else {
+	} else if name == provisioningIP && baremetalProvisioningConfig.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled {
 		return corev1.EnvVar{
 			Name: name,
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "status.hostIP",
+				},
+			},
 		}
+	}
+
+	return corev1.EnvVar{
+		Name: name,
 	}
 }
 
@@ -134,8 +143,15 @@ func newMetal3InitContainers(images *Images, config *metal3iov1alpha1.Provisioni
 	initContainers := []corev1.Container{
 		createInitContainerIpaDownloader(images),
 		createInitContainerMachineOsDownloader(images, config),
-		createInitContainerStaticIpSet(images, config),
 	}
+
+	// If the provisioning network is disabled, and the user hasn't requested a
+	// particular provisioning IP on the machine CIDR, we have nothing for this container
+	// to manage.
+	if config.ProvisioningIP != "" {
+		initContainers = append(initContainers, createInitContainerStaticIpSet(images, config))
+	}
+
 	return initContainers
 }
 
@@ -196,8 +212,15 @@ func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSp
 		createContainerMetal3IronicConductor(images, config),
 		createContainerMetal3IronicApi(images, config),
 		createContainerMetal3IronicInspector(images, config),
-		createContainerMetal3StaticIpManager(images, config),
 	}
+
+	// If the provisioning network is disabled, and the user hasn't requested a
+	// particular provisioning IP on the machine CIDR, we have nothing for this container
+	// to manage.
+	if config.ProvisioningIP != "" {
+		containers = append(containers, createContainerMetal3StaticIpManager(images, config))
+	}
+
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
 		containers = append(containers, createContainerMetal3Dnsmasq(images, config))
 	}

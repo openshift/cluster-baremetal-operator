@@ -172,6 +172,20 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
 		},
 		{
+			// All fields are specified, except ProvisioningIP and CIDR
+			name:          "ValidDisabled",
+			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
+			expectedError: false,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
+		},
+		{
+			name:          "InvalidDisabledNoCIDRWithIP",
+			spec:          disabledProvisioning().ProvisioningNetworkCIDR("").build(),
+			expectedError: true,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkDisabled,
+			expectedMsg:   "provisioningNetworkCIDR",
+		},
+		{
 			// Missing ProvisioningOSDownloadURL
 			name:          "InvalidDisabled",
 			spec:          disabledProvisioning().ProvisioningOSDownloadURL("").build(),

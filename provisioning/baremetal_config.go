@@ -116,15 +116,17 @@ func validateDisabledConfig(prov *metal3iov1alpha1.Provisioning) error {
 		Name  string
 		Value string
 	}{
-
-		{Name: "ProvisioningIP", Value: prov.Spec.ProvisioningIP},
-		{Name: "ProvisioningNetworkCIDR", Value: prov.Spec.ProvisioningNetworkCIDR},
 		{Name: "ProvisioningOSDownloadURL", Value: prov.Spec.ProvisioningOSDownloadURL},
 	} {
 		if toTest.Value == "" {
 			return fmt.Errorf("%s is required but is empty", toTest.Name)
 		}
 	}
+
+	if prov.Spec.ProvisioningNetworkCIDR == "" && prov.Spec.ProvisioningIP != "" {
+		return fmt.Errorf("provisioningNetworkCIDR is required when specifying a provisioningIP")
+	}
+
 	return nil
 }
 
@@ -156,20 +158,14 @@ func getDeployRamdiskUrl(config *metal3iov1alpha1.ProvisioningSpec) *string {
 	return nil
 }
 
-func getIronicEndpoint(config *metal3iov1alpha1.ProvisioningSpec) *string {
-	if config.ProvisioningIP != "" {
-		ironicEndpoint := fmt.Sprintf("http://%s/%s", net.JoinHostPort(config.ProvisioningIP, baremetalIronicPort), baremetalIronicEndpointSubpath)
-		return &ironicEndpoint
-	}
-	return nil
+func getIronicEndpoint() *string {
+	ironicEndpoint := fmt.Sprintf("http://localhost:%s/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
+	return &ironicEndpoint
 }
 
-func getIronicInspectorEndpoint(config *metal3iov1alpha1.ProvisioningSpec) *string {
-	if config.ProvisioningIP != "" {
-		inspectorEndpoint := fmt.Sprintf("http://%s/%s", net.JoinHostPort(config.ProvisioningIP, baremetalIronicInspectorPort), baremetalIronicEndpointSubpath)
-		return &inspectorEndpoint
-	}
-	return nil
+func getIronicInspectorEndpoint() *string {
+	ironicInspectorEndpoint := fmt.Sprintf("http://localhost:%s/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
+	return &ironicInspectorEndpoint
 }
 
 func getProvisioningOSDownloadURL(config *metal3iov1alpha1.ProvisioningSpec) *string {
@@ -190,9 +186,9 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 	case deployRamdiskUrl:
 		return getDeployRamdiskUrl(baremetalConfig)
 	case ironicEndpoint:
-		return getIronicEndpoint(baremetalConfig)
+		return getIronicEndpoint()
 	case ironicInspectorEndpoint:
-		return getIronicInspectorEndpoint(baremetalConfig)
+		return getIronicInspectorEndpoint()
 	case httpPort:
 		return pointer.StringPtr(baremetalHttpPort)
 	case dhcpRange:
