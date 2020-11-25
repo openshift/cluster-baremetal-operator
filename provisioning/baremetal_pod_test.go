@@ -26,38 +26,16 @@ import (
 )
 
 func TestBuildEnvVar(t *testing.T) {
-	managedSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "eth0",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Managed",
-	}
-	unmanagedSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "ensp0",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Unmanaged",
-	}
-	disabledSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Disabled",
-	}
 	tCases := []struct {
 		name           string
 		configName     string
-		spec           metal3iov1alpha1.ProvisioningSpec
+		spec           *metal3iov1alpha1.ProvisioningSpec
 		expectedEnvVar corev1.EnvVar
 	}{
 		{
 			name:       "Managed ProvisioningIPCIDR",
 			configName: provisioningIP,
-			spec:       managedSpec,
+			spec:       managedProvisioning().build(),
 			expectedEnvVar: corev1.EnvVar{
 				Name:  provisioningIP,
 				Value: "172.30.20.3/24",
@@ -66,7 +44,7 @@ func TestBuildEnvVar(t *testing.T) {
 		{
 			name:       "Unmanaged ProvisioningInterface",
 			configName: provisioningInterface,
-			spec:       unmanagedSpec,
+			spec:       unmanagedProvisioning().build(),
 			expectedEnvVar: corev1.EnvVar{
 				Name:  provisioningInterface,
 				Value: "ensp0",
@@ -75,7 +53,7 @@ func TestBuildEnvVar(t *testing.T) {
 		{
 			name:       "Disabled MachineOsUrl",
 			configName: machineImageUrl,
-			spec:       disabledSpec,
+			spec:       disabledProvisioning().build(),
 			expectedEnvVar: corev1.EnvVar{
 				Name:  machineImageUrl,
 				Value: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
@@ -84,7 +62,7 @@ func TestBuildEnvVar(t *testing.T) {
 		{
 			name:       "Disabled ProvisioningInterface",
 			configName: provisioningInterface,
-			spec:       disabledSpec,
+			spec:       disabledProvisioning().build(),
 			expectedEnvVar: corev1.EnvVar{
 				Name:  provisioningInterface,
 				Value: "",
@@ -94,7 +72,7 @@ func TestBuildEnvVar(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualEnvVar := buildEnvVar(tc.configName, &tc.spec)
+			actualEnvVar := buildEnvVar(tc.configName, tc.spec)
 			assert.Equal(t, tc.expectedEnvVar, actualEnvVar, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, tc.expectedEnvVar, actualEnvVar))
 			return
 		})
@@ -103,14 +81,6 @@ func TestBuildEnvVar(t *testing.T) {
 }
 
 func TestNewMetal3InitContainers(t *testing.T) {
-	managedSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "eth0",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Managed",
-	}
 	images := Images{
 		BaremetalOperator:   expectedBaremetalOperator,
 		Ironic:              expectedIronic,
@@ -121,10 +91,12 @@ func TestNewMetal3InitContainers(t *testing.T) {
 	}
 	tCases := []struct {
 		name               string
+		config             *metal3iov1alpha1.ProvisioningSpec
 		expectedContainers []corev1.Container
 	}{
 		{
-			name: "valid config",
+			name:   "valid config",
+			config: managedProvisioning().build(),
 			expectedContainers: []corev1.Container{
 				{
 					Name:  "metal3-ipa-downloader",
@@ -140,11 +112,25 @@ func TestNewMetal3InitContainers(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "disabled without provisioning ip",
+			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
+			expectedContainers: []corev1.Container{
+				{
+					Name:  "metal3-ipa-downloader",
+					Image: images.IpaDownloader,
+				},
+				{
+					Name:  "metal3-machine-os-downloader",
+					Image: images.MachineOsDownloader,
+				},
+			},
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualContainers := newMetal3InitContainers(&images, &managedSpec)
+			actualContainers := newMetal3InitContainers(&images, tc.config)
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Init Containers : %d Actual number of Init Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 		})
 	}
@@ -152,29 +138,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 }
 
 func TestNewMetal3Containers(t *testing.T) {
-	managedSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "eth0",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Managed",
-	}
-	unmanagedSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "ensp0",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Unmanaged",
-	}
-	disabledSpec := metal3iov1alpha1.ProvisioningSpec{
-		ProvisioningInterface:     "",
-		ProvisioningIP:            "172.30.20.3",
-		ProvisioningNetworkCIDR:   "172.30.20.0/24",
-		ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-		ProvisioningNetwork:       "Disabled",
-	}
-
 	images := Images{
 		BaremetalOperator:   expectedBaremetalOperator,
 		Ironic:              expectedIronic,
@@ -185,29 +148,34 @@ func TestNewMetal3Containers(t *testing.T) {
 	}
 	tCases := []struct {
 		name               string
-		config             metal3iov1alpha1.ProvisioningSpec
+		config             *metal3iov1alpha1.ProvisioningSpec
 		expectedContainers int
 	}{
 		{
 			name:               "ManagedSpec",
-			config:             managedSpec,
+			config:             managedProvisioning().build(),
 			expectedContainers: 8,
 		},
 		{
 			name:               "UnmanagedSpec",
-			config:             unmanagedSpec,
+			config:             unmanagedProvisioning().build(),
 			expectedContainers: 8,
 		},
 		{
 			name:               "DisabledSpec",
-			config:             disabledSpec,
+			config:             disabledProvisioning().build(),
 			expectedContainers: 7,
+		},
+		{
+			name:               "DisabledSpecWithoutProvisioningIP",
+			config:             disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
+			expectedContainers: 6,
 		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualContainers := newMetal3Containers(&images, &tc.config)
+			actualContainers := newMetal3Containers(&images, tc.config)
 			assert.Equal(t, tc.expectedContainers, len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, tc.expectedContainers, len(actualContainers)))
 		})
 	}
