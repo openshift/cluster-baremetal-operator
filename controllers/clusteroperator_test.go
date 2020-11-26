@@ -122,6 +122,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 					Name: clusterOperatorName,
 					Annotations: map[string]string{
 						"include.release.openshift.io/self-managed-high-availability": "true",
+						"include.release.openshift.io/single-node-developer":          "true",
 					},
 					OwnerReferences: []v1.OwnerReference{
 						{
@@ -147,6 +148,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 					Name: clusterOperatorName,
 					Annotations: map[string]string{
 						"include.release.openshift.io/self-managed-high-availability": "true",
+						"include.release.openshift.io/single-node-developer":          "true",
 					},
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
@@ -158,6 +160,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 					Name: clusterOperatorName,
 					Annotations: map[string]string{
 						"include.release.openshift.io/self-managed-high-availability": "true",
+						"include.release.openshift.io/single-node-developer":          "true",
 					},
 					OwnerReferences: []v1.OwnerReference{
 						{
