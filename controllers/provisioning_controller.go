@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -101,60 +102,47 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	return true, nil
 }
 
-func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3iov1alpha1.Provisioning, error) {
-	ctx := context.Background()
+func (r *ProvisioningReconciler) configuration() (bool, *metal3iov1alpha1.Provisioning, error) {
+	enabled, err := r.isEnabled()
+	if err != nil {
+		return false, nil, errors.Wrap(err, "could not determine whether to run")
+	}
+	if !enabled {
+		return enabled, nil, nil
+	}
 
-	// provisioning.metal3.io is a singleton
-	if req.Name != BaremetalProvisioningCR {
-		r.Log.V(1).Info("ignoring invalid CR", "name", req.Name)
-		return nil, nil
-	}
-	// Fetch the Provisioning instance
 	instance := &metal3iov1alpha1.Provisioning{}
-	if err := r.Client.Get(ctx, req.NamespacedName, instance); err != nil {
+	if err := r.Client.Get(context.Background(), types.NamespacedName{Name: BaremetalProvisioningCR}, instance); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, nil
+			return enabled, nil, nil
 		}
-		return nil, errors.Wrap(err, "unable to read Provisioning CR")
+		return enabled, nil, errors.Wrap(err, "unable to read Provisioning CR")
 	}
-	return instance, nil
+	return enabled, instance, nil
 }
 
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	//log := r.Log.WithValues("provisioning", req.NamespacedName)
-
-	enabled, err := r.isEnabled()
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
-	}
-	if !enabled {
-		// set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %v", clusterOperatorName, err)
-		}
-
-		// We're disabled; don't requeue
+	if req.Name != BaremetalProvisioningCR {
+		r.Log.V(1).Info("ignoring invalid CR", "name", req.Name)
 		return ctrl.Result{}, nil
 	}
 
-	baremetalConfig, err := r.readProvisioningCR(req)
+	enabled, baremetalConfig, err := r.configuration()
 	if err != nil {
-		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
 	}
-	if baremetalConfig == nil {
-		// Provisioning configuration not available at this time.
-		// Cannot proceed with metal3 deployment.
-		err = r.updateCOStatus(ReasonUnsupported, "Provisioning CR not found", "")
+	if !enabled || baremetalConfig == nil {
+		statusMsg := "Provisioning CR not found"
+		if !enabled {
+			statusMsg = "Nothing to do on this Platform"
+		}
+		err = r.updateCOStatus(ReasonUnsupported, statusMsg, "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %v", clusterOperatorName, err)
 		}
-
-		// We're disabled, but requeue in case we get a provisioning CR
-		return ctrl.Result{}, fmt.Errorf("no provisioning CR found; will remain Disabled until CR available")
+		return ctrl.Result{}, nil
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
@@ -275,19 +263,22 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
-
-	// Check the Platform Type to determine the state of the CO
-	enabled, err := r.isEnabled()
+	// make sure that the initial state is set when there is no CR
+	enabled, baremetalConfig, err := r.configuration()
 	if err != nil {
-		return errors.Wrap(err, "could not determine whether to run")
+		return err
 	}
-	if !enabled {
-		//Set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
+	if !enabled || baremetalConfig == nil {
+		statusMsg := "Provisioning CR not found"
+		if !enabled {
+			statusMsg = "Nothing to do on this Platform"
+		}
+		err = r.updateCOStatus(ReasonUnsupported, statusMsg, "")
 		if err != nil {
-			return errors.Wrap(err, "unable to set baremetal ClusterOperator to Disabled")
+			return fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %v", clusterOperatorName, err)
 		}
 	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).

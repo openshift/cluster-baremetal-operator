@@ -103,7 +103,7 @@ func TestIsEnabled(t *testing.T) {
 	}
 }
 
-func TestProvisioningCRName(t *testing.T) {
+func TestConfiguration(t *testing.T) {
 	testCases := []struct {
 		name           string
 		req            ctrl.Request
@@ -112,7 +112,7 @@ func TestProvisioningCRName(t *testing.T) {
 		expectedConfig bool
 	}{
 		{
-			name: "ValidNameAndCR",
+			name: "ValidCR",
 			req:  ctrl.Request{NamespacedName: types.NamespacedName{Name: BaremetalProvisioningCR, Namespace: ""}},
 			baremetalCR: &metal3iov1alpha1.Provisioning{
 				TypeMeta: metav1.TypeMeta{
@@ -133,28 +133,25 @@ func TestProvisioningCRName(t *testing.T) {
 			expectedError:  false,
 			expectedConfig: false,
 		},
-		{
-			name: "InvalidName",
-			req:  ctrl.Request{NamespacedName: types.NamespacedName{Name: "invalid-name", Namespace: ""}},
-			baremetalCR: &metal3iov1alpha1.Provisioning{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Provisioning",
-					APIVersion: "v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "bad-name",
-				},
-			},
-			expectedError:  true,
-			expectedConfig: false,
-		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
 			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.baremetalCR)
-			baremetalconfig, err := reconciler.readProvisioningCR(tc.req)
+			reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(&configv1.Infrastructure{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Infrastructure",
+					APIVersion: "config.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Status: configv1.InfrastructureStatus{
+					Platform: configv1.BareMetalPlatformType,
+				},
+			})
+			_, baremetalconfig, err := reconciler.configuration()
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
