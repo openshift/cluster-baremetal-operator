@@ -165,12 +165,12 @@ func getDeployRamdiskUrl() *string {
 }
 
 func getIronicEndpoint() *string {
-	ironicEndpoint := fmt.Sprintf("http://localhost:%s/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
+	ironicEndpoint := fmt.Sprintf("https://localhost:%s/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
 	return &ironicEndpoint
 }
 
 func getIronicInspectorEndpoint() *string {
-	ironicInspectorEndpoint := fmt.Sprintf("http://localhost:%s/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
+	ironicInspectorEndpoint := fmt.Sprintf("https://localhost:%s/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
 	return &ironicInspectorEndpoint
 }
 

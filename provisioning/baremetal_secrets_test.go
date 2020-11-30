@@ -35,22 +35,6 @@ func init() {
 	}
 }
 
-func TestGenerateRandomPassword(t *testing.T) {
-	pwd1, err := generateRandomPassword()
-	if err != nil {
-		t.Errorf("Unexpected error while generating random password: %s", err)
-	}
-	if pwd1 == "" {
-		t.Errorf("Expected a valid string but got null")
-	}
-	pwd2, err := generateRandomPassword()
-	if err != nil {
-		t.Errorf("Unexpected error while re-generating random password: %s", err)
-	} else {
-		assert.False(t, pwd1 == pwd2, "regenerated random password should not match pervious one")
-	}
-}
-
 func TestCreateMariadbPasswordSecret(t *testing.T) {
 	baremetalCR := &metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
@@ -83,6 +67,10 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 		},
 		{
 			name:          "new-ironic-rpc-secret",
+			expectedError: nil,
+		},
+		{
+			name:          "new-tls-secret",
 			expectedError: nil,
 		},
 		{
@@ -158,6 +146,17 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 					t.Errorf("Error creating Ironic secret.")
 				}
 				assert.True(t, strings.Compare(secret.(*v1.Secret).StringData[ironicUsernameKey], ironicrpcUsername) == 0, "rpc password created incorrectly")
+			case "new-tls-secret":
+				err := CreateTlsSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				// Check if TLS secret exits
+				_, err = kubeClient.Tracker().Get(secretsResource, testNamespace, tlsSecretName)
+				if apierrors.IsNotFound(err) {
+					t.Errorf("Error creating TLS secret.")
+				}
 			}
 		})
 	}

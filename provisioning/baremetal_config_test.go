@@ -267,13 +267,13 @@ func TestGetMetal3DeploymentConfig(t *testing.T) {
 			name:          "Disabled IronicEndpoint",
 			configName:    ironicEndpoint,
 			spec:          disabledProvisioning().build(),
-			expectedValue: "http://localhost:6385/v1/",
+			expectedValue: "https://localhost:6385/v1/",
 		},
 		{
 			name:          "Disabled InspectorEndpoint",
 			configName:    ironicInspectorEndpoint,
 			spec:          disabledProvisioning().build(),
-			expectedValue: "http://localhost:5050/v1/",
+			expectedValue: "https://localhost:5050/v1/",
 		},
 		{
 			name:          "Unmanaged HttpPort",
