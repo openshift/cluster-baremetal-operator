@@ -556,6 +556,7 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 			InitContainers:    initContainers,
 			Containers:        containers,
 			HostNetwork:       true,
+			DNSPolicy:         corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName: "system-node-critical",
 			NodeSelector:      map[string]string{"node-role.kubernetes.io/master": ""},
 			SecurityContext: &corev1.PodSecurityContext{

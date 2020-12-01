@@ -142,20 +142,14 @@ func getProvisioningIPCIDR(config *metal3iov1alpha1.ProvisioningSpec) *string {
 	return nil
 }
 
-func getDeployKernelUrl(config *metal3iov1alpha1.ProvisioningSpec) *string {
-	if config.ProvisioningIP != "" {
-		deployKernelUrl := fmt.Sprintf("http://%s/%s", net.JoinHostPort(config.ProvisioningIP, baremetalHttpPort), baremetalKernelUrlSubPath)
-		return &deployKernelUrl
-	}
-	return nil
+func getDeployKernelUrl() *string {
+	deployKernelUrl := fmt.Sprintf("http://localhost:%d/%s", imageCachePort, baremetalKernelUrlSubPath)
+	return &deployKernelUrl
 }
 
-func getDeployRamdiskUrl(config *metal3iov1alpha1.ProvisioningSpec) *string {
-	if config.ProvisioningIP != "" {
-		deployRamdiskUrl := fmt.Sprintf("http://%s/%s", net.JoinHostPort(config.ProvisioningIP, baremetalHttpPort), baremetalRamdiskUrlSubPath)
-		return &deployRamdiskUrl
-	}
-	return nil
+func getDeployRamdiskUrl() *string {
+	deployRamdiskUrl := fmt.Sprintf("http://localhost:%d/%s", imageCachePort, baremetalRamdiskUrlSubPath)
+	return &deployRamdiskUrl
 }
 
 func getIronicEndpoint() *string {
@@ -182,9 +176,9 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 	case provisioningInterface:
 		return &baremetalConfig.ProvisioningInterface
 	case deployKernelUrl:
-		return getDeployKernelUrl(baremetalConfig)
+		return getDeployKernelUrl()
 	case deployRamdiskUrl:
-		return getDeployRamdiskUrl(baremetalConfig)
+		return getDeployRamdiskUrl()
 	case ironicEndpoint:
 		return getIronicEndpoint()
 	case ironicInspectorEndpoint:
