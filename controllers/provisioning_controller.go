@@ -271,6 +271,11 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	err := r.ensureClusterOperator(nil)
+	if err != nil {
+		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
+	}
+
 	// Check the Platform Type to determine the state of the CO
 	enabled, err := r.isEnabled()
 	if err != nil {
@@ -284,6 +289,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}
 	}
 
+	// If Platform is BareMetal, we could still be missing the Provisioning CR
 	if enabled {
 		namespacedName := types.NamespacedName{Name: BaremetalProvisioningCR}
 		baremetalConfig, err := r.readProvisioningCR(namespacedName)

@@ -130,7 +130,7 @@ func (r *ProvisioningReconciler) ensureClusterOperator(baremetalConfig *metal3io
 	}
 
 	// if the CO has been created with the manifest then we need to update the ownership
-	if len(co.ObjectMeta.OwnerReferences) == 0 {
+	if baremetalConfig != nil && len(co.ObjectMeta.OwnerReferences) == 0 {
 		err = controllerutil.SetControllerReference(baremetalConfig, co, r.Scheme)
 		if err != nil {
 			return err
