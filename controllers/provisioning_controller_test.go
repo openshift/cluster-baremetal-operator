@@ -154,7 +154,7 @@ func TestProvisioningCRName(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
 			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.baremetalCR)
-			baremetalconfig, err := reconciler.readProvisioningCR(tc.req)
+			baremetalconfig, err := reconciler.readProvisioningCR(tc.req.NamespacedName)
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return

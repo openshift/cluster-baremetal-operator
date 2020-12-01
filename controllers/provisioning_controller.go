@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -101,17 +102,17 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	return true, nil
 }
 
-func (r *ProvisioningReconciler) readProvisioningCR(req ctrl.Request) (*metal3iov1alpha1.Provisioning, error) {
+func (r *ProvisioningReconciler) readProvisioningCR(namespacedName types.NamespacedName) (*metal3iov1alpha1.Provisioning, error) {
 	ctx := context.Background()
 
 	// provisioning.metal3.io is a singleton
-	if req.Name != BaremetalProvisioningCR {
-		r.Log.V(1).Info("ignoring invalid CR", "name", req.Name)
+	if namespacedName.Name != BaremetalProvisioningCR {
+		r.Log.V(1).Info("ignoring invalid CR", "name", namespacedName.Name)
 		return nil, nil
 	}
 	// Fetch the Provisioning instance
 	instance := &metal3iov1alpha1.Provisioning{}
-	if err := r.Client.Get(ctx, req.NamespacedName, instance); err != nil {
+	if err := r.Client.Get(ctx, namespacedName, instance); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, nil
 		}
@@ -140,7 +141,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	baremetalConfig, err := r.readProvisioningCR(req)
+	baremetalConfig, err := r.readProvisioningCR(req.NamespacedName)
 	if err != nil {
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
@@ -270,6 +271,10 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	err := r.ensureClusterOperator(nil)
+	if err != nil {
+		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
+	}
 
 	// Check the Platform Type to determine the state of the CO
 	enabled, err := r.isEnabled()
@@ -283,6 +288,19 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return errors.Wrap(err, "unable to set baremetal ClusterOperator to Disabled")
 		}
 	}
+
+	// If Platform is BareMetal, we could still be missing the Provisioning CR
+	if enabled {
+		namespacedName := types.NamespacedName{Name: BaremetalProvisioningCR}
+		baremetalConfig, err := r.readProvisioningCR(namespacedName)
+		if err != nil || baremetalConfig == nil {
+			err = r.updateCOStatus(ReasonComplete, "Provisioning CR not found on BareMetal Platform; marking operator as available", "")
+			if err != nil {
+				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
+			}
+		}
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).
