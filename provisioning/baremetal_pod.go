@@ -491,10 +491,12 @@ func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 	}
 }
 
-func GetExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, targetNamespace string) (bool, error) {
+func MAOMetal3DeploymentExists(client appsclientv1.DeploymentsGetter, targetNamespace string) (bool, error) {
 	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
 	if existing != nil && err == nil {
-		return true, nil
+		if _, maoOwned := existing.Annotations["machine.openshift.io/owned"]; maoOwned {
+			return true, nil
+		}
 	}
 	return false, err
 }

@@ -34,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
-	osoperatorv1 "github.com/openshift/api/operator/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
@@ -64,8 +63,6 @@ type ProvisioningReconciler struct {
 	KubeClient     kubernetes.Interface
 	ReleaseVersion string
 	ImagesFilename string
-
-	Generations []osoperatorv1.GenerationStatus
 }
 
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -223,8 +220,8 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
 	}
 
-	// If Metal3 Deployment already exists, do nothing.
-	exists, err := provisioning.GetExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
+	// If Metal3 Deployment already exists and managed by MAO, do nothing.
+	exists, err := provisioning.MAOMetal3DeploymentExists(r.KubeClient.AppsV1(), ComponentNamespace)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, errors.Wrap(err, "failed to find existing Metal3 Deployment")
 	}
@@ -238,35 +235,61 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	err = r.updateCOStatus(ReasonSyncing, "", "Applying the Metal3 deployment")
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
+	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
+	if specChanged {
+		err = r.updateCOStatus(ReasonSyncing, "", "Applying the Metal3 deployment")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
+		}
 	}
 
-	// Proceed with creating a new Metal3 deployment
-	metal3Deployment := provisioning.NewMetal3Deployment(ComponentNamespace, &containerImages, &baremetalConfig.Spec)
-	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, r.Generations)
-
-	err = controllerutil.SetControllerReference(baremetalConfig, metal3Deployment, r.Scheme)
+	// Proceed with creating or updating the Metal3 deployment
+	updated, err := r.ensureMetal3Deployment(baremetalConfig, &containerImages)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to set controllerReference on deployment: %v", err)
+		return ctrl.Result{}, err
 	}
-
-	deployment, updated, err := resourceapply.ApplyDeployment(r.KubeClient.AppsV1(),
-		events.NewLoggingEventRecorder(ComponentName), metal3Deployment, expectedGeneration)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to apply Metal3 deployment: %v", err)
-	}
-
 	if updated {
-		resourcemerge.SetDeploymentGeneration(&r.Generations, deployment)
+		return ctrl.Result{Requeue: true}, err
 	}
+
+	if specChanged {
+		baremetalConfig.Status.ObservedGeneration = baremetalConfig.Generation
+		err = r.Client.Status().Update(context.Background(), baremetalConfig)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to update observed generation: %w", err)
+		}
+	}
+
 	err = r.updateCOStatus(ReasonComplete, "new Metal3 deployment completed", "")
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ProvisioningReconciler) ensureMetal3Deployment(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images) (updated bool, err error) {
+	metal3Deployment := provisioning.NewMetal3Deployment(ComponentNamespace, images, &provConfig.Spec)
+	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, provConfig.Status.Generations)
+
+	err = controllerutil.SetControllerReference(provConfig, metal3Deployment, r.Scheme)
+	if err != nil {
+		err = fmt.Errorf("unable to set controllerReference on deployment: %w", err)
+		return
+	}
+
+	deployment, updated, err := resourceapply.ApplyDeployment(r.KubeClient.AppsV1(),
+		events.NewLoggingEventRecorder(ComponentName), metal3Deployment, expectedGeneration)
+	if err != nil {
+		err = fmt.Errorf("unable to apply Metal3 deployment: %w", err)
+		return
+	}
+
+	if updated {
+		resourcemerge.SetDeploymentGeneration(&provConfig.Status.Generations, deployment)
+		err = r.Client.Status().Update(context.Background(), provConfig)
+	}
+	return
 }
 
 // SetupWithManager configures the manager to run the controller
