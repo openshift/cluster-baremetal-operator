@@ -230,12 +230,12 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	// If Metal3 Deployment already exists and managed by MAO, do nothing.
-	exists, err := provisioning.MAOMetal3DeploymentExists(r.KubeClient.AppsV1(), ComponentNamespace)
+	metal3DeploymentSelector, maoOwned, err := provisioning.CheckExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
 	if err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, errors.Wrap(err, "failed to find existing Metal3 Deployment")
+		return ctrl.Result{}, errors.Wrap(err, "failed to check for existing Metal3 Deployment")
 	}
 
-	if exists {
+	if maoOwned {
 		r.Log.V(1).Info("metal3 deployment already exists")
 		err = r.updateCOStatus(ReasonComplete, "found existing Metal3 deployment", "")
 		if err != nil {
@@ -253,7 +253,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	// Proceed with creating or updating the Metal3 deployment
-	updated, err := r.ensureMetal3Deployment(baremetalConfig, &containerImages)
+	updated, err := r.ensureMetal3Deployment(baremetalConfig, &containerImages, metal3DeploymentSelector)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -292,8 +292,8 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	return ctrl.Result{}, nil
 }
 
-func (r *ProvisioningReconciler) ensureMetal3Deployment(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images) (updated bool, err error) {
-	metal3Deployment := provisioning.NewMetal3Deployment(ComponentNamespace, images, &provConfig.Spec)
+func (r *ProvisioningReconciler) ensureMetal3Deployment(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, selector *metav1.LabelSelector) (updated bool, err error) {
+	metal3Deployment := provisioning.NewMetal3Deployment(ComponentNamespace, images, &provConfig.Spec, selector)
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, provConfig.Status.Generations)
 
 	err = controllerutil.SetControllerReference(provConfig, metal3Deployment, r.Scheme)

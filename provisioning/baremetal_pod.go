@@ -517,7 +517,7 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 	return container
 }
 
-func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec) *corev1.PodTemplateSpec {
+func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, k8sAppLabel string) *corev1.PodTemplateSpec {
 	initContainers := newMetal3InitContainers(images, config)
 	containers := newMetal3Containers(images, config)
 	tolerations := []corev1.Toleration{
@@ -546,8 +546,7 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"api":        "clusterapi",
-				"k8s-app":    "controller",
+				"k8s-app":    k8sAppLabel,
 				cboLabelName: stateService,
 			},
 		},
@@ -567,10 +566,24 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 	}
 }
 
-func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec) *appsv1.Deployment {
-	replicas := int32(1)
-	template := newMetal3PodTemplateSpec(images, config)
+func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, selector *metav1.LabelSelector) *appsv1.Deployment {
+	if selector == nil {
+		selector = &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"k8s-app":    metal3AppName,
+				cboLabelName: stateService,
+			},
+		}
+	}
+	k8sAppLabel := metal3AppName
+	for k, v := range selector.MatchLabels {
+		if k == "k8s-app" {
+			k8sAppLabel = v
+			break
+		}
+	}
 
+	template := newMetal3PodTemplateSpec(images, config, k8sAppLabel)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      baremetalDeploymentName,
@@ -579,27 +592,23 @@ func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 				cboOwnedAnnotation: "",
 			},
 			Labels: map[string]string{
-				"k8s-app": "controller",
+				"k8s-app":    k8sAppLabel,
+				cboLabelName: stateService,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"k8s-app": "controller",
-				},
-			},
+			Replicas: pointer.Int32Ptr(1),
+			Selector: selector,
 			Template: *template,
 		},
 	}
 }
 
-func MAOMetal3DeploymentExists(client appsclientv1.DeploymentsGetter, targetNamespace string) (bool, error) {
+func CheckExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, targetNamespace string) (*metav1.LabelSelector, bool, error) {
 	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
 	if existing != nil && err == nil {
-		if _, maoOwned := existing.Annotations["machine.openshift.io/owned"]; maoOwned {
-			return true, nil
-		}
+		_, maoOwned := existing.Annotations["machine.openshift.io/owned"]
+		return existing.Spec.Selector, maoOwned, nil
 	}
-	return false, err
+	return nil, false, err
 }
