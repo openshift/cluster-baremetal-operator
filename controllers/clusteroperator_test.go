@@ -17,7 +17,6 @@ import (
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
-	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
@@ -337,13 +336,8 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 
 	for _, tc := range tCases {
 		baremetalCR.Spec = tc.spec
-		if errs := provisioning.ValidateBaremetalProvisioningConfig(baremetalCR); len(errs) > 0 {
-			var errorstring string
-			for _, err := range errs {
-				errorstring = err.Error() + "\n" + errorstring
-			}
-			errorstring = strings.TrimSuffix(errorstring, "\n")
-			err := reconciler.updateCOStatus(ReasonInvalidConfiguration, errorstring, "Unable to apply Provisioning CR: invalid configuration")
+		if err := baremetalCR.ValidateBaremetalProvisioningConfig(); err != nil {
+			err = reconciler.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
 			if err != nil {
 				t.Error(err)
 			}
