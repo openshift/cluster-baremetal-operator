@@ -18,8 +18,10 @@ package provisioning
 import (
 	"crypto/rand"
 	"math/big"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/cert"
 
 	"github.com/openshift/library-go/pkg/crypto"
 )
@@ -29,7 +31,10 @@ type TlsCertificate struct {
 	certificate string
 }
 
-const tlsExpirationDays = 365
+const (
+	tlsExpirationDays = 365 * 2
+	tlsRefreshDays    = 180
+)
 
 func generateRandomPassword() (string, error) {
 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
@@ -80,4 +85,20 @@ func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
 		privateKey:  string(keyBytes),
 		certificate: string(certBytes),
 	}, nil
+}
+
+func isTlsCertificateExpired(certificate string) (bool, error) {
+	certs, err := cert.ParseCertsPEM([]byte(certificate))
+	if err != nil {
+		return false, err
+	}
+
+	refreshAfter := time.Now().AddDate(0, 0, tlsRefreshDays)
+	for _, cert := range certs {
+		if cert.NotAfter.Before(refreshAfter) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

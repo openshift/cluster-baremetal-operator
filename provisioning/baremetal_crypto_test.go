@@ -30,6 +30,13 @@ func TestGenerateTlsCertificate(t *testing.T) {
 		assert.NotEqual(t, cert.certificate, "", "empty certificate")
 		assert.NotEqual(t, cert.privateKey, "", "empty private key")
 	}
+
+	expired, err := isTlsCertificateExpired(cert.certificate)
+	if err != nil {
+		t.Errorf("Unexpected error while checking a certificate: %s", err)
+	} else {
+		assert.False(t, expired, "new certificate is already expired")
+	}
 }
 
 func TestGenerateTlsCertificateWithHost(t *testing.T) {
@@ -39,5 +46,12 @@ func TestGenerateTlsCertificateWithHost(t *testing.T) {
 	} else {
 		assert.NotEqual(t, cert.certificate, "", "empty certificate")
 		assert.NotEqual(t, cert.privateKey, "", "empty private key")
+	}
+
+	expired, err := isTlsCertificateExpired(cert.certificate)
+	if err != nil {
+		t.Errorf("Unexpected error while checking a certificate: %s", err)
+	} else {
+		assert.False(t, expired, "new certificate is already expired")
 	}
 }
