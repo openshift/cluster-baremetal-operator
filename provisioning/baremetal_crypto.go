@@ -16,20 +16,20 @@ limitations under the License.
 package provisioning
 
 import (
-	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
 	"math/big"
-	"time"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/library-go/pkg/crypto"
 )
 
 type TlsCertificate struct {
 	privateKey  string
 	certificate string
 }
+
+const tlsExpirationDays = 365
 
 func generateRandomPassword() (string, error) {
 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
@@ -48,60 +48,36 @@ func generateRandomPassword() (string, error) {
 	return string(buf), nil
 }
 
-func generateSerialNumber() (*big.Int, error) {
-	max := new(big.Int).Lsh(big.NewInt(1), 128)
-	return rand.Int(rand.Reader, max)
-}
-
-func generateTlsCertificate() (TlsCertificate, error) {
-	pkey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
+	caConfig, err := crypto.MakeSelfSignedCAConfig("metal3-ironic", tlsExpirationDays)
 	if err != nil {
 		return TlsCertificate{}, err
 	}
 
-	sn, err := generateSerialNumber()
+	ca := crypto.CA{
+		Config:          caConfig,
+		SerialGenerator: &crypto.RandomSerialGenerator{},
+	}
+
+	var host string
+	if provisioningIP == "" {
+		host = "localhost"
+	} else {
+		host = provisioningIP
+	}
+
+	config, err := ca.MakeServerCert(sets.NewString(host), tlsExpirationDays)
 	if err != nil {
 		return TlsCertificate{}, err
 	}
 
-	notBefore := time.Now()
-	// NOTE(dtantsur): is 10 years enough? let's assume so.
-	notAfter := notBefore.Add(10 * 365 * 24 * time.Hour)
-
-	// TODO(dtantsur): add IPAddresses with provisioning IPs
-	cert := x509.Certificate{
-		SerialNumber:          sn,
-		NotBefore:             notBefore,
-		NotAfter:              notAfter,
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &cert, &cert, &pkey.PublicKey, pkey)
+	certBytes, keyBytes, err := config.GetPEMBytes()
 	if err != nil {
 		return TlsCertificate{}, err
 	}
-
-	var buf bytes.Buffer
-	err = pem.Encode(&buf, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	if err != nil {
-		return TlsCertificate{}, err
-	}
-	pemStr := buf.String()
-	buf.Truncate(0)
-
-	pkeyBytes, err := x509.MarshalPKCS8PrivateKey(pkey)
-	if err != nil {
-		return TlsCertificate{}, err
-	}
-	if err := pem.Encode(&buf, &pem.Block{Type: "PRIVATE KEY", Bytes: pkeyBytes}); err != nil {
-		return TlsCertificate{}, err
-	}
-	keyStr := buf.String()
 
 	return TlsCertificate{
-		privateKey:  keyStr,
-		certificate: pemStr,
+		privateKey:  string(keyBytes),
+		certificate: string(certBytes),
 	}, nil
 }

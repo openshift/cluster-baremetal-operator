@@ -1,7 +1,6 @@
 package provisioning
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,17 +22,18 @@ func TestGenerateRandomPassword(t *testing.T) {
 	}
 }
 
-func TestGenerateSerialNumber(t *testing.T) {
-	sn, err := generateSerialNumber()
+func TestGenerateTlsCertificate(t *testing.T) {
+	cert, err := generateTlsCertificate("")
 	if err != nil {
-		t.Errorf("Unexpected error while generating a serial number: %s", err)
+		t.Errorf("Unexpected error while generating a certificate: %s", err)
 	} else {
-		assert.GreaterOrEqual(t, sn.Cmp(big.NewInt(0)), 0, "serial number is negative")
+		assert.NotEqual(t, cert.certificate, "", "empty certificate")
+		assert.NotEqual(t, cert.privateKey, "", "empty private key")
 	}
 }
 
-func TestGenerateTlsCertificate(t *testing.T) {
-	cert, err := generateTlsCertificate()
+func TestGenerateTlsCertificateWithHost(t *testing.T) {
+	cert, err := generateTlsCertificate("127.0.0.1")
 	if err != nil {
 		t.Errorf("Unexpected error while generating a certificate: %s", err)
 	} else {

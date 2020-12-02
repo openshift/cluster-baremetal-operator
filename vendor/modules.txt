@@ -376,6 +376,7 @@ github.com/openshift/client-go/config/clientset/versioned/typed/config/v1/fake
 # github.com/openshift/library-go v0.0.0-20200910214143-887092e305c1
 ## explicit
 github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers
+github.com/openshift/library-go/pkg/crypto
 github.com/openshift/library-go/pkg/operator/events
 github.com/openshift/library-go/pkg/operator/resource/resourceapply
 github.com/openshift/library-go/pkg/operator/resource/resourcehelper
@@ -808,6 +809,8 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
+# k8s.io/apiserver v0.20.0
+k8s.io/apiserver/pkg/authentication/user
 # k8s.io/client-go v0.20.0
 ## explicit
 k8s.io/client-go/discovery
