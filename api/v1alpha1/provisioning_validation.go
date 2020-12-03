@@ -50,9 +50,11 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig() error {
 	   "ProvisioningOSDownloadURL"
 
 	   Disabled:
+	   "ProvisioningOSDownloadURL"
+
+	   And optionally when Disabled, both:
 	   "ProvisioningIP"
 	   "ProvisioningNetworkCIDR"
-	   "ProvisioningOSDownloadURL"
 	*/
 
 	var errs []error
@@ -62,26 +64,29 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig() error {
 		errs = append(errs, err...)
 	}
 
-	// Ignore DHCPRange in all but Managed mode.
+	if provisioningNetworkMode == ProvisioningNetworkDisabled {
+		// Only check network settings in Disabled mode if it's set.
+		if prov.Spec.ProvisioningNetworkCIDR == "" && prov.Spec.ProvisioningIP == "" {
+			return errors.NewAggregate(errs)
+		}
+	}
+
+	// Only force check of dhcpRange if in managed mode.
 	dhcpRange := prov.Spec.ProvisioningDHCPRange
 	if provisioningNetworkMode != ProvisioningNetworkManaged {
 		dhcpRange = ""
 	}
 
-	// They all use the provisioning network settings, except DHCPRange.  We'll
-	// verify that below
-	if provisioningNetworkMode != ProvisioningNetworkDisabled || prov.Spec.ProvisioningIP != "" {
-		if err := validateProvisioningNetworkSettings(prov.Spec.ProvisioningIP, prov.Spec.ProvisioningNetworkCIDR, dhcpRange); err != nil {
-			errs = append(errs, err...)
-		}
+	if err := validateProvisioningNetworkSettings(prov.Spec.ProvisioningIP, prov.Spec.ProvisioningNetworkCIDR, dhcpRange); err != nil {
+		errs = append(errs, err...)
 	}
 
-	if provisioningNetworkMode == ProvisioningNetworkManaged || provisioningNetworkMode == ProvisioningNetworkUnmanaged {
+	if provisioningNetworkMode != ProvisioningNetworkDisabled {
 		if err := validateProvisioningInterface(prov.Spec.ProvisioningInterface); err != nil {
 			errs = append(errs, err...)
 		}
 	}
-
+	// We need to check this here because we've designed validateProvisioningNetworkSettings() to allow an empty DHCP Range.
 	if provisioningNetworkMode == ProvisioningNetworkManaged {
 		if prov.Spec.ProvisioningDHCPRange == "" {
 			errs = append(errs, fmt.Errorf("provisioningDHCPRange is required in Managed mode but is not set"))
@@ -170,7 +175,6 @@ func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange strin
 	_, provisioningCIDR, err := net.ParseCIDR(cidr)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("could not parse provisioningNetworkCIDR %q", cidr))
-		// Similar thing.. need this to be valid for further tests.
 		return errs
 	}
 

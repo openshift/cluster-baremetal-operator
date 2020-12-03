@@ -260,17 +260,17 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 		},
 		{
 			// All fields are specified, except ProvisioningIP and CIDR
-			name:          "ValidDisabled",
+			name:          "ValidDisabledNoNetwork",
 			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedError: false,
 			expectedMode:  ProvisioningNetworkDisabled,
 		},
 		{
-			name:          "InvalidDisabledNoCIDRWithIP",
-			spec:          disabledProvisioning().ProvisioningNetworkCIDR("").build(),
+			name:          "InvalidDisabledBadDownloadURL",
+			spec:          disabledProvisioning().ProvisioningOSDownloadURL("http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.zip?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234").build(),
 			expectedError: true,
 			expectedMode:  ProvisioningNetworkDisabled,
-			expectedMsg:   "provisioningNetworkCIDR",
+			expectedMsg:   "provisioningOSDownloadURL",
 		},
 		{
 			// Missing ProvisioningOSDownloadURL
@@ -279,6 +279,22 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			expectedError: true,
 			expectedMode:  ProvisioningNetworkDisabled,
 			expectedMsg:   "provisioningOSDownloadURL",
+		},
+		{
+			// IP and CIDR set with bad CIDR
+			name:          "InvalidDisabledBadCIDR",
+			spec:          disabledProvisioning().ProvisioningIP("172.22.0.3").ProvisioningNetworkCIDR("172.22.0.0/33").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkDisabled,
+			expectedMsg:   "could not parse provisioningNetworkCIDR",
+		},
+		{
+			// Only IP is set and not CIDR
+			name:          "InvalidDisabledOnlyIP",
+			spec:          disabledProvisioning().ProvisioningIP("172.22.0.3").ProvisioningNetworkCIDR("").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkDisabled,
+			expectedMsg:   "provisioningNetworkCIDR",
 		},
 	}
 	for _, tc := range tCases {
@@ -293,6 +309,9 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			assert.Equal(t, tc.expectedMode, baremetalCR.getProvisioningNetworkMode(), "enabled results did not match")
 			if tc.expectedError {
 				assert.True(t, strings.Contains(err.Error(), tc.expectedMsg))
+				if !strings.Contains(err.Error(), tc.expectedMsg) {
+					t.Errorf("Non-matching errors: %v", err)
+				}
 			}
 			return
 		})
