@@ -32,6 +32,7 @@ const (
 	baremetalSharedVolume      = "metal3-shared"
 	metal3AuthRootDir          = "/auth"
 	ironicCredentialsVolume    = "metal3-ironic-basic-auth"
+	ironicrpcCredentialsVolume = "metal3-ironic-rpc-basic-auth"
 	inspectorCredentialsVolume = "metal3-inspector-basic-auth"
 	htpasswdEnvVar             = "HTTP_BASIC_HTPASSWD" // #nosec
 	mariadbPwdEnvVar           = "MARIADB_PASSWORD"    // #nosec
@@ -46,6 +47,12 @@ var sharedVolumeMount = corev1.VolumeMount{
 var ironicCredentialsMount = corev1.VolumeMount{
 	Name:      ironicCredentialsVolume,
 	MountPath: metal3AuthRootDir + "/ironic",
+	ReadOnly:  true,
+}
+
+var rpcCredentialsMount = corev1.VolumeMount{
+	Name:      ironicrpcCredentialsVolume,
+	MountPath: metal3AuthRootDir + "/ironic-rpc",
 	ReadOnly:  true,
 }
 
@@ -79,6 +86,19 @@ var metal3Volumes = []corev1.Volume{
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: ironicSecretName,
+				Items: []corev1.KeyToPath{
+					{Key: ironicUsernameKey, Path: ironicUsernameKey},
+					{Key: ironicPasswordKey, Path: ironicPasswordKey},
+					{Key: ironicConfigKey, Path: ironicConfigKey},
+				},
+			},
+		},
+	},
+	{
+		Name: ironicrpcCredentialsVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: ironicrpcSecretName,
 				Items: []corev1.KeyToPath{
 					{Key: ironicUsernameKey, Path: ironicUsernameKey},
 					{Key: ironicPasswordKey, Path: ironicPasswordKey},
@@ -346,12 +366,14 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 		VolumeMounts: []corev1.VolumeMount{
 			sharedVolumeMount,
 			inspectorCredentialsMount,
+			rpcCredentialsMount,
 		},
 		Env: []corev1.EnvVar{
 			mariadbPassword,
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
+			setIronicHtpasswdHash(htpasswdEnvVar, ironicrpcSecretName),
 		},
 	}
 	return container
@@ -365,8 +387,11 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command:      []string{"/bin/runironic-api"},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Command: []string{"/bin/runironic-api"},
+		VolumeMounts: []corev1.VolumeMount{
+			sharedVolumeMount,
+			rpcCredentialsMount,
+		},
 		Env: []corev1.EnvVar{
 			mariadbPassword,
 			buildEnvVar(httpPort, config),

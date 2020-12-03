@@ -25,6 +25,8 @@ const (
 	ironicHtpasswdKey   = "htpasswd"
 	ironicConfigKey     = "auth-config"
 	ironicSecretName    = "metal3-ironic-password"
+	ironicrpcSecretName = "metal3-ironic-rpc-password" // #nosec
+	ironicrpcUsername   = "rpc-user"
 	ironicUsername      = "ironic-user"
 	inspectorSecretName = "metal3-ironic-inspector-password"
 	inspectorUsername   = "inspector-user"
@@ -91,6 +93,11 @@ func CreateMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamesp
 // CreateIronicPasswordSecret creates a Secret for the Ironic Password
 func CreateIronicPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
 	return createIronicSecret(client, targetNamespace, ironicSecretName, ironicUsername, "ironic", baremetalConfig, scheme)
+}
+
+// CreateIronicRpcPasswordSecret creates a Secret for the Ironic RPC Password
+func CreateIronicRpcPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
+	return createIronicSecret(client, targetNamespace, ironicrpcSecretName, ironicrpcUsername, "json_rpc", baremetalConfig, scheme)
 }
 
 // CreateInspectorPasswordSecret creates a Secret for the Ironic Inspector Password
