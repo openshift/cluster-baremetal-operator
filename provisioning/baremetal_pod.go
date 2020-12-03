@@ -210,7 +210,9 @@ func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSp
 		createContainerMetal3Mariadb(images),
 		createContainerMetal3Httpd(images, config),
 		createContainerMetal3IronicConductor(images, config),
+		createContainerIronicInspectorRamdiskLogs(images),
 		createContainerMetal3IronicApi(images, config),
+		createContainerIronicDeployRamdiskLogs(images),
 		createContainerMetal3IronicInspector(images, config),
 	}
 
@@ -376,6 +378,20 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 	return container
 }
 
+func createContainerIronicDeployRamdiskLogs(images *Images) corev1.Container {
+	container := corev1.Container{
+		Name:            "ironic-deploy-ramdisk-logs",
+		Image:           images.Ironic,
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Command:      []string{"/bin/runlogwatch.sh"},
+		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+	}
+	return container
+}
+
 func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-ironic-inspector",
@@ -393,6 +409,20 @@ func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alph
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(htpasswdEnvVar, inspectorSecretName),
 		},
+	}
+	return container
+}
+
+func createContainerIronicInspectorRamdiskLogs(images *Images) corev1.Container {
+	container := corev1.Container{
+		Name:            "ironic-inspector-ramdisk-logs",
+		Image:           images.IronicInspector,
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		Command:      []string{"/bin/runlogwatch.sh"},
+		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
 	}
 	return container
 }

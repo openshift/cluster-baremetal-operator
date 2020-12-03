@@ -154,22 +154,22 @@ func TestNewMetal3Containers(t *testing.T) {
 		{
 			name:               "ManagedSpec",
 			config:             managedProvisioning().build(),
-			expectedContainers: 8,
+			expectedContainers: 10,
 		},
 		{
 			name:               "UnmanagedSpec",
 			config:             unmanagedProvisioning().build(),
-			expectedContainers: 8,
+			expectedContainers: 10,
 		},
 		{
 			name:               "DisabledSpec",
 			config:             disabledProvisioning().build(),
-			expectedContainers: 7,
+			expectedContainers: 9,
 		},
 		{
 			name:               "DisabledSpecWithoutProvisioningIP",
 			config:             disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
-			expectedContainers: 6,
+			expectedContainers: 8,
 		},
 	}
 	for _, tc := range tCases {
