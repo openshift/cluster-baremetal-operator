@@ -17,6 +17,7 @@ package provisioning
 
 import (
 	"context"
+	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -235,6 +236,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			{
 				Name:          "metrics",
 				ContainerPort: 60000,
+				HostPort:      60000,
 			},
 		},
 		Command:         []string{"/baremetal-operator"},
@@ -309,11 +311,19 @@ func createContainerMetal3Mariadb(images *Images) corev1.Container {
 		Env: []corev1.EnvVar{
 			mariadbPassword,
 		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "mysql",
+				ContainerPort: 3306,
+				HostPort:      3306,
+			},
+		},
 	}
 	return container
 }
 
 func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	port, _ := strconv.Atoi(baremetalHttpPort) // #nosec
 	container := corev1.Container{
 		Name:            "metal3-httpd",
 		Image:           images.Ironic,
@@ -327,6 +337,13 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "http",
+				ContainerPort: int32(port),
+				HostPort:      int32(port),
+			},
 		},
 	}
 	return container
@@ -351,6 +368,13 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "json-rpc",
+				ContainerPort: 8089,
+				HostPort:      8089,
+			},
+		},
 	}
 	return container
 }
@@ -372,6 +396,13 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(htpasswdEnvVar, ironicSecretName),
 		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "ironic",
+				ContainerPort: 6385,
+				HostPort:      6385,
+			},
+		},
 	}
 	return container
 }
@@ -392,6 +423,13 @@ func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alph
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(htpasswdEnvVar, inspectorSecretName),
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "inspector",
+				ContainerPort: 5050,
+				HostPort:      5050,
+			},
 		},
 	}
 	return container
