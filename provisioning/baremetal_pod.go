@@ -673,8 +673,10 @@ func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace s
 		return appsv1.DeploymentReplicaFailure, nil
 	}
 	return deploymentState, nil
-func DeleteMetal3Deployment(client appsclientv1.DeploymentsGetter, targetNamespace string) error {
-	err := client.Deployments(targetNamespace).Delete(context.Background(), baremetalDeploymentName, metav1.DeleteOptions{})
+}
+
+func DeleteMetal3Deployment(info *ProvisioningInfo) error {
+	err := info.Client.AppsV1().Deployments(info.Namespace).Delete(context.Background(), baremetalDeploymentName, metav1.DeleteOptions{})
 	if apierrors.IsNotFound(err) {
 		// metal3 deployment does not exist. Nothing to delete
 		return nil

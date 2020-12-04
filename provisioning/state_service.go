@@ -1,10 +1,12 @@
 package provisioning
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -53,4 +55,13 @@ func EnsureMetal3StateService(info *ProvisioningInfo) (updated bool, err error) 
 		err = fmt.Errorf("unable to apply Metal3-state service: %w", err)
 	}
 	return
+}
+
+func DeleteMetal3StateService(info *ProvisioningInfo) error {
+	err := info.Client.CoreV1().Services(info.Namespace).Delete(context.Background(), stateService, metav1.DeleteOptions{})
+	if apierrors.IsNotFound(err) {
+		// metal3-state service does not exist. Nothing to delete
+		return nil
+	}
+	return err
 }

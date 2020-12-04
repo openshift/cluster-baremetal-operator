@@ -169,42 +169,11 @@ password = %s
 	return err
 }
 
-func DeleteMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
-	err := client.Secrets(targetNamespace).Delete(context.Background(), baremetalSecretName, metav1.DeleteOptions{})
+func DeleteAllSecrets(info *ProvisioningInfo) {
+	_ = info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), baremetalSecretName, metav1.DeleteOptions{})
+	_ = info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicSecretName, metav1.DeleteOptions{})
+	_ = info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{})
+	_ = info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicrpcSecretName, metav1.DeleteOptions{})
 
-	if apierrors.IsNotFound(err) {
-		// mariadb password Secret doesn't exist. Nothing to delete
-		return nil
-	}
-	return err
-}
-
-func DeleteIronicPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
-	err := client.Secrets(targetNamespace).Delete(context.Background(), ironicSecretName, metav1.DeleteOptions{})
-
-	if apierrors.IsNotFound(err) {
-		// ironic password Secret doesn't exist. Nothing to delete
-		return nil
-	}
-	return err
-}
-
-func DeleteInspectorPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
-	err := client.Secrets(targetNamespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{})
-
-	if apierrors.IsNotFound(err) {
-		// ironic password Secret doesn't exist. Nothing to delete
-		return nil
-	}
-	return err
-}
-
-func DeleteIronicRpcPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string) error {
-	err := client.Secrets(targetNamespace).Delete(context.Background(), ironicrpcSecretName, metav1.DeleteOptions{})
-
-	if apierrors.IsNotFound(err) {
-		// ironic rpc Secret doesn't exist. Nothing to delete
-		return nil
-	}
-	return err
+	return
 }

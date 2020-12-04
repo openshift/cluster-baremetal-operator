@@ -121,65 +121,6 @@ func (r *ProvisioningReconciler) readProvisioningCR(namespacedName types.Namespa
 	return instance, nil
 }
 
-//Ensure Finalizer is present on the Provisioning CR when not deleted and
-//delete resources and remove Finalizer when it is
-func (r *ProvisioningReconciler) checkForCRDeletion(baremetalConfig *metal3iov1alpha1.Provisioning) (bool, error) {
-	// examine DeletionTimestamp to determine if object is under deletion
-	if baremetalConfig.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// to registering our finalizer.
-		if !containsString(baremetalConfig.ObjectMeta.Finalizers,
-			metal3iov1alpha1.ProvisioningFinalizer) {
-			// Add finalizer becasue it doesn't already exist
-			baremetalConfig.ObjectMeta.Finalizers = append(baremetalConfig.ObjectMeta.Finalizers,
-				metal3iov1alpha1.ProvisioningFinalizer)
-			if err := r.Client.Update(context.Background(), baremetalConfig); err != nil {
-				return false, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
-			}
-		}
-		return false, nil
-	} else {
-		// The Provisioning object is being deleted
-		if containsString(baremetalConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
-			err := r.deleteMetal3Resources()
-			if err != nil {
-				return false, errors.Wrap(err, "failed to delete metal3 pod")
-			}
-			// Remove our finalizer from the list and update it.
-			baremetalConfig.ObjectMeta.Finalizers = removeString(baremetalConfig.ObjectMeta.Finalizers,
-				metal3iov1alpha1.ProvisioningFinalizer)
-			if err = r.Client.Update(context.Background(), baremetalConfig); err != nil {
-				return true, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
-			}
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-//Delete Secrets and the Metal3 Deployment objects
-func (r *ProvisioningReconciler) deleteMetal3Resources() error {
-	err := provisioning.DeleteMariadbPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace)
-	if err != nil {
-		r.Log.V(1).Info("could not delete mariadb password Secret")
-	}
-	err = provisioning.DeleteIronicPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace)
-	if err != nil {
-		r.Log.V(1).Info("could not delete ironic password Secret")
-	}
-	err = provisioning.DeleteInspectorPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace)
-	if err != nil {
-		r.Log.V(1).Info("could not delete ironic inspector password Secret")
-	}
-	err = provisioning.DeleteIronicRpcPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace)
-	if err != nil {
-		r.Log.V(1).Info("could not delete ironic rpc password Secret")
-	}
-
-	return provisioning.DeleteMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
-}
-
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -212,35 +153,6 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	err = r.ensureClusterOperator(baremetalConfig)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	deleted, err := r.checkForCRDeletion(baremetalConfig)
-	if err != nil || deleted {
-		return ctrl.Result{}, err
-	}
-
-	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
-	if specChanged {
-		err = r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
-		}
-	}
-
-	if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalConfig); err != nil {
-		// Provisioning configuration is not valid.
-		// Requeue request.
-		r.Log.Error(err, "invalid config in Provisioning CR")
-		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
-		}
-		// Temporarily not requeuing request
-		return ctrl.Result{}, nil
-	}
-
 	// Read container images from Config Map
 	var containerImages provisioning.Images
 	if err := provisioning.GetContainerImages(&containerImages, r.ImagesFilename); err != nil {
@@ -253,6 +165,52 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, co_err)
 		}
 		return ctrl.Result{}, err
+	}
+
+	info := r.provisioningInfo(baremetalConfig, &containerImages)
+
+	// Make sure ClusterOperator exists and updated
+	err = r.ensureClusterOperator(baremetalConfig)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Check if Provisioning Configuartion is being deleted
+	deleted, err := r.checkForCRDeletion(info)
+	if err != nil {
+		err = r.updateCOStatus(ReasonDeployTimedOut, err.Error(), "Unable to delete a metal3 resource on Provisioning CR deletion")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+		return ctrl.Result{}, err
+	}
+	if err == nil && deleted {
+		err = r.updateCOStatus(ReasonComplete, "all Metal3 resources deleted", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
+		}
+		return ctrl.Result{}, nil
+	}
+
+	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
+	if specChanged {
+		err = r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
+		}
+	}
+
+	// Check if provisioning configuration is valid
+	if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalConfig); err != nil {
+		// Provisioning configuration is not valid.
+		// Requeue request.
+		r.Log.Error(err, "invalid config in Provisioning CR")
+		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+		// Temporarily not requeuing request
+		return ctrl.Result{}, nil
 	}
 
 	// Create Secrets needed for Metal3 deployment
@@ -278,8 +236,6 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if maoOwned {
 		r.Log.V(1).Info("Adding annotation for CBO to take ownership of metal3 deployment created by MAO")
 	}
-
-	info := r.provisioningInfo(baremetalConfig, &containerImages)
 
 	// Proceed with creating or updating the Metal3 deployment
 	updated, err := provisioning.EnsureMetal3Deployment(info, metal3DeploymentSelector)
@@ -368,6 +324,62 @@ func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.P
 		Namespace:     ComponentNamespace,
 		Images:        images,
 	}
+}
+
+//Ensure Finalizer is present on the Provisioning CR when not deleted and
+//delete resources and remove Finalizer when it is
+func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.ProvisioningInfo) (bool, error) {
+	// examine DeletionTimestamp to determine if object is under deletion
+	if info.ProvConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// to registering our finalizer.
+		if !containsString(info.ProvConfig.ObjectMeta.Finalizers,
+			metal3iov1alpha1.ProvisioningFinalizer) {
+			// Add finalizer becasue it doesn't already exist
+			info.ProvConfig.ObjectMeta.Finalizers = append(info.ProvConfig.ObjectMeta.Finalizers,
+				metal3iov1alpha1.ProvisioningFinalizer)
+			if err := r.Client.Update(context.Background(), info.ProvConfig); err != nil {
+				return false, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
+			}
+		}
+		return false, nil
+	} else {
+		// The Provisioning object is being deleted
+		if containsString(info.ProvConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
+			err := r.deleteMetal3Resources(info)
+			if err != nil {
+				return false, errors.Wrap(err, "failed to delete metal3 resource")
+			}
+			// Remove our finalizer from the list and update it.
+			info.ProvConfig.ObjectMeta.Finalizers = removeString(info.ProvConfig.ObjectMeta.Finalizers,
+				metal3iov1alpha1.ProvisioningFinalizer)
+			if err = r.Client.Update(context.Background(), info.ProvConfig); err != nil {
+				return true, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+//Delete Secrets and the Metal3 Deployment objects
+func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.ProvisioningInfo) error {
+	provisioning.DeleteAllSecrets(info)
+
+	err := provisioning.DeleteMetal3Deployment(info)
+	if err != nil {
+		return errors.Wrap(err, "failed to delete metal3 deployment")
+	}
+	err = provisioning.DeleteMetal3StateService(info)
+	if err != nil {
+		return errors.Wrap(err, "failed to delete metal3 service")
+	}
+	err = provisioning.DeleteImageCache(info)
+	if err != nil {
+		return errors.Wrap(err, "failed to delete metal3 image cache")
+	}
+	return nil
 }
 
 // SetupWithManager configures the manager to run the controller
