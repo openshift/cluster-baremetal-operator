@@ -17,6 +17,7 @@ package provisioning
 
 import (
 	"context"
+	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -28,6 +29,7 @@ import (
 )
 
 const (
+	metal3AppName              = "metal3"
 	baremetalDeploymentName    = "metal3"
 	baremetalSharedVolume      = "metal3-shared"
 	metal3AuthRootDir          = "/auth"
@@ -37,6 +39,7 @@ const (
 	htpasswdEnvVar             = "HTTP_BASIC_HTPASSWD" // #nosec
 	mariadbPwdEnvVar           = "MARIADB_PASSWORD"    // #nosec
 	cboOwnedAnnotation         = "baremetal.openshift.io/owned"
+	cboLabelName               = "baremetal.openshift.io/cluster-baremetal-operator"
 )
 
 var sharedVolumeMount = corev1.VolumeMount{
@@ -81,6 +84,7 @@ var metal3Volumes = []corev1.Volume{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	},
+	imageVolume(),
 	{
 		Name: ironicCredentialsVolume,
 		VolumeSource: corev1.VolumeSource{
@@ -184,7 +188,7 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Env:          []corev1.EnvVar{},
 	}
 	return initContainer
@@ -199,7 +203,7 @@ func createInitContainerMachineOsDownloader(images *Images, config *metal3iov1al
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Env: []corev1.EnvVar{
 			buildEnvVar(machineImageUrl, config),
 		},
@@ -257,6 +261,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			{
 				Name:          "metrics",
 				ContainerPort: 60000,
+				HostPort:      60000,
 			},
 		},
 		Command:         []string{"/baremetal-operator"},
@@ -307,8 +312,11 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command:      []string{"/bin/rundnsmasq"},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Command: []string{"/bin/rundnsmasq"},
+		VolumeMounts: []corev1.VolumeMount{
+			sharedVolumeMount,
+			imageVolumeMount,
+		},
 		Env: []corev1.EnvVar{
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningInterface, config),
@@ -331,11 +339,19 @@ func createContainerMetal3Mariadb(images *Images) corev1.Container {
 		Env: []corev1.EnvVar{
 			mariadbPassword,
 		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "mysql",
+				ContainerPort: 3306,
+				HostPort:      3306,
+			},
+		},
 	}
 	return container
 }
 
 func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	port, _ := strconv.Atoi(baremetalHttpPort) // #nosec
 	container := corev1.Container{
 		Name:            "metal3-httpd",
 		Image:           images.Ironic,
@@ -343,12 +359,22 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command:      []string{"/bin/runhttpd"},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Command: []string{"/bin/runhttpd"},
+		VolumeMounts: []corev1.VolumeMount{
+			sharedVolumeMount,
+			imageVolumeMount,
+		},
 		Env: []corev1.EnvVar{
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          httpPortName,
+				ContainerPort: int32(port),
+				HostPort:      int32(port),
+			},
 		},
 	}
 	return container
@@ -375,6 +401,13 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(htpasswdEnvVar, ironicrpcSecretName),
 		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "json-rpc",
+				ContainerPort: 8089,
+				HostPort:      8089,
+			},
+		},
 	}
 	return container
 }
@@ -398,6 +431,13 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(htpasswdEnvVar, ironicSecretName),
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "ironic",
+				ContainerPort: 6385,
+				HostPort:      6385,
+			},
 		},
 	}
 	return container
@@ -433,6 +473,13 @@ func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alph
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(htpasswdEnvVar, inspectorSecretName),
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "inspector",
+				ContainerPort: 5050,
+				HostPort:      5050,
+			},
 		},
 	}
 	return container
@@ -499,8 +546,9 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"api":     "clusterapi",
-				"k8s-app": "controller",
+				"api":        "clusterapi",
+				"k8s-app":    "controller",
+				cboLabelName: stateService,
 			},
 		},
 		Spec: corev1.PodSpec{
