@@ -156,6 +156,7 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 			},
 			InitContainers: []corev1.Container{
 				createInitContainerMachineOsDownloader(images, cacheConfig),
+				createInitContainerIpaDownloader(images),
 			},
 			Containers: []corev1.Container{
 				createContainerImageCache(images),
