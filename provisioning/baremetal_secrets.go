@@ -184,7 +184,7 @@ func CreateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, 
 		if len(existing.ObjectMeta.OwnerReferences) == 0 {
 			err = controllerutil.SetControllerReference(baremetalConfig, existing, scheme)
 			if err != nil {
-				return err
+				return errors.Wrap(err, fmt.Sprintf("failed to set controller reference of Secret %s", tlsSecretName))
 			}
 			changed = true
 		}
@@ -192,13 +192,13 @@ func CreateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, 
 		existingCert := existing.StringData[tlsCertificateKey]
 		expired, err := isTlsCertificateExpired(existingCert)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to determine expiration date of TLS certificate")
 		}
 
 		if expired {
 			cert, err := generateTlsCertificate(baremetalConfig.Spec.ProvisioningIP)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "failed to generate new TLS certificate")
 			}
 			existing.StringData[tlsCertificateKey] = cert.certificate
 			existing.StringData[tlsPrivateKeyKey] = cert.privateKey
