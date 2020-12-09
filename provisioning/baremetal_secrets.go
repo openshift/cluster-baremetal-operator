@@ -159,7 +159,7 @@ func CreateAllSecrets(client coreclientv1.SecretsGetter, targetNamespace string,
 		return errors.Wrap(err, "failed to create Inspector password")
 	}
 	// Generate/update TLS certificate
-	if err := CreateTlsSecret(client, targetNamespace, baremetalConfig, scheme); err != nil {
+	if err := CreateOrUpdateTlsSecret(client, targetNamespace, baremetalConfig, scheme); err != nil {
 		return errors.Wrap(err, "failed to create TLS certificate")
 	}
 	return nil
@@ -175,46 +175,55 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 	return utilerrors.NewAggregate(secretErrors)
 }
 
-// CreateTlsSecret creates a Secret for the Ironic and Inspector TLS
-func CreateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	existing, err := client.Secrets(targetNamespace).Get(context.Background(), tlsSecretName, metav1.GetOptions{})
-	if err == nil {
-		changed := false
+func updateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme, secret *corev1.Secret) error {
+	changed := false
 
-		if len(existing.ObjectMeta.OwnerReferences) == 0 {
-			err = controllerutil.SetControllerReference(baremetalConfig, existing, scheme)
-			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("failed to set controller reference of Secret %s", tlsSecretName))
-			}
-			changed = true
+	if len(secret.ObjectMeta.OwnerReferences) == 0 {
+		err := controllerutil.SetControllerReference(baremetalConfig, secret, scheme)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("failed to set controller reference of Secret %s", tlsSecretName))
 		}
+		changed = true
+	}
 
-		existingCert := existing.StringData[tlsCertificateKey]
-		expired, err := isTlsCertificateExpired(existingCert)
+	existingCert := secret.StringData[tlsCertificateKey]
+	if existingCert != "" {
+		expired, err := IsTlsCertificateExpired(existingCert)
 		if err != nil {
 			return errors.Wrap(err, "failed to determine expiration date of TLS certificate")
 		}
 
-		if expired {
-			cert, err := generateTlsCertificate(baremetalConfig.Spec.ProvisioningIP)
-			if err != nil {
-				return errors.Wrap(err, "failed to generate new TLS certificate")
-			}
-			existing.StringData[tlsCertificateKey] = cert.certificate
-			existing.StringData[tlsPrivateKeyKey] = cert.privateKey
-			changed = true
-		}
-
-		if changed {
-			_, err = client.Secrets(targetNamespace).Update(context.Background(), existing, metav1.UpdateOptions{})
-			return err
-		} else {
+		if !expired {
 			return nil
 		}
 	}
 
-	if !apierrors.IsNotFound(err) {
+	cert, err := generateTlsCertificate(baremetalConfig.Spec.ProvisioningIP)
+	if err != nil {
+		return errors.Wrap(err, "failed to generate new TLS certificate")
+	}
+	secret.StringData = map[string]string{tlsCertificateKey: cert.certificate, tlsPrivateKeyKey: cert.privateKey}
+	changed = true
+
+	if changed {
+		_, err = client.Secrets(targetNamespace).Update(context.Background(), secret, metav1.UpdateOptions{})
 		return err
+	}
+
+	return nil
+
+}
+
+// CreateOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
+// It updates the secret if the existing certificate is close to expiration.
+func CreateOrUpdateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
+	existing, err := client.Secrets(targetNamespace).Get(context.Background(), tlsSecretName, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if err == nil {
+		return updateTlsSecret(client, targetNamespace, baremetalConfig, scheme, existing)
 	}
 
 	// Secret does not already exist. So, create one.
