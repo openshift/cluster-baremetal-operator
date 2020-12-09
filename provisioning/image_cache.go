@@ -8,6 +8,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +33,9 @@ const (
 	DaemonSetReplicaFailure appsv1.DaemonSetConditionType = "ReplicaFailure"
 	DaemonSetAvailable      appsv1.DaemonSetConditionType = "Available"
 )
+
+var daemonSetRolloutStartTime = time.Now()
+var daemonSetRolloutTimeout = 5 * time.Minute
 
 var fileCompressionSuffix = regexp.MustCompile(`\.[gx]z$`)
 
@@ -222,7 +226,7 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 		err = fmt.Errorf("unable to set controllerReference on daemonset: %w", err)
 		return
 	}
-
+	daemonSetRolloutStartTime = time.Now()
 	daemonSet, updated, err := resourceapply.ApplyDaemonSet(
 		info.Client.AppsV1(),
 		info.EventRecorder,
@@ -252,5 +256,9 @@ func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace str
 		// There were errors accessing the deployment.
 		return DaemonSetReplicaFailure, err
 	}
-	return getDaemonSetCondition(existing), nil
+	daemonSetState := getDaemonSetCondition(existing)
+	if daemonSetState == DaemonSetProgressing && daemonSetRolloutTimeout <= time.Since(daemonSetRolloutStartTime) {
+		return DaemonSetReplicaFailure, nil
+	}
+	return daemonSetState, nil
 }

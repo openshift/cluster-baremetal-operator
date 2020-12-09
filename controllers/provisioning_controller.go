@@ -259,6 +259,10 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// Determine the status of the deployment
 	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	if err != nil {
+		err = r.updateCOStatus(ReasonNotFound, "metal3 deployment inaccessible", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
 	}
 	if deploymentState == appsv1.DeploymentReplicaFailure {
@@ -266,8 +270,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
 		}
-	}
-	if deploymentState == appsv1.DeploymentAvailable {
+	} else if deploymentState == appsv1.DeploymentAvailable {
 		err = r.updateCOStatus(ReasonSyncing, "metal3 pod running; starting other services", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
@@ -299,6 +302,11 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// Determine the status of the DaemonSet
 	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	if err != nil {
+		err = r.updateCOStatus(ReasonNotFound, "metal3 image cache daemonset inaccessible", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 image cache daemonset")
 	}
 	if daemonSetState == provisioning.DaemonSetReplicaFailure {
@@ -306,9 +314,8 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
 		}
-	}
-	if daemonSetState == provisioning.DaemonSetAvailable {
-		err = r.updateCOStatus(ReasonSyncing, "metal3 pod and image cache are running", "")
+	} else if daemonSetState == provisioning.DaemonSetAvailable {
+		err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
 		}

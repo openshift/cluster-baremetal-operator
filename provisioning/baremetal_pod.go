@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -45,6 +46,9 @@ const (
 	cboOwnedAnnotation         = "baremetal.openshift.io/owned"
 	cboLabelName               = "baremetal.openshift.io/cluster-baremetal-operator"
 )
+
+var deploymentRolloutStartTime = time.Now()
+var deploymentRolloutTimeout = 5 * time.Minute
 
 var sharedVolumeMount = corev1.VolumeMount{
 	Name:      baremetalSharedVolume,
@@ -630,6 +634,7 @@ func EnsureMetal3Deployment(info *ProvisioningInfo, selector *metav1.LabelSelect
 		return
 	}
 
+	deploymentRolloutStartTime = time.Now()
 	deployment, updated, err := resourceapply.ApplyDeployment(info.Client.AppsV1(),
 		info.EventRecorder, metal3Deployment, expectedGeneration)
 	if err != nil {
@@ -659,5 +664,9 @@ func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace s
 		// There were errors accessing the deployment.
 		return appsv1.DeploymentReplicaFailure, err
 	}
-	return getDeploymentCondition(existing), nil
+	deploymentState := getDeploymentCondition(existing)
+	if deploymentState == appsv1.DeploymentProgressing && deploymentRolloutTimeout <= time.Since(deploymentRolloutStartTime) {
+		return appsv1.DeploymentReplicaFailure, nil
+	}
+	return deploymentState, nil
 }
