@@ -271,7 +271,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
 		}
 	} else if deploymentState == appsv1.DeploymentAvailable {
-		err = r.updateCOStatus(ReasonSyncing, "metal3 pod running; starting other services", "")
+		err = r.updateCOStatus(ReasonSyncing, "metal3 pod running", "starting other metal3 services")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
 		}

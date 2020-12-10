@@ -240,15 +240,6 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 	return
 }
 
-func getDaemonSetCondition(daemonSet *appsv1.DaemonSet) appsv1.DaemonSetConditionType {
-	for _, cond := range daemonSet.Status.Conditions {
-		if cond.Status == corev1.ConditionTrue {
-			return cond.Type
-		}
-	}
-	return DaemonSetProgressing
-}
-
 // Provide the current state of metal3 deployment
 func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DaemonSetConditionType, error) {
 	existing, err := client.DaemonSets(targetNamespace).Get(context.Background(), imageCacheService, metav1.GetOptions{})
@@ -256,9 +247,11 @@ func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace str
 		// There were errors accessing the deployment.
 		return DaemonSetReplicaFailure, err
 	}
-	daemonSetState := getDaemonSetCondition(existing)
-	if daemonSetState == DaemonSetProgressing && daemonSetRolloutTimeout <= time.Since(daemonSetRolloutStartTime) {
+	if existing.Status.NumberReady == existing.Status.DesiredNumberScheduled {
+		return DaemonSetAvailable, nil
+	}
+	if daemonSetRolloutTimeout <= time.Since(daemonSetRolloutStartTime) {
 		return DaemonSetReplicaFailure, nil
 	}
-	return daemonSetState, nil
+	return DaemonSetProgressing, nil
 }
