@@ -213,18 +213,9 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	// Create Secrets needed for Metal3 deployment
-	if err := provisioning.CreateMariadbPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to create Mariadb password")
-	}
-	if err := provisioning.CreateIronicPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to create Ironic password")
-	}
-	if err := provisioning.CreateIronicRpcPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to create Ironic rpc password")
-	}
-	if err := provisioning.CreateInspectorPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to create Inspector password")
+	//Create Secrets needed for Metal3 deployment
+	if err := provisioning.CreateAllSecrets(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// If Metal3 Deployment already exists and managed by MAO, do nothing.
@@ -365,7 +356,13 @@ func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.Provision
 
 //Delete Secrets and the Metal3 Deployment objects
 func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.ProvisioningInfo) error {
-	provisioning.DeleteAllSecrets(info)
+	failedSecrets := provisioning.DeleteAllSecrets(info)
+	if len(failedSecrets) > 0 {
+		for _, secret := range failedSecrets {
+			r.Log.V(1).Info("failed to delete secret : ", "secret", secret)
+		}
+		r.Log.V(1).Info("proceeeding with deletion of other resources")
+	}
 
 	err := provisioning.DeleteMetal3Deployment(info)
 	if err != nil {

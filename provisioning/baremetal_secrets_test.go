@@ -105,7 +105,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 
 			switch tc.name {
 			case "new-mariadb-secret":
-				err := CreateMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
+				err := createMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
 				assert.Equal(t, tc.expectedError, err)
 
 				if tc.expectedError == nil {
@@ -115,7 +115,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 					// created and the old one returned.
 					if tc.testRecreate {
 						original := secret.(*v1.Secret).StringData[baremetalSecretKey]
-						err := CreateMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
+						err := createMariadbPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
 						assert.Equal(t, tc.expectedError, err)
 						newSecret, _ := kubeClient.Tracker().Get(secretsResource, testNamespace, "metal3-mariadb-password")
 						recreated := newSecret.(*v1.Secret).StringData[baremetalSecretKey]
@@ -123,7 +123,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 					}
 				}
 			case "new-ironic-secret":
-				err := CreateIronicPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
+				err := createIronicSecret(kubeClient.CoreV1(), testNamespace, ironicSecretName, ironicUsername, "ironic", baremetalCR, scheme)
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return
@@ -135,7 +135,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 				}
 				assert.True(t, strings.Compare(secret.(*v1.Secret).StringData[ironicUsernameKey], ironicUsername) == 0, "ironic password created incorrectly")
 			case "new-inspector-secret":
-				err := CreateInspectorPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
+				err := createIronicSecret(kubeClient.CoreV1(), testNamespace, inspectorSecretName, inspectorUsername, "inspector", baremetalCR, scheme)
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return
@@ -147,7 +147,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 				}
 				assert.True(t, strings.Compare(secret.(*v1.Secret).StringData[ironicUsernameKey], inspectorUsername) == 0, "inspector password created incorrectly")
 			case "new-ironic-rpc-secret":
-				err := CreateIronicRpcPasswordSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
+				err := createIronicSecret(kubeClient.CoreV1(), testNamespace, ironicrpcSecretName, ironicrpcUsername, "json_rpc", baremetalCR, scheme)
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return

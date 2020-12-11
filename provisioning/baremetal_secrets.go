@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -50,7 +51,7 @@ func generateRandomPassword() (string, error) {
 }
 
 // CreateMariadbPasswordSecret creates a Secret for Mariadb password
-func CreateMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
+func createMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
 	existing, err := client.Secrets(targetNamespace).Get(context.Background(), baremetalSecretName, metav1.GetOptions{})
 	if err == nil && len(existing.ObjectMeta.OwnerReferences) == 0 {
 		err = controllerutil.SetControllerReference(baremetalConfig, existing, scheme)
@@ -88,21 +89,6 @@ func CreateMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamesp
 	_, err = client.Secrets(targetNamespace).Create(context.Background(), secret, metav1.CreateOptions{})
 
 	return err
-}
-
-// CreateIronicPasswordSecret creates a Secret for the Ironic Password
-func CreateIronicPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	return createIronicSecret(client, targetNamespace, ironicSecretName, ironicUsername, "ironic", baremetalConfig, scheme)
-}
-
-// CreateIronicRpcPasswordSecret creates a Secret for the Ironic RPC Password
-func CreateIronicRpcPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	return createIronicSecret(client, targetNamespace, ironicrpcSecretName, ironicrpcUsername, "json_rpc", baremetalConfig, scheme)
-}
-
-// CreateInspectorPasswordSecret creates a Secret for the Ironic Inspector Password
-func CreateInspectorPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	return createIronicSecret(client, targetNamespace, inspectorSecretName, inspectorUsername, "inspector", baremetalConfig, scheme)
 }
 
 func createIronicSecret(client coreclientv1.SecretsGetter, targetNamespace string, name string, username string, configSection string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
@@ -169,11 +155,40 @@ password = %s
 	return err
 }
 
-func DeleteAllSecrets(info *ProvisioningInfo) {
-	_ = info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), baremetalSecretName, metav1.DeleteOptions{})
-	_ = info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicSecretName, metav1.DeleteOptions{})
-	_ = info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{})
-	_ = info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicrpcSecretName, metav1.DeleteOptions{})
+func CreateAllSecrets(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
+	// Create a Secret for the Mariadb Password
+	if err := createMariadbPasswordSecret(client, targetNamespace, baremetalConfig, scheme); err != nil {
+		return errors.Wrap(err, "failed to create Mariadb password")
+	}
+	// Create a Secret for the Ironic Password
+	if err := createIronicSecret(client, targetNamespace, ironicSecretName, ironicUsername, "ironic", baremetalConfig, scheme); err != nil {
+		return errors.Wrap(err, "failed to create Ironic password")
+	}
+	// Create a Secret for the Ironic RPC Password
+	if err := createIronicSecret(client, targetNamespace, ironicrpcSecretName, ironicrpcUsername, "json_rpc", baremetalConfig, scheme); err != nil {
+		return errors.Wrap(err, "failed to create Ironic rpc password")
+	}
+	// Create a Secret for the Ironic Inspector Password
+	if err := createIronicSecret(client, targetNamespace, inspectorSecretName, inspectorUsername, "inspector", baremetalConfig, scheme); err != nil {
+		return errors.Wrap(err, "failed to create Inspector password")
+	}
+	return nil
+}
 
-	return
+func DeleteAllSecrets(info *ProvisioningInfo) []string {
+	deleteFailures := []string{}
+	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), baremetalSecretName, metav1.DeleteOptions{}); err != nil {
+		deleteFailures = append(deleteFailures, baremetalSecretName)
+	}
+	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicSecretName, metav1.DeleteOptions{}); err != nil {
+		deleteFailures = append(deleteFailures, ironicSecretName)
+	}
+	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{}); err != nil {
+		deleteFailures = append(deleteFailures, inspectorSecretName)
+	}
+	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicrpcSecretName, metav1.DeleteOptions{}); err != nil {
+		deleteFailures = append(deleteFailures, ironicrpcSecretName)
+	}
+
+	return deleteFailures
 }
