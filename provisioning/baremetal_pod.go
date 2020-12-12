@@ -601,6 +601,9 @@ func NewMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 			Replicas: pointer.Int32Ptr(1),
 			Selector: selector,
 			Template: *template,
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RecreateDeploymentStrategyType,
+			},
 		},
 	}
 }
