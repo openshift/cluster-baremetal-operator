@@ -218,7 +218,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	// If Metal3 Deployment already exists and managed by MAO, do nothing.
+	// Check Metal3 Deployment already exists and managed by MAO.
 	metal3DeploymentSelector, maoOwned, err := provisioning.CheckExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, errors.Wrap(err, "failed to check for existing Metal3 Deployment")

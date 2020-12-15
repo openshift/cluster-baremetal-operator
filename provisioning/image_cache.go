@@ -241,7 +241,7 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 	return
 }
 
-// Provide the current state of metal3 deployment
+// Provide the current state of metal3 image-cache daemonset
 func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DaemonSetConditionType, error) {
 	existing, err := client.DaemonSets(targetNamespace).Get(context.Background(), imageCacheService, metav1.GetOptions{})
 	if err != nil || existing == nil {
