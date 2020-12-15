@@ -1,17 +1,20 @@
 package provisioning
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
 	"path"
 	"regexp"
 	"strconv"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -22,11 +25,17 @@ import (
 )
 
 const (
-	imageCacheSharedVolume = "metal3-shared-image-cache"
-	imageCacheService      = "metal3-image-cache"
-	imageCachePort         = 6181
-	imageCachePortName     = "http"
+	imageCacheSharedVolume                                = "metal3-shared-image-cache"
+	imageCacheService                                     = "metal3-image-cache"
+	imageCachePort                                        = 6181
+	imageCachePortName                                    = "http"
+	DaemonSetProgressing    appsv1.DaemonSetConditionType = "Progressing"
+	DaemonSetReplicaFailure appsv1.DaemonSetConditionType = "ReplicaFailure"
+	DaemonSetAvailable      appsv1.DaemonSetConditionType = "Available"
 )
+
+var daemonSetRolloutStartTime = time.Now()
+var daemonSetRolloutTimeout = 5 * time.Minute
 
 var fileCompressionSuffix = regexp.MustCompile(`\.[gx]z$`)
 
@@ -217,7 +226,7 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 		err = fmt.Errorf("unable to set controllerReference on daemonset: %w", err)
 		return
 	}
-
+	daemonSetRolloutStartTime = time.Now()
 	daemonSet, updated, err := resourceapply.ApplyDaemonSet(
 		info.Client.AppsV1(),
 		info.EventRecorder,
@@ -229,4 +238,20 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 
 	resourcemerge.SetDaemonSetGeneration(&info.ProvConfig.Status.Generations, daemonSet)
 	return
+}
+
+// Provide the current state of metal3 deployment
+func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DaemonSetConditionType, error) {
+	existing, err := client.DaemonSets(targetNamespace).Get(context.Background(), imageCacheService, metav1.GetOptions{})
+	if err != nil || existing == nil {
+		// There were errors accessing the deployment.
+		return DaemonSetReplicaFailure, err
+	}
+	if existing.Status.NumberReady == existing.Status.DesiredNumberScheduled {
+		return DaemonSetAvailable, nil
+	}
+	if daemonSetRolloutTimeout <= time.Since(daemonSetRolloutStartTime) {
+		return DaemonSetReplicaFailure, nil
+	}
+	return DaemonSetProgressing, nil
 }

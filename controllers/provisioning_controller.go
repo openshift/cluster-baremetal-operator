@@ -31,15 +31,12 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
-	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
-	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
 
 const (
@@ -189,6 +186,14 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
+	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
+	if specChanged {
+		err = r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
+		}
+	}
+
 	if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalConfig); err != nil {
 		// Provisioning configuration is not valid.
 		// Requeue request.
@@ -215,7 +220,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	//Create Secrets needed for Metal3 deployment
+	// Create Secrets needed for Metal3 deployment
 	if err := provisioning.CreateMariadbPasswordSecret(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create Mariadb password")
 	}
@@ -236,32 +241,42 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	if maoOwned {
-		r.Log.V(1).Info("metal3 deployment already exists")
-		err = r.updateCOStatus(ReasonComplete, "found existing Metal3 deployment", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
-		}
-		return ctrl.Result{}, nil
+		r.Log.V(1).Info("Adding annotation for CBO to take ownership of metal3 deployment created by MAO")
 	}
 
-	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
-	if specChanged {
-		err = r.updateCOStatus(ReasonSyncing, "", "Applying the Metal3 deployment")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
-		}
-	}
+	info := r.provisioningInfo(baremetalConfig, &containerImages)
 
 	// Proceed with creating or updating the Metal3 deployment
-	updated, err := r.ensureMetal3Deployment(baremetalConfig, &containerImages, metal3DeploymentSelector)
+	updated, err := provisioning.EnsureMetal3Deployment(info, metal3DeploymentSelector)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if updated {
+		err = r.Client.Status().Update(context.Background(), baremetalConfig)
 		return ctrl.Result{Requeue: true}, err
 	}
 
-	info := r.provisioningInfo(baremetalConfig, &containerImages)
+	// Determine the status of the deployment
+	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	if err != nil {
+		err = r.updateCOStatus(ReasonNotFound, "metal3 deployment inaccessible", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
+	}
+	if deploymentState == appsv1.DeploymentReplicaFailure {
+		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+	} else if deploymentState == appsv1.DeploymentAvailable {
+		err = r.updateCOStatus(ReasonSyncing, "metal3 pod running", "starting other metal3 services")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
+		}
+	}
+
 	for _, ensureResource := range []ensureFunc{
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
@@ -284,36 +299,29 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		}
 	}
 
-	err = r.updateCOStatus(ReasonComplete, "new Metal3 deployment completed", "")
+	// Determine the status of the DaemonSet
+	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
+		err = r.updateCOStatus(ReasonNotFound, "metal3 image cache daemonset inaccessible", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+
+		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 image cache daemonset")
+	}
+	if daemonSetState == provisioning.DaemonSetReplicaFailure {
+		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 image cache rollout taking too long", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+		}
+	} else if daemonSetState == provisioning.DaemonSetAvailable {
+		err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
+		}
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *ProvisioningReconciler) ensureMetal3Deployment(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, selector *metav1.LabelSelector) (updated bool, err error) {
-	metal3Deployment := provisioning.NewMetal3Deployment(ComponentNamespace, images, &provConfig.Spec, selector)
-	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, provConfig.Status.Generations)
-
-	err = controllerutil.SetControllerReference(provConfig, metal3Deployment, r.Scheme)
-	if err != nil {
-		err = fmt.Errorf("unable to set controllerReference on deployment: %w", err)
-		return
-	}
-
-	deployment, updated, err := resourceapply.ApplyDeployment(r.KubeClient.AppsV1(),
-		events.NewLoggingEventRecorder(ComponentName), metal3Deployment, expectedGeneration)
-	if err != nil {
-		err = fmt.Errorf("unable to apply Metal3 deployment: %w", err)
-		return
-	}
-
-	if updated {
-		resourcemerge.SetDeploymentGeneration(&provConfig.Status.Generations, deployment)
-		err = r.Client.Status().Update(context.Background(), provConfig)
-	}
-	return
 }
 
 func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images) *provisioning.ProvisioningInfo {

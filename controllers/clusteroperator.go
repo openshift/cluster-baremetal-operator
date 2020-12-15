@@ -49,6 +49,9 @@ const (
 	// ReasonDeploymentCrashLooping indicates that the deployment is crashlooping
 	ReasonDeploymentCrashLooping StatusReason = "DeploymentCrashLooping"
 
+	// ReasonNotFound indicates that the deployment is not found
+	ReasonNotFound StatusReason = "ResourceNotFound"
+
 	// ReasonUnsupported is an unsupported StatusReason
 	ReasonUnsupported StatusReason = "UnsupportedPlatform"
 )
@@ -223,7 +226,7 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 	case ReasonComplete:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
-	case ReasonInvalidConfiguration, ReasonDeployTimedOut:
+	case ReasonInvalidConfiguration, ReasonDeployTimedOut, ReasonNotFound:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
