@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
@@ -175,20 +176,23 @@ func CreateAllSecrets(client coreclientv1.SecretsGetter, targetNamespace string,
 	return nil
 }
 
-func DeleteAllSecrets(info *ProvisioningInfo) []string {
-	deleteFailures := []string{}
+func DeleteAllSecrets(info *ProvisioningInfo) error {
+	var secretErrors []string
 	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), baremetalSecretName, metav1.DeleteOptions{}); err != nil {
-		deleteFailures = append(deleteFailures, baremetalSecretName)
+		secretErrors = append(secretErrors, err.Error())
 	}
 	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicSecretName, metav1.DeleteOptions{}); err != nil {
-		deleteFailures = append(deleteFailures, ironicSecretName)
+		secretErrors = append(secretErrors, err.Error())
 	}
 	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{}); err != nil {
-		deleteFailures = append(deleteFailures, inspectorSecretName)
+		secretErrors = append(secretErrors, err.Error())
 	}
 	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicrpcSecretName, metav1.DeleteOptions{}); err != nil {
-		deleteFailures = append(deleteFailures, ironicrpcSecretName)
+		secretErrors = append(secretErrors, err.Error())
 	}
-
-	return deleteFailures
+	if len(secretErrors) > 0 {
+		return fmt.Errorf(strings.Join(secretErrors, "\n"))
+	} else {
+		return nil
+	}
 }

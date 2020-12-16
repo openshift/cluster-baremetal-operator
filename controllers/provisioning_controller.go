@@ -140,7 +140,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// set ClusterOperator status to disabled=true, available=true
 		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %w", clusterOperatorName, err)
 		}
 
 		// We're disabled; don't requeue
@@ -159,7 +159,6 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	// Provisioning CR is present
 	// Make sure ClusterOperator's ownership is updated
 	err = r.ensureClusterOperator(baremetalConfig)
 	if err != nil {
@@ -175,7 +174,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		r.Log.Error(err, "invalid contents in images Config Map")
 		co_err := r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "invalid contents in images Config Map")
 		if co_err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, co_err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, co_err)
 		}
 		return ctrl.Result{}, err
 	}
@@ -187,14 +186,14 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if err != nil {
 		err = r.updateCOStatus(ReasonDeployTimedOut, err.Error(), "Unable to delete a metal3 resource on Provisioning CR deletion")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 		return ctrl.Result{}, err
 	}
 	if err == nil && deleted {
 		err = r.updateCOStatus(ReasonComplete, "all Metal3 resources deleted", "")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -203,7 +202,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if specChanged {
 		err = r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, err)
 		}
 	}
 
@@ -214,7 +213,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		r.Log.Error(err, "invalid config in Provisioning CR")
 		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 		// Temporarily not requeuing request
 		return ctrl.Result{}, nil
@@ -250,19 +249,19 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if err != nil {
 		err = r.updateCOStatus(ReasonNotFound, "metal3 deployment inaccessible", "")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
 	}
 	if deploymentState == appsv1.DeploymentReplicaFailure {
 		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 	} else if deploymentState == appsv1.DeploymentAvailable {
 		err = r.updateCOStatus(ReasonSyncing, "metal3 pod running", "starting other metal3 services")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
 		}
 	}
 
@@ -293,20 +292,19 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if err != nil {
 		err = r.updateCOStatus(ReasonNotFound, "metal3 image cache daemonset inaccessible", "")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
-
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 image cache daemonset")
 	}
 	if daemonSetState == provisioning.DaemonSetReplicaFailure {
 		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 image cache rollout taking too long", "")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 	} else if daemonSetState == provisioning.DaemonSetAvailable {
 		err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %v", clusterOperatorName, err)
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
 		}
 	}
 
@@ -363,24 +361,16 @@ func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.Provision
 
 //Delete Secrets and the Metal3 Deployment objects
 func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.ProvisioningInfo) error {
-	failedSecrets := provisioning.DeleteAllSecrets(info)
-	if len(failedSecrets) > 0 {
-		for _, secret := range failedSecrets {
-			r.Log.V(1).Info("failed to delete secret : ", "secret", secret)
-		}
-		r.Log.V(1).Info("proceeeding with deletion of other resources")
+	if err := provisioning.DeleteAllSecrets(info); err != nil {
+		return errors.Wrap(err, "failed to delete one or more metal3 secrets")
 	}
-
-	err := provisioning.DeleteMetal3Deployment(info)
-	if err != nil {
+	if err := provisioning.DeleteMetal3Deployment(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 deployment")
 	}
-	err = provisioning.DeleteMetal3StateService(info)
-	if err != nil {
+	if err := provisioning.DeleteMetal3StateService(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 service")
 	}
-	err = provisioning.DeleteImageCache(info)
-	if err != nil {
+	if err := provisioning.DeleteImageCache(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 image cache")
 	}
 	return nil
@@ -402,7 +392,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		//Set ClusterOperator status to disabled=true, available=true
 		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
 		if err != nil {
-			return errors.Wrap(err, "unable to set baremetal ClusterOperator to Disabled")
+			return fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %w", clusterOperatorName, err)
 		}
 	}
 
@@ -413,7 +403,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if err != nil || baremetalConfig == nil {
 			err = r.updateCOStatus(ReasonComplete, "Provisioning CR not found on BareMetal Platform; marking operator as available", "")
 			if err != nil {
-				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %v", clusterOperatorName, err)
+				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
 			}
 		}
 	}
