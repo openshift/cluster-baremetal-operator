@@ -211,7 +211,6 @@ func updateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, 
 	}
 
 	return nil
-
 }
 
 // CreateOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
