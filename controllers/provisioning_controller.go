@@ -126,6 +126,12 @@ func (r *ProvisioningReconciler) readProvisioningCR(namespacedName types.Namespa
 func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//log := r.Log.WithValues("provisioning", req.NamespacedName)
 
+	// Make sure ClusterOperator exists
+	err := r.ensureClusterOperator(nil)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	enabled, err := r.isEnabled()
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
@@ -153,6 +159,13 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
+	// Provisioning CR is present
+	// Make sure ClusterOperator's ownership is updated
+	err = r.ensureClusterOperator(baremetalConfig)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// Read container images from Config Map
 	var containerImages provisioning.Images
 	if err := provisioning.GetContainerImages(&containerImages, r.ImagesFilename); err != nil {
@@ -168,12 +181,6 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	info := r.provisioningInfo(baremetalConfig, &containerImages)
-
-	// Make sure ClusterOperator exists and updated
-	err = r.ensureClusterOperator(baremetalConfig)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 
 	// Check if Provisioning Configuartion is being deleted
 	deleted, err := r.checkForCRDeletion(info)
