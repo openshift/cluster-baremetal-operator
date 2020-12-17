@@ -23,6 +23,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
@@ -672,4 +673,13 @@ func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace s
 		return appsv1.DeploymentReplicaFailure, nil
 	}
 	return deploymentState, nil
+}
+
+func DeleteMetal3Deployment(info *ProvisioningInfo) error {
+	err := info.Client.AppsV1().Deployments(info.Namespace).Delete(context.Background(), baremetalDeploymentName, metav1.DeleteOptions{})
+	if apierrors.IsNotFound(err) {
+		// metal3 deployment does not exist. Nothing to delete
+		return nil
+	}
+	return err
 }
