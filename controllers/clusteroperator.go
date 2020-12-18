@@ -150,21 +150,21 @@ func (r *ProvisioningReconciler) ensureClusterOperator(baremetalConfig *metal3io
 		}
 	}
 
-	needsUpadate := false
+	needsUpdate := false
 	if !equality.Semantic.DeepEqual(co.Status.RelatedObjects, relatedObjects()) {
-		needsUpadate = true
+		needsUpdate = true
 		co.Status.RelatedObjects = relatedObjects()
 	}
 	if !equality.Semantic.DeepEqual(co.Status.Versions, operandVersions(r.ReleaseVersion)) {
-		needsUpadate = true
+		needsUpdate = true
 		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 	if len(co.Status.Conditions) == 0 {
-		needsUpadate = true
+		needsUpdate = true
 		co.Status.Conditions = defaultStatusConditions()
 	}
 
-	if needsUpadate {
+	if needsUpdate {
 		_, err = r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
 	}
 	return err
