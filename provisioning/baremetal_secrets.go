@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -179,10 +180,8 @@ func CreateAllSecrets(client coreclientv1.SecretsGetter, targetNamespace string,
 func DeleteAllSecrets(info *ProvisioningInfo) error {
 	var secretErrors []error
 	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName} {
-		if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{}); err != nil {
-			if !apierrors.IsNotFound(err) {
-				secretErrors = append(secretErrors, err)
-			}
+		if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{})); err != nil {
+			secretErrors = append(secretErrors, err)
 		}
 	}
 	return utilerrors.NewAggregate(secretErrors)

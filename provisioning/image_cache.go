@@ -12,11 +12,11 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -258,10 +258,5 @@ func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace str
 }
 
 func DeleteImageCache(info *ProvisioningInfo) error {
-	err := info.Client.AppsV1().DaemonSets(info.Namespace).Delete(context.Background(), imageCacheService, metav1.DeleteOptions{})
-	if apierrors.IsNotFound(err) {
-		// metal3 image cache does not exist. Nothing to delete
-		return nil
-	}
-	return err
+	return client.IgnoreNotFound(info.Client.AppsV1().DaemonSets(info.Namespace).Delete(context.Background(), imageCacheService, metav1.DeleteOptions{}))
 }
