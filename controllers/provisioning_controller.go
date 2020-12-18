@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
@@ -333,8 +334,7 @@ func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.Provision
 		if !containsString(info.ProvConfig.ObjectMeta.Finalizers,
 			metal3iov1alpha1.ProvisioningFinalizer) {
 			// Add finalizer becasue it doesn't already exist
-			info.ProvConfig.ObjectMeta.Finalizers = append(info.ProvConfig.ObjectMeta.Finalizers,
-				metal3iov1alpha1.ProvisioningFinalizer)
+			controllerutil.AddFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
 			if err := r.Client.Update(context.Background(), info.ProvConfig); err != nil {
 				return false, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
 			}
@@ -348,8 +348,7 @@ func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.Provision
 				return false, errors.Wrap(err, "failed to delete metal3 resource")
 			}
 			// Remove our finalizer from the list and update it.
-			info.ProvConfig.ObjectMeta.Finalizers = removeString(info.ProvConfig.ObjectMeta.Finalizers,
-				metal3iov1alpha1.ProvisioningFinalizer)
+			controllerutil.RemoveFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
 			if err = r.Client.Update(context.Background(), info.ProvConfig); err != nil {
 				return true, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
 			}
@@ -428,13 +427,3 @@ func containsString(slice []string, s string) bool {
 	return false
 }
 
-// Helper function to remove string from a slice of strings
-func removeString(slice []string, s string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return
-}
