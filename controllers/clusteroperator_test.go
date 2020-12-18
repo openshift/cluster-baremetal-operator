@@ -237,7 +237,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			co, err := reconciler.getClusterOperator()
+			co, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

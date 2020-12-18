@@ -170,16 +170,6 @@ func (r *ProvisioningReconciler) ensureClusterOperator(baremetalConfig *metal3io
 	return err
 }
 
-func (r *ProvisioningReconciler) getClusterOperator() (*osconfigv1.ClusterOperator, error) {
-	existing, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
-	}
-
-	return existing, nil
-}
-
 // setStatusCondition initalizes and returns a ClusterOperatorStatusCondition
 func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 	conditionStatus osconfigv1.ConditionStatus, reason string,
@@ -209,11 +199,10 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 }
 
 func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
-
-	co, err := r.getClusterOperator()
+	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if err != nil {
 		r.Log.Error(err, "failed to get or create ClusterOperator")
-		return err
+		return fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
 	}
 	conds := defaultStatusConditions()
 	switch newReason {
