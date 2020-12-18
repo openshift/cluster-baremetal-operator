@@ -35,10 +35,10 @@ func GetContainerImages(containerImages *Images, imagesFilePath string) error {
 	//read images.json file
 	jsonData, err := ioutil.ReadFile(filepath.Clean(imagesFilePath))
 	if err != nil {
-		return fmt.Errorf("unable to read file %s", imagesFilePath)
+		return fmt.Errorf("unable to read file %s : %w", imagesFilePath, err)
 	}
 	if err := json.Unmarshal(jsonData, containerImages); err != nil {
-		return fmt.Errorf("unable to unmarshal image names from file %s ", imagesFilePath)
+		return fmt.Errorf("unable to unmarshal image names from file %s : %w", imagesFilePath, err)
 	}
 	return nil
 }
