@@ -458,6 +458,9 @@ github.com/spf13/viper
 github.com/ssgreg/nlreturn/v2/pkg/nlreturn
 # github.com/stretchr/objx v0.2.0
 github.com/stretchr/objx
+# github.com/stretchr/stew v0.0.0-20130812190256-80ef0842b48b
+## explicit
+github.com/stretchr/stew/slice
 # github.com/stretchr/testify v1.6.1
 ## explicit
 github.com/stretchr/testify/assert
