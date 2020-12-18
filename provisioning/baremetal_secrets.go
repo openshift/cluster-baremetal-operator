@@ -178,17 +178,12 @@ func CreateAllSecrets(client coreclientv1.SecretsGetter, targetNamespace string,
 
 func DeleteAllSecrets(info *ProvisioningInfo) error {
 	var secretErrors []error
-	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), baremetalSecretName, metav1.DeleteOptions{}); err != nil {
-		secretErrors = append(secretErrors, err)
-	}
-	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicSecretName, metav1.DeleteOptions{}); err != nil {
-		secretErrors = append(secretErrors, err)
-	}
-	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{}); err != nil {
-		secretErrors = append(secretErrors, err)
-	}
-	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicrpcSecretName, metav1.DeleteOptions{}); err != nil {
-		secretErrors = append(secretErrors, err)
+	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName} {
+		if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				secretErrors = append(secretErrors, err)
+			}
+		}
 	}
 	return utilerrors.NewAggregate(secretErrors)
 }
