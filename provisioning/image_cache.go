@@ -35,10 +35,15 @@ const (
 	DaemonSetAvailable      appsv1.DaemonSetConditionType = "Available"
 )
 
-var daemonSetRolloutStartTime = time.Now()
-var daemonSetRolloutTimeout = 5 * time.Minute
-
-var fileCompressionSuffix = regexp.MustCompile(`\.[gx]z$`)
+var (
+	daemonSetRolloutStartTime = time.Now()
+	daemonSetRolloutTimeout   = 5 * time.Minute
+	fileCompressionSuffix     = regexp.MustCompile(`\.[gx]z$`)
+	imageVolumeMount          = corev1.VolumeMount{
+		Name:      imageCacheSharedVolume,
+		MountPath: "/shared/html/images",
+	}
+)
 
 func imageVolume() corev1.Volume {
 	volType := corev1.HostPathDirectoryOrCreate
@@ -51,11 +56,6 @@ func imageVolume() corev1.Volume {
 			},
 		},
 	}
-}
-
-var imageVolumeMount = corev1.VolumeMount{
-	Name:      imageCacheSharedVolume,
-	MountPath: "/shared/html/images",
 }
 
 func imageCacheConfig(targetNamespace string, config metal3iov1alpha1.ProvisioningSpec) (*metal3iov1alpha1.ProvisioningSpec, error) {
