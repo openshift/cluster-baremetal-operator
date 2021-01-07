@@ -227,7 +227,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	// Check Metal3 Deployment already exists and managed by MAO.
-	metal3DeploymentSelector, maoOwned, err := provisioning.CheckExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
+	_, maoOwned, err := provisioning.CheckExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, errors.Wrap(err, "failed to check for existing Metal3 Deployment")
 	}
@@ -236,38 +236,8 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		r.Log.V(1).Info("Adding annotation for CBO to take ownership of metal3 deployment created by MAO")
 	}
 
-	// Proceed with creating or updating the Metal3 deployment
-	updated, err := provisioning.EnsureMetal3Deployment(info, metal3DeploymentSelector)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if updated {
-		err = r.Client.Status().Update(context.Background(), baremetalConfig)
-		return ctrl.Result{Requeue: true}, err
-	}
-
-	// Determine the status of the deployment
-	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
-	if err != nil {
-		err = r.updateCOStatus(ReasonNotFound, "metal3 deployment inaccessible", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
-		}
-		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
-	}
-	if deploymentState == appsv1.DeploymentReplicaFailure {
-		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
-		}
-	} else if deploymentState == appsv1.DeploymentAvailable {
-		err = r.updateCOStatus(ReasonSyncing, "metal3 pod running", "starting other metal3 services")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
-		}
-	}
-
 	for _, ensureResource := range []ensureFunc{
+		provisioning.EnsureMetal3Deployment,
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
 	} {
@@ -289,6 +259,22 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		}
 	}
 
+	// Determine the status of the deployment
+	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	if err != nil {
+		err = r.updateCOStatus(ReasonNotFound, "metal3 deployment inaccessible", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+		}
+		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
+	}
+	if deploymentState == appsv1.DeploymentReplicaFailure {
+		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+		}
+	}
+
 	// Determine the status of the DaemonSet
 	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	if err != nil {
@@ -303,7 +289,8 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
-	} else if daemonSetState == provisioning.DaemonSetAvailable {
+	}
+	if deploymentState == appsv1.DeploymentAvailable && daemonSetState == provisioning.DaemonSetAvailable {
 		err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)

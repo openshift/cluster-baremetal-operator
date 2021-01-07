@@ -632,9 +632,10 @@ func CheckExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, target
 	return nil, false, err
 }
 
-func EnsureMetal3Deployment(info *ProvisioningInfo, selector *metav1.LabelSelector) (updated bool, err error) {
+func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 	// Create metal3 deployment object based on current baremetal configuration
 	// It will be created with the cboOwnedAnnotation
+	selector, _, _ := CheckExistingMetal3Deployment(info.Client.AppsV1(), info.Namespace)
 	metal3Deployment := newMetal3Deployment(info.Namespace, info.Images, &info.ProvConfig.Spec, selector)
 
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
