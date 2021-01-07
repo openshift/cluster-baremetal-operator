@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"github.com/stretchr/stew/slice"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +32,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
@@ -330,11 +332,10 @@ func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.Provision
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// to registering our finalizer.
-		if !containsString(info.ProvConfig.ObjectMeta.Finalizers,
+		if !slice.Contains(info.ProvConfig.ObjectMeta.Finalizers,
 			metal3iov1alpha1.ProvisioningFinalizer) {
 			// Add finalizer becasue it doesn't already exist
-			info.ProvConfig.ObjectMeta.Finalizers = append(info.ProvConfig.ObjectMeta.Finalizers,
-				metal3iov1alpha1.ProvisioningFinalizer)
+			controllerutil.AddFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
 			if err := r.Client.Update(context.Background(), info.ProvConfig); err != nil {
 				return false, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
 			}
@@ -342,14 +343,13 @@ func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.Provision
 		return false, nil
 	} else {
 		// The Provisioning object is being deleted
-		if containsString(info.ProvConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
+		if slice.Contains(info.ProvConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
 			err := r.deleteMetal3Resources(info)
 			if err != nil {
 				return false, errors.Wrap(err, "failed to delete metal3 resource")
 			}
 			// Remove our finalizer from the list and update it.
-			info.ProvConfig.ObjectMeta.Finalizers = removeString(info.ProvConfig.ObjectMeta.Finalizers,
-				metal3iov1alpha1.ProvisioningFinalizer)
+			controllerutil.RemoveFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
 			if err = r.Client.Update(context.Background(), info.ProvConfig); err != nil {
 				return true, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
 			}
@@ -416,25 +416,4 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Complete(r)
-}
-
-// Helper function to check presence of string in a slice of strings
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
-// Helper function to remove string from a slice of strings
-func removeString(slice []string, s string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return
 }

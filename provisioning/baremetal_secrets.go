@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
@@ -13,7 +12,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -177,22 +178,11 @@ func CreateAllSecrets(client coreclientv1.SecretsGetter, targetNamespace string,
 }
 
 func DeleteAllSecrets(info *ProvisioningInfo) error {
-	var secretErrors []string
-	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), baremetalSecretName, metav1.DeleteOptions{}); err != nil {
-		secretErrors = append(secretErrors, err.Error())
+	var secretErrors []error
+	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName} {
+		if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{})); err != nil {
+			secretErrors = append(secretErrors, err)
+		}
 	}
-	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicSecretName, metav1.DeleteOptions{}); err != nil {
-		secretErrors = append(secretErrors, err.Error())
-	}
-	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{}); err != nil {
-		secretErrors = append(secretErrors, err.Error())
-	}
-	if err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), ironicrpcSecretName, metav1.DeleteOptions{}); err != nil {
-		secretErrors = append(secretErrors, err.Error())
-	}
-	if len(secretErrors) > 0 {
-		return fmt.Errorf(strings.Join(secretErrors, "\n"))
-	} else {
-		return nil
-	}
+	return utilerrors.NewAggregate(secretErrors)
 }
