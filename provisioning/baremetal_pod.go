@@ -526,7 +526,7 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 	return container
 }
 
-func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, k8sAppLabel string) *corev1.PodTemplateSpec {
+func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, labels *map[string]string) *corev1.PodTemplateSpec {
 	initContainers := newMetal3InitContainers(images, config)
 	containers := newMetal3Containers(images, config)
 	tolerations := []corev1.Toleration{
@@ -554,10 +554,7 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels: map[string]string{
-				"k8s-app":    k8sAppLabel,
-				cboLabelName: stateService,
-			},
+			Labels: *labels,
 		},
 		Spec: corev1.PodSpec{
 			Volumes:           metal3Volumes,
@@ -586,13 +583,23 @@ func newMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 		}
 	}
 	k8sAppLabel := metal3AppName
+	apiLabelValue := ""
 	for k, v := range selector.MatchLabels {
 		if k == "k8s-app" {
 			k8sAppLabel = v
-			break
+		}
+		if k == "api" {
+			apiLabelValue = v
 		}
 	}
-	template := newMetal3PodTemplateSpec(images, config, k8sAppLabel)
+	podSpecLabels := map[string]string{
+		"k8s-app":    k8sAppLabel,
+		cboLabelName: stateService,
+	}
+	if apiLabelValue != "" {
+		podSpecLabels["api"] = apiLabelValue
+	}
+	template := newMetal3PodTemplateSpec(images, config, &podSpecLabels)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      baremetalDeploymentName,
