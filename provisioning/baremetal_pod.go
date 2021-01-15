@@ -531,8 +531,9 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 	containers := newMetal3Containers(images, config)
 	tolerations := []corev1.Toleration{
 		{
-			Key:    "node-role.kubernetes.io/master",
-			Effect: corev1.TaintEffectNoSchedule,
+			Key:      "node-role.kubernetes.io/master",
+			Effect:   corev1.TaintEffectNoSchedule,
+			Operator: corev1.TolerationOpExists,
 		},
 		{
 			Key:      "CriticalAddonsOnly",
