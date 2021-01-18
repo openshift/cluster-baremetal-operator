@@ -21,7 +21,7 @@ spec:
       serviceAccountName: cluster-baremetal-operator
       containers:
       - name: cluster-baremetal-operator
-        image: registry.svc.ci.openshift.org/openshift:cluster-baremetal-operator
+        image: registry.ci.openshift.org/openshift:cluster-baremetal-operator
         command:
         - "/usr/bin/cluster-baremetal-operator"
         env:
