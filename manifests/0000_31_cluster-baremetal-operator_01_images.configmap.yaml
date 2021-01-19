@@ -10,12 +10,12 @@ metadata:
 data:
   images.json: >
     {
-      "clusterBaremetalOperator": "registry.ci.openshift.org/openshift:cluster-baremetal-operator",
-      "baremetalOperator": "registry.ci.openshift.org/openshift:baremetal-operator",
-      "baremetalIronic": "registry.ci.openshift.org/openshift:ironic",
-      "baremetalIronicInspector": "registry.ci.openshift.org/openshift:ironic-inspector",
-      "baremetalIpaDownloader": "registry.ci.openshift.org/openshift:ironic-ipa-downloader",
-      "baremetalMachineOsDownloader": "registry.ci.openshift.org/openshift:ironic-machine-os-downloader",
-      "baremetalStaticIpManager": "registry.ci.openshift.org/openshift:ironic-static-ip-manager"
+      "clusterBaremetalOperator": "registry.ci2.openshift.org/openshift:cluster-baremetal-operator",
+      "baremetalOperator": "registry.ci2.openshift.org/openshift:baremetal-operator",
+      "baremetalIronic": "registry.ci2.openshift.org/openshift:ironic",
+      "baremetalIronicInspector": "registry.ci2.openshift.org/openshift:ironic-inspector",
+      "baremetalIpaDownloader": "registry.ci2.openshift.org/openshift:ironic-ipa-downloader",
+      "baremetalMachineOsDownloader": "registry.ci2.openshift.org/openshift:ironic-machine-os-downloader",
+      "baremetalStaticIpManager": "registry.ci2.openshift.org/openshift:ironic-static-ip-manager"
     }
 
