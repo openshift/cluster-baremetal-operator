@@ -6,12 +6,12 @@ import (
 
 var (
 	TestImagesFile                = "sample_images.json"
-	expectedBaremetalOperator     = "registry.ci2.openshift.org/openshift:baremetal-operator"
-	expectedIronic                = "registry.ci2.openshift.org/openshift:ironic"
-	expectedIronicInspector       = "registry.ci2.openshift.org/openshift:ironic-inspector"
-	expectedIronicIpaDownloader   = "registry.ci2.openshift.org/openshift:ironic-ipa-downloader"
-	expectedMachineOsDownloader   = "registry.ci2.openshift.org/openshift:ironic-machine-os-downloader"
-	expectedIronicStaticIpManager = "registry.ci2.openshift.org/openshift:ironic-static-ip-manager"
+	expectedBaremetalOperator     = "registry.ci.openshift.org/openshift:baremetal-operator-test"
+	expectedIronic                = "registry.ci.openshift.org/openshift:ironic-test"
+	expectedIronicInspector       = "registry.ci.openshift.org/openshift:ironic-inspector-test"
+	expectedIronicIpaDownloader   = "registry.ci.openshift.org/openshift:ironic-ipa-downloader-test"
+	expectedMachineOsDownloader   = "registry.ci.openshift.org/openshift:ironic-machine-os-downloader-test"
+	expectedIronicStaticIpManager = "registry.ci.openshift.org/openshift:ironic-static-ip-manager-test"
 )
 
 func TestGetContainerImages(t *testing.T) {

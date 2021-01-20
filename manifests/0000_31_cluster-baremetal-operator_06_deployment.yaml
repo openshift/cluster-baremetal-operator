@@ -35,7 +35,7 @@ spec:
               fieldPath: metadata.namespace
         - name: METRICS_PORT
           value: "8080"
-        image: registry.ci2.openshift.org/openshift:cluster-baremetal-operator
+        image: registry.ci.openshift.org/openshift:cluster-baremetal-operator-test
         name: cluster-baremetal-operator
         resources:
           requests:

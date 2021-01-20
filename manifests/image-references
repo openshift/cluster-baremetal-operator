@@ -6,28 +6,28 @@ spec:
   - name: cluster-baremetal-operator
     from:
       kind: DockerImage
-      name: registry.ci2.openshift.org/openshift:cluster-baremetal-operator
+      name: registry.ci.openshift.org/openshift:cluster-baremetal-operator-test
   - name: baremetal-operator
     from:
       kind: DockerImage
-      name: registry.ci2.openshift.org/openshift:baremetal-operator
+      name: registry.ci.openshift.org/openshift:baremetal-operator-test
   - name: ironic
     from:
       kind: DockerImage
-      name: registry.ci2.openshift.org/openshift:ironic
+      name: registry.ci.openshift.org/openshift:ironic-test
   - name: ironic-inspector
     from:
       kind: DockerImage
-      name: registry.ci2.openshift.org/openshift:ironic-inspector
+      name: registry.ci.openshift.org/openshift:ironic-inspector-test
   - name: ironic-ipa-downloader
     from:
       kind: DockerImage
-      name: registry.ci2.openshift.org/openshift:ironic-ipa-downloader
+      name: registry.ci.openshift.org/openshift:ironic-ipa-downloader-test
   - name: ironic-machine-os-downloader
     from:
       kind: DockerImage
-      name: registry.ci2.openshift.org/openshift:ironic-machine-os-downloader
+      name: registry.ci.openshift.org/openshift:ironic-machine-os-downloader-test
   - name: ironic-static-ip-manager
     from:
       kind: DockerImage
-      name: registry.ci2.openshift.org/openshift:ironic-static-ip-manager
+      name: registry.ci.openshift.org/openshift:ironic-static-ip-manager-test
