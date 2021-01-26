@@ -255,6 +255,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureMetal3Deployment,
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
+		provisioning.EnsureMetal3MetricsService,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -372,10 +373,13 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 		return errors.Wrap(err, "failed to delete metal3 deployment")
 	}
 	if err := provisioning.DeleteMetal3StateService(info); err != nil {
-		return errors.Wrap(err, "failed to delete metal3 service")
+		return errors.Wrap(err, "failed to delete metal3 state service")
 	}
 	if err := provisioning.DeleteImageCache(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 image cache")
+	}
+	if err := provisioning.DeleteMetal3MetricsService(info); err != nil {
+		return errors.Wrap(err, "failed to delete metal3 metrics service")
 	}
 	return nil
 }
