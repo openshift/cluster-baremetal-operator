@@ -89,6 +89,7 @@ func TestNewMetal3InitContainers(t *testing.T) {
 		IpaDownloader:       expectedIronicIpaDownloader,
 		MachineOsDownloader: expectedMachineOsDownloader,
 		StaticIpManager:     expectedIronicStaticIpManager,
+		KubeRBACProxy:       expectedKubeRBACProxy,
 	}
 	tCases := []struct {
 		name               string
@@ -145,6 +146,7 @@ func TestNewMetal3Containers(t *testing.T) {
 		IpaDownloader:       expectedIronicIpaDownloader,
 		MachineOsDownloader: expectedMachineOsDownloader,
 		StaticIpManager:     expectedIronicStaticIpManager,
+		KubeRBACProxy:       expectedKubeRBACProxy,
 	}
 	tCases := []struct {
 		name               string
@@ -154,22 +156,22 @@ func TestNewMetal3Containers(t *testing.T) {
 		{
 			name:               "ManagedSpec",
 			config:             managedProvisioning().build(),
-			expectedContainers: 10,
+			expectedContainers: 11,
 		},
 		{
 			name:               "UnmanagedSpec",
 			config:             unmanagedProvisioning().build(),
-			expectedContainers: 10,
+			expectedContainers: 11,
 		},
 		{
 			name:               "DisabledSpec",
 			config:             disabledProvisioning().build(),
-			expectedContainers: 9,
+			expectedContainers: 10,
 		},
 		{
 			name:               "DisabledSpecWithoutProvisioningIP",
 			config:             disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
-			expectedContainers: 8,
+			expectedContainers: 9,
 		},
 	}
 	for _, tc := range tCases {

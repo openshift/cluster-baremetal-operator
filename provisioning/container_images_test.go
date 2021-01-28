@@ -12,6 +12,7 @@ var (
 	expectedIronicIpaDownloader   = "registry.svc.ci.openshift.org/openshift:ironic-ipa-downloader"
 	expectedMachineOsDownloader   = "registry.svc.ci.openshift.org/openshift:ironic-machine-os-downloader"
 	expectedIronicStaticIpManager = "registry.svc.ci.openshift.org/openshift:ironic-static-ip-manager"
+	expectedKubeRBACProxy         = "registry.svc.ci.openshift.org/openshift:kube-rbac-proxy"
 )
 
 func TestGetContainerImages(t *testing.T) {

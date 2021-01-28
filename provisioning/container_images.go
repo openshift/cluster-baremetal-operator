@@ -29,6 +29,7 @@ type Images struct {
 	IpaDownloader       string `json:"baremetalIpaDownloader"`
 	MachineOsDownloader string `json:"baremetalMachineOsDownloader"`
 	StaticIpManager     string `json:"baremetalStaticIpManager"`
+	KubeRBACProxy       string `json:"kubeRBACProxy"`
 }
 
 func GetContainerImages(containerImages *Images, imagesFilePath string) error {

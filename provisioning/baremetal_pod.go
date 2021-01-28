@@ -23,6 +23,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
@@ -53,6 +54,7 @@ const (
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
+	kubeRBACConfigName               = "config"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
 )
 
@@ -183,6 +185,45 @@ var metal3Volumes = []corev1.Volume{
 	},
 }
 
+// List of the volumes needed by createKubeProxyContainer
+func newRBACConfigVolumes() []corev1.Volume {
+	var readOnly int32 = 420
+	return []corev1.Volume{
+		{
+			Name: kubeRBACConfigName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "kube-rbac-proxy",
+					},
+					DefaultMode: pointer.Int32Ptr(readOnly),
+				},
+			},
+		},
+		{
+			Name: certStoreName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  certStoreName,
+					DefaultMode: pointer.Int32Ptr(readOnly),
+				},
+			},
+		},
+		{
+			Name: "trusted-ca",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					Items: []corev1.KeyToPath{{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}},
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: externalTrustBundleConfigMapName,
+					},
+					Optional: pointer.BoolPtr(true),
+				},
+			},
+		},
+	}
+}
+
 func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
 	value := getMetal3DeploymentConfig(name, baremetalProvisioningConfig)
 	if value != nil {
@@ -287,6 +328,8 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 
 func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *configv1.Proxy) []corev1.Container {
 	containers := []corev1.Container{
+		createKubeProxyContainer(images.KubeRBACProxy, "metal3-mtrc",
+			defaultMetal3MetricsAddress, metal3ExposeMetricsPort),
 		createContainerMetal3BaremetalOperator(images, config),
 		createContainerMetal3Mariadb(images),
 		createContainerMetal3Httpd(images, config),
@@ -330,17 +373,11 @@ func getWatchNamespace(config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar 
 }
 
 func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
-	container := corev1.Container{
+	return corev1.Container{
 		Name:  "metal3-baremetal-operator",
 		Image: images.BaremetalOperator,
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          "metrics",
-				ContainerPort: 60000,
-				HostPort:      60000,
-			},
-		},
-		Command:         []string{"/baremetal-operator"},
+		Command: []string{"/baremetal-operator",
+			"-metrics-addr", defaultMetal3MetricsAddress},
 		ImagePullPolicy: "IfNotPresent",
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
@@ -387,7 +424,6 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			},
 		},
 	}
-	return container
 }
 
 func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
@@ -623,10 +659,50 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 	return container
 }
 
+func createKubeProxyContainer(image, portName, upstreamPort string, exposePort int32) corev1.Container {
+	configMountPath := "/etc/kube-rbac-proxy"
+	tlsCertMountPath := "/etc/tls/private"
+	resources := corev1.ResourceRequirements{
+		Requests: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceMemory: resource.MustParse("20Mi"),
+			corev1.ResourceCPU:    resource.MustParse("10m"),
+		},
+	}
+	args := []string{
+		fmt.Sprintf("--secure-listen-address=0.0.0.0:%d", exposePort),
+		fmt.Sprintf("--upstream=http://localhost%s", upstreamPort),
+		fmt.Sprintf("--config-file=%s/config-file.yaml", configMountPath),
+		fmt.Sprintf("--tls-cert-file=%s/tls.crt", tlsCertMountPath),
+		fmt.Sprintf("--tls-private-key-file=%s/tls.key", tlsCertMountPath),
+		"--logtostderr=true",
+		"--v=10",
+	}
+	ports := []corev1.ContainerPort{{
+		Name:          portName,
+		ContainerPort: exposePort,
+	}}
+
+	return corev1.Container{
+		Name:      fmt.Sprintf("kube-rbac-proxy-%s", portName),
+		Image:     image,
+		Args:      args,
+		Resources: resources,
+		Ports:     ports,
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      kubeRBACConfigName,
+				MountPath: configMountPath,
+			},
+			{
+				Name:      certStoreName,
+				MountPath: tlsCertMountPath,
+			}},
+	}
+}
+
 func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, labels *map[string]string, proxy *configv1.Proxy) *corev1.PodTemplateSpec {
 	initContainers := newMetal3InitContainers(images, config, proxy)
 	containers := newMetal3Containers(images, config, proxy)
-
 	tolerations := []corev1.Toleration{
 		{
 			Key:      "node-role.kubernetes.io/master",
@@ -651,12 +727,19 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 		},
 	}
 
+	volumes := []corev1.Volume{}
+	volumes = append(volumes, metal3Volumes...)
+	// Include the volumes needed by createKubeProxyContainer,
+	// used to set up the proxy container for metric
+	// collection.
+	volumes = append(volumes, newRBACConfigVolumes()...)
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: *labels,
 		},
 		Spec: corev1.PodSpec{
-			Volumes:           metal3Volumes,
+			Volumes:           volumes,
 			InitContainers:    initContainers,
 			Containers:        containers,
 			HostNetwork:       true,
