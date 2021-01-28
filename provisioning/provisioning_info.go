@@ -2,6 +2,7 @@ package provisioning
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,4 +21,5 @@ type ProvisioningInfo struct {
 	Images           *Images
 	PodLabelSelector *metav1.LabelSelector
 	Proxy            *configv1.Proxy
+	DynamicClient    dynamic.Interface
 }
