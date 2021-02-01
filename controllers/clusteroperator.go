@@ -11,6 +11,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -190,7 +191,7 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 	}
 
 	if len(co.Status.Versions) < 1 {
-		r.Log.Info("updating ClusterOperator Status Versions field")
+		klog.Info("updating ClusterOperator Status Versions field")
 		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 
@@ -201,7 +202,7 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if err != nil {
-		r.Log.Error(err, "failed to get or create ClusterOperator")
+		klog.ErrorS(err, "failed to get or create ClusterOperator")
 		return fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
 	}
 	conds := defaultStatusConditions()

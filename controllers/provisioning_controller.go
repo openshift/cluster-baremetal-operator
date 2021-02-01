@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"github.com/stretchr/stew/slice"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -56,7 +56,6 @@ type ProvisioningReconciler struct {
 	// that reads objects from the cache and writes to the apiserver
 	Client         client.Client
 	Scheme         *runtime.Scheme
-	Log            logr.Logger
 	OSClient       osclientset.Interface
 	EventRecorder  record.EventRecorder
 	KubeClient     kubernetes.Interface
@@ -109,7 +108,7 @@ func (r *ProvisioningReconciler) readProvisioningCR(namespacedName types.Namespa
 
 	// provisioning.metal3.io is a singleton
 	if namespacedName.Name != BaremetalProvisioningCR {
-		r.Log.V(1).Info("ignoring invalid CR", "name", namespacedName.Name)
+		klog.Info("ignoring invalid CR", "name", namespacedName.Name)
 		return nil, nil
 	}
 	// Fetch the Provisioning instance
@@ -157,7 +156,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if baremetalConfig == nil {
 		// Provisioning configuration not available at this time.
 		// Cannot proceed wtih metal3 deployment.
-		r.Log.V(1).Info("Provisioning CR not found")
+		klog.Info("Provisioning CR not found")
 		return ctrl.Result{}, nil
 	}
 
@@ -173,7 +172,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// Images config map is not valid
 		// Provisioning configuration is not valid.
 		// Requeue request.
-		r.Log.Error(err, "invalid contents in images Config Map")
+		klog.ErrorS(err, "invalid contents in images Config Map")
 		co_err := r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "invalid contents in images Config Map")
 		if co_err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, co_err)
@@ -212,7 +211,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalConfig); err != nil {
 		// Provisioning configuration is not valid.
 		// Requeue request.
-		r.Log.Error(err, "invalid config in Provisioning CR")
+		klog.ErrorS(err, "invalid config in Provisioning CR")
 		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
@@ -234,7 +233,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	if maoOwned {
-		r.Log.V(1).Info("Adding annotation for CBO to take ownership of metal3 deployment created by MAO")
+		klog.Info("Adding annotation for CBO to take ownership of metal3 deployment created by MAO")
 	}
 
 	for _, ensureResource := range []ensureFunc{

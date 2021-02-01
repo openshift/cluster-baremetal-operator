@@ -28,7 +28,6 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 func newFakeProvisioningReconciler(scheme *runtime.Scheme, object runtime.Object) *ProvisioningReconciler {
 	return &ProvisioningReconciler{
 		Client:   fakeclient.NewFakeClientWithScheme(scheme, object),
-		Log:      ctrl.Log.WithName("controllers").WithName("Provisioning"),
 		Scheme:   scheme,
 		OSClient: fakeconfigclientset.NewSimpleClientset(),
 	}
