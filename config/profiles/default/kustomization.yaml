@@ -1,6 +1,7 @@
 commonAnnotations:
   include.release.openshift.io/self-managed-high-availability: "true"
   include.release.openshift.io/single-node-developer: "true"
+  exclude.release.openshift.io/internal-openshift-hosted: "true"
 
 bases:
 - ../../crd
@@ -11,13 +12,13 @@ bases:
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
 #- ../../certmanager
 # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
-#- ../../prometheus
+- ../../prometheus
 
-#patchesStrategicMerge:
+patchesStrategicMerge:
   # Protect the /metrics endpoint by putting it behind auth.
   # Only one of manager_auth_proxy_patch.yaml and
   # manager_prometheus_metrics_patch.yaml should be enabled.
-#- manager_auth_proxy_patch.yaml
+- manager_auth_proxy_patch.yaml
   # If you want your controller-manager to expose the /metrics
   # endpoint w/o any authn/z, uncomment the following line and
   # comment manager_auth_proxy_patch.yaml.

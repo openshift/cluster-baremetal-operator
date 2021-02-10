@@ -50,9 +50,9 @@ deploy: generate
 	$(KUSTOMIZE) build config/profiles/$(MANIFEST_PROFILE) | kubectl apply -f -
 
 # this is to just get the order right
-RBAC_LIST = rbac.authorization.k8s.io_v1_role_cluster-baremetal-operator.yaml \
+RBAC_LIST = openshift-machine-api_rbac.authorization.k8s.io_v1_role_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_clusterrole_cluster-baremetal-operator.yaml \
-	rbac.authorization.k8s.io_v1_rolebinding_cluster-baremetal-operator.yaml \
+	openshift-machine-api_rbac.authorization.k8s.io_v1_rolebinding_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_clusterrolebinding_cluster-baremetal-operator.yaml
 
 # Generate manifests e.g. CRD, RBAC etc.
@@ -62,7 +62,7 @@ manifests: generate
 	ls $(TMP_DIR)
 	# now rename/join the output files into the files we expect
 	mv $(TMP_DIR)/apiextensions.k8s.io_v1_customresourcedefinition_provisionings.metal3.io.yaml manifests/0000_31_cluster-baremetal-operator_02_metal3provisioning.crd.yaml
-	mv $(TMP_DIR)/apps_v1_deployment_cluster-baremetal-operator.yaml manifests/0000_31_cluster-baremetal-operator_06_deployment.yaml
+	mv $(TMP_DIR)/openshift-machine-api_apps_v1_deployment_cluster-baremetal-operator.yaml manifests/0000_31_cluster-baremetal-operator_06_deployment.yaml
 	rm -f manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml
 	for rbac in $(RBAC_LIST) ; do \
 	cat $(TMP_DIR)/$${rbac} >> manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml ;\

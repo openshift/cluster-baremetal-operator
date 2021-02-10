@@ -17,12 +17,36 @@ spec:
   template:
     metadata:
       annotations:
+        exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
         include.release.openshift.io/single-node-developer: "true"
       labels:
         k8s-app: cluster-baremetal-operator
     spec:
       containers:
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://localhost:8080/
+        - --tls-cert-file=/etc/tls/private/tls.crt
+        - --tls-private-key-file=/etc/tls/private/tls.key
+        - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+        - --logtostderr=true
+        - --v=10
+        image: registry.svc.ci.openshift.org/openshift:kube-rbac-proxy
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 20Mi
+        volumeMounts:
+        - mountPath: /etc/kube-rbac-proxy
+          name: config
+        - mountPath: /etc/tls/private
+          name: cluster-baremetal-operator-tls
       - command:
         - /usr/bin/cluster-baremetal-operator
         env:
@@ -67,5 +91,14 @@ spec:
         tolerationSeconds: 120
       volumes:
       - configMap:
+          defaultMode: 420
+          name: kube-rbac-proxy
+        name: config
+      - name: cluster-baremetal-operator-tls
+        secret:
+          defaultMode: 420
+          secretName: cluster-baremetal-operator-tls
+      - configMap:
+          defaultMode: 420
           name: cluster-baremetal-operator-images
         name: images

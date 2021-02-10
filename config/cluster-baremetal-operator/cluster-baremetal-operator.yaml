@@ -64,3 +64,4 @@ spec:
       - name: images
         configMap:
           name: cluster-baremetal-operator-images
+          defaultMode: 420
