@@ -130,6 +130,18 @@ func validateDisabledConfig(prov *metal3iov1alpha1.Provisioning) error {
 	return nil
 }
 
+func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
+	var dhcpRange string
+	if config.ProvisioningDHCPRange != "" {
+		_, net, err := net.ParseCIDR(config.ProvisioningNetworkCIDR)
+		if err == nil {
+			cidr, _ := net.Mask.Size()
+			dhcpRange = fmt.Sprintf("%s,%d", config.ProvisioningDHCPRange, cidr)
+		}
+	}
+	return &dhcpRange
+}
+
 func getProvisioningIPCIDR(config *metal3iov1alpha1.ProvisioningSpec) *string {
 	if config.ProvisioningNetworkCIDR != "" && config.ProvisioningIP != "" {
 		_, net, err := net.ParseCIDR(config.ProvisioningNetworkCIDR)
@@ -186,7 +198,7 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 	case httpPort:
 		return pointer.StringPtr(baremetalHttpPort)
 	case dhcpRange:
-		return &baremetalConfig.ProvisioningDHCPRange
+		return getDHCPRange(baremetalConfig)
 	case machineImageUrl:
 		return getProvisioningOSDownloadURL(baremetalConfig)
 	}
