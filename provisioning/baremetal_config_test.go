@@ -54,6 +54,13 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
 		},
 		{
+			// All fields are specified as they should including the ProvisioningNetwork
+			name:          "ValidIPv6Managed",
+			spec:          managedIPv6Provisioning().build(),
+			expectedError: false,
+			expectedMode:  metal3iov1alpha1.ProvisioningNetworkManaged,
+		},
+		{
 			// ProvisioningNetwork is not specified and ProvisioningDHCPExternal is the default value
 			name:          "ImpliedManaged",
 			spec:          managedProvisioning().ProvisioningNetwork("").build(),
@@ -278,7 +285,13 @@ func TestGetMetal3DeploymentConfig(t *testing.T) {
 			name:          "Managed DHCPRange",
 			configName:    dhcpRange,
 			spec:          managedProvisioning().build(),
-			expectedValue: "172.30.20.11, 172.30.20.101",
+			expectedValue: "172.30.20.11,172.30.20.101,24",
+		},
+		{
+			name:          "Managed IPv6 DHCPRange",
+			configName:    dhcpRange,
+			spec:          managedIPv6Provisioning().build(),
+			expectedValue: "fd2e:6f44:5dd8:b856::10,fd2e:6f44:5dd8:b856::ff,80",
 		},
 		{
 			name:          "Disabled DHCPRange",
@@ -314,8 +327,21 @@ func managedProvisioning() *provisioningBuilder {
 			ProvisioningInterface:     "eth0",
 			ProvisioningIP:            "172.30.20.3",
 			ProvisioningNetworkCIDR:   "172.30.20.0/24",
-			ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
+			ProvisioningDHCPRange:     "172.30.20.11,172.30.20.101",
 			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+			ProvisioningNetwork:       "Managed",
+		},
+	}
+}
+
+func managedIPv6Provisioning() *provisioningBuilder {
+	return &provisioningBuilder{
+		metal3iov1alpha1.ProvisioningSpec{
+			ProvisioningInterface:     "eth0",
+			ProvisioningIP:            "fd2e:6f44:5dd8:b856::2",
+			ProvisioningNetworkCIDR:   "fd2e:6f44:5dd8:b856::0/80",
+			ProvisioningDHCPRange:     "fd2e:6f44:5dd8:b856::10,fd2e:6f44:5dd8:b856::ff",
+			ProvisioningOSDownloadURL: "http://[fd2e:6f44:5dd8:b856::2]/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
 			ProvisioningNetwork:       "Managed",
 		},
 	}
