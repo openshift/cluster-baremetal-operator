@@ -418,7 +418,7 @@ func enableMultiNamespace() *provisioningBuilder {
 			ProvisioningNetworkCIDR:   "172.30.20.0/24",
 			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
 			ProvisioningNetwork:       "Disabled",
-			EnableMultiNamespaces:     true,
+			WatchAllNamespaces:        true,
 		},
 	}
 }
@@ -431,18 +431,17 @@ func disableMultiNamespace() *provisioningBuilder {
 			ProvisioningNetworkCIDR:   "172.30.20.0/24",
 			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
 			ProvisioningNetwork:       "Disabled",
-			EnableMultiNamespaces:     false,
+			WatchAllNamespaces:        false,
 		},
 	}
 }
 
-func (pb *provisioningBuilder) EnableMultiNamespaces(value bool) *provisioningBuilder {
-	pb.ProvisioningSpec.EnableMultiNamespaces = value
+func (pb *provisioningBuilder) WatchAllNamespaces(value bool) *provisioningBuilder {
+	pb.ProvisioningSpec.WatchAllNamespaces = value
 	return pb
 }
 
-func TestEnableMultiNamespacesConfig(t *testing.T) {
-
+func TestWatchAllNamespaces(t *testing.T) {
 	tCases := []struct {
 		name          string
 		spec          *metal3iov1alpha1.ProvisioningSpec
@@ -467,9 +466,8 @@ func TestEnableMultiNamespacesConfig(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualValue := tc.spec.EnableMultiNamespaces
-			assert.NotNil(t, actualValue)
-			assert.Equal(t, tc.expectedValue, tc.spec.EnableMultiNamespaces, fmt.Sprintf("EnableMultiNamespaces : Expected : %s Actual : %s", strconv.FormatBool(tc.expectedValue), strconv.FormatBool(tc.spec.EnableMultiNamespaces)))
+			assert.NotNil(t, tc.spec.WatchAllNamespaces)
+			assert.Equal(t, tc.expectedValue, tc.spec.WatchAllNamespaces, fmt.Sprintf("WatchAllNamespaces : Expected : %s Actual : %s", strconv.FormatBool(tc.expectedValue), strconv.FormatBool(tc.spec.WatchAllNamespaces)))
 			return
 		})
 	}

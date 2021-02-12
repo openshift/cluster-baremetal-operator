@@ -69,23 +69,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - metal3.io
-  resources:
-  - baremetalhosts
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
-  - baremetalhosts/finalizers
-  - baremetalhosts/status
-  verbs:
-  - update
-- apiGroups:
   - monitoring.coreos.com
   resources:
   - servicemonitors
@@ -196,6 +179,23 @@ rules:
   - infrastructures/status
   verbs:
   - get
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts/finalizers
+  - baremetalhosts/status
+  verbs:
+  - update
 - apiGroups:
   - metal3.io
   resources:
