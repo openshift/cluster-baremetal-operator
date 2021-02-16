@@ -55,6 +55,9 @@ RBAC_LIST = rbac.authorization.k8s.io_v1_role_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_rolebinding_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_clusterrolebinding_cluster-baremetal-operator.yaml
 
+PROMETHEUS_RBAC_LIST = rbac.authorization.k8s.io_v1_rolebinding_prometheus-k8s-cluster-baremetal-operator.yaml \
+	rbac.authorization.k8s.io_v1_role_prometheus-k8s-cluster-baremetal-operator.yaml
+
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
 manifests: generate
@@ -68,10 +71,17 @@ manifests: generate
 	mv $(TMP_DIR)/monitoring.coreos.com_v1_prometheusrule_cluster-baremetal-operator-prometheus-rules.yaml manifests/0000_90_cluster-baremetal-operator_04_alertrules.yaml
 	mv $(TMP_DIR)/v1_service_cluster-baremetal-operator-service.yaml manifests/0000_31_cluster-baremetal-operator_03_service.yaml
 	mv $(TMP_DIR)/v1_configmap_kube-rbac-proxy.yaml manifests/0000_31_cluster-baremetal-operator_05_kube-rbac-proxy-config.yaml
+	# cluster-baremetal-operator rbacs
 	rm -f manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml
 	for rbac in $(RBAC_LIST) ; do \
 	cat $(TMP_DIR)/$${rbac} >> manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml ;\
 	echo '---' >> manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml ;\
+	done
+	# prometheus rbacs
+	rm -rf manifests/0000_31_cluster-baremetal-operator_05_prometheus_rbac.yaml
+	for rbac in $(PROMETHEUS_RBAC_LIST) ; do \
+	cat $(TMP_DIR)/$${rbac} >> manifests/0000_31_cluster-baremetal-operator_05_prometheus_rbac.yaml ;\
+	echo '---' >> manifests/0000_31_cluster-baremetal-operator_05_prometheus_rbac.yaml ;\
 	done
 	rm -rf $(TMP_DIR)
 
