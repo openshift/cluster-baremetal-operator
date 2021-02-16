@@ -1,2 +1,5 @@
 resources:
 - monitor.yaml
+- service.yaml
+- alertrules.yaml
+- proxyconfig.yaml

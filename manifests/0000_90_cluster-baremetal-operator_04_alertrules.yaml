@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+  labels:
+    prometheus: k8s
+    role: alert-rules
+  name: cluster-baremetal-operator-prometheus-rules
+  namespace: openshift-machine-api
+spec:
+  groups:
+  - name: cluster-baremetal-operator-down
+    rules:
+    - alert: ClusterBaremetalOperatorDown
+      annotations:
+        message: cluster baremetal operator is down
+      expr: |
+        absent(up{job="cluster-baremetal-operator"} == 1)
+      for: 5m
+      labels:
+        severity: critical
