@@ -31,3 +31,7 @@ spec:
     from:
       kind: DockerImage
       name: registry.svc.ci.openshift.org/openshift:ironic-static-ip-manager
+  - name: kube-rbac-proxy
+    from:
+      kind: DockerImage
+      name: registry.svc.ci.openshift.org/openshift:kube-rbac-proxy

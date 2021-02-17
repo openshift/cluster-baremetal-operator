@@ -11,6 +11,7 @@ data:
   images.json: >
     {
       "clusterBaremetalOperator": "registry.svc.ci.openshift.org/openshift:cluster-baremetal-operator",
+      "kubeRBACProxy": "registry.svc.ci.openshift.org/openshift:kube-rbac-proxy",
       "baremetalOperator": "registry.svc.ci.openshift.org/openshift:baremetal-operator",
       "baremetalIronic": "registry.svc.ci.openshift.org/openshift:ironic",
       "baremetalIronicInspector": "registry.svc.ci.openshift.org/openshift:ironic-inspector",

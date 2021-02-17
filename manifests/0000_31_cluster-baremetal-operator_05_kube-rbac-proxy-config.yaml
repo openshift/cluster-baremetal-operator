@@ -1,0 +1,16 @@
+apiVersion: v1
+data:
+  config-file.yaml: |+
+    authorization:
+      resourceAttributes:
+        apiVersion: v1
+        resource: namespace
+        subresource: metrics
+        namespace: openshift-machine-api
+
+kind: ConfigMap
+metadata:
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+  name: kube-rbac-proxy
+  namespace: openshift-machine-api
