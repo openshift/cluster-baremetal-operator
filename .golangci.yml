@@ -18,6 +18,9 @@ linters:
     "varcheck",
     "whitespace",
     "unconvert",
+    "ineffassign",
+    "nakedret",
+    "nestif",
   ]
 
 linters-settings:
