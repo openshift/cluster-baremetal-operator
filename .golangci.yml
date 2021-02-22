@@ -17,6 +17,7 @@ linters:
     "unused",
     "varcheck",
     "whitespace",
+    "unconvert",
   ]
 
 linters-settings:
