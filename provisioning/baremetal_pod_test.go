@@ -77,7 +77,6 @@ func TestBuildEnvVar(t *testing.T) {
 			return
 		})
 	}
-
 }
 
 func TestNewMetal3InitContainers(t *testing.T) {
@@ -134,7 +133,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Init Containers : %d Actual number of Init Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 		})
 	}
-
 }
 
 func TestNewMetal3Containers(t *testing.T) {

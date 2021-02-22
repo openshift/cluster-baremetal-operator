@@ -158,7 +158,6 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 					t.Errorf("Error creating Ironic secret.")
 				}
 				assert.True(t, strings.Compare(secret.(*v1.Secret).StringData[ironicUsernameKey], ironicrpcUsername) == 0, "rpc password created incorrectly")
-
 			}
 		})
 	}

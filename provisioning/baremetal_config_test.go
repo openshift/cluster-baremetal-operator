@@ -213,7 +213,6 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 }
 
 func TestGetMetal3DeploymentConfig(t *testing.T) {
-
 	tCases := []struct {
 		name          string
 		configName    string
