@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	osconfigv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 
@@ -121,7 +122,7 @@ func createContainerImageCache(images *Images) corev1.Container {
 	return container
 }
 
-func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provisioningConfig *metal3iov1alpha1.ProvisioningSpec) (*corev1.PodTemplateSpec, error) {
+func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provisioningConfig *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy) (*corev1.PodTemplateSpec, error) {
 	cacheConfig, err := imageCacheConfig(targetNamespace, *provisioningConfig)
 	if err != nil {
 		return nil, err
@@ -163,14 +164,26 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 			},
 			Volumes: []corev1.Volume{
 				imageVolume(),
+				{
+					Name: "trusted-ca",
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							Items: []corev1.KeyToPath{{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}},
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: externalTrustBundleConfigMapName,
+							},
+							Optional: pointer.BoolPtr(true),
+						},
+					},
+				},
 			},
-			InitContainers: []corev1.Container{
+			InitContainers: injectProxyAndCA([]corev1.Container{
 				createInitContainerMachineOsDownloader(images, cacheConfig),
 				createInitContainerIpaDownloader(images),
-			},
-			Containers: []corev1.Container{
+			}, proxy),
+			Containers: injectProxyAndCA([]corev1.Container{
 				createContainerImageCache(images),
-			},
+			}, proxy),
 			HostNetwork:       true,
 			DNSPolicy:         corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName: "system-node-critical",
@@ -183,8 +196,8 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 	}, nil
 }
 
-func newImageCacheDaemonSet(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec) (*appsv1.DaemonSet, error) {
-	template, err := newImageCachePodTemplateSpec(targetNamespace, images, config)
+func newImageCacheDaemonSet(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy) (*appsv1.DaemonSet, error) {
+	template, err := newImageCachePodTemplateSpec(targetNamespace, images, config, proxy)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +229,7 @@ func newImageCacheDaemonSet(targetNamespace string, images *Images, config *meta
 }
 
 func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
-	imageCacheDaemonSet, err := newImageCacheDaemonSet(info.Namespace, info.Images, &info.ProvConfig.Spec)
+	imageCacheDaemonSet, err := newImageCacheDaemonSet(info.Namespace, info.Images, &info.ProvConfig.Spec, info.Proxy)
 	if err != nil {
 		return
 	}

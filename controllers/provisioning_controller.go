@@ -73,6 +73,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors,verbs=create;watch;get;list;patch
 
+// +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status,verbs=get;list;watch;create;update;patch;delete
@@ -178,7 +179,13 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	info := r.provisioningInfo(baremetalConfig, &containerImages)
+	// Get cluster-wide proxy information
+	clusterWideProxy, err := r.OSClient.ConfigV1().Proxies().Get(context.Background(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	info := r.provisioningInfo(baremetalConfig, &containerImages, clusterWideProxy)
 
 	// Check if Provisioning Configuartion is being deleted
 	deleted, err := r.checkForCRDeletion(info)
@@ -301,7 +308,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	return ctrl.Result{}, nil
 }
 
-func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images) *provisioning.ProvisioningInfo {
+func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, proxy *osconfigv1.Proxy) *provisioning.ProvisioningInfo {
 	return &provisioning.ProvisioningInfo{
 		Client:        r.KubeClient,
 		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
@@ -309,6 +316,7 @@ func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.P
 		Scheme:        r.Scheme,
 		Namespace:     ComponentNamespace,
 		Images:        images,
+		Proxy:         proxy,
 	}
 }
 
@@ -405,5 +413,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&osconfigv1.ClusterOperator{}).
+		Owns(&osconfigv1.Proxy{}).
 		Complete(r)
 }

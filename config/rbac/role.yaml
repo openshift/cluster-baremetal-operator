@@ -92,6 +92,14 @@ rules:
   verbs:
   - get
 - apiGroups:
+  - config.openshift.io
+  resources:
+  - proxies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - metal3.io
   resources:
   - baremetalhosts
