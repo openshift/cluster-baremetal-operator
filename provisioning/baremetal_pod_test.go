@@ -21,7 +21,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v1 "github.com/openshift/api/config/v1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
@@ -130,7 +132,7 @@ func TestNewMetal3InitContainers(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualContainers := newMetal3InitContainers(&images, tc.config)
+			actualContainers := newMetal3InitContainers(&images, tc.config, nil)
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Init Containers : %d Actual number of Init Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 		})
 	}
@@ -175,8 +177,60 @@ func TestNewMetal3Containers(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualContainers := newMetal3Containers(&images, tc.config)
+			actualContainers := newMetal3Containers(&images, tc.config, nil)
 			assert.Equal(t, tc.expectedContainers, len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, tc.expectedContainers, len(actualContainers)))
+		})
+	}
+}
+
+func TestProxyAndCAInjection(t *testing.T) {
+	images := Images{
+		BaremetalOperator:   expectedBaremetalOperator,
+		Ironic:              expectedIronic,
+		IronicInspector:     expectedIronicInspector,
+		IpaDownloader:       expectedIronicIpaDownloader,
+		MachineOsDownloader: expectedMachineOsDownloader,
+		StaticIpManager:     expectedIronicStaticIpManager,
+	}
+
+	proxy := v1.Proxy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+		Status: v1.ProxyStatus{
+			HTTPProxy:  "https://172.2.0.1:3128",
+			HTTPSProxy: "https://172.2.0.1:3128",
+			NoProxy:    ".example.com",
+		},
+	}
+
+	tCases := []struct {
+		name       string
+		containers []corev1.Container
+	}{
+		{
+			name:       "init containers have proxy and CA information",
+			containers: newMetal3InitContainers(&images, managedProvisioning().build(), &proxy),
+		},
+		{
+			name:       "metal3 containers have proxy and CA information",
+			containers: newMetal3Containers(&images, managedProvisioning().build(), &proxy),
+		},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing tc : %s", tc.name)
+			for _, container := range tc.containers {
+				assert.Contains(t, container.Env, corev1.EnvVar{Name: "HTTP_PROXY", Value: "https://172.2.0.1:3128"})
+				assert.Contains(t, container.Env, corev1.EnvVar{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"})
+				assert.Contains(t, container.Env, corev1.EnvVar{Name: "NO_PROXY", Value: ".example.com"})
+
+				assert.Contains(t, container.VolumeMounts, corev1.VolumeMount{
+					MountPath: "/etc/pki/ca-trust/extracted/pem",
+					Name:      "trusted-ca",
+					ReadOnly:  true},
+				)
+			}
 		})
 	}
 }
