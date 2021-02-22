@@ -17,6 +17,7 @@ package provisioning
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -407,4 +408,69 @@ func (pb *provisioningBuilder) ProvisioningNetwork(value string) *provisioningBu
 func (pb *provisioningBuilder) ProvisioningOSDownloadURL(value string) *provisioningBuilder {
 	pb.ProvisioningSpec.ProvisioningOSDownloadURL = value
 	return pb
+}
+
+func enableMultiNamespace() *provisioningBuilder {
+	return &provisioningBuilder{
+		metal3iov1alpha1.ProvisioningSpec{
+			ProvisioningInterface:     "",
+			ProvisioningIP:            "172.30.20.3",
+			ProvisioningNetworkCIDR:   "172.30.20.0/24",
+			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+			ProvisioningNetwork:       "Disabled",
+			EnableMultiNamespaces:     true,
+		},
+	}
+}
+
+func disableMultiNamespace() *provisioningBuilder {
+	return &provisioningBuilder{
+		metal3iov1alpha1.ProvisioningSpec{
+			ProvisioningInterface:     "",
+			ProvisioningIP:            "172.30.20.3",
+			ProvisioningNetworkCIDR:   "172.30.20.0/24",
+			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+			ProvisioningNetwork:       "Disabled",
+			EnableMultiNamespaces:     false,
+		},
+	}
+}
+
+func (pb *provisioningBuilder) EnableMultiNamespaces(value bool) *provisioningBuilder {
+	pb.ProvisioningSpec.EnableMultiNamespaces = value
+	return pb
+}
+
+func TestEnableMultiNamespacesConfig(t *testing.T) {
+
+	tCases := []struct {
+		name          string
+		spec          *metal3iov1alpha1.ProvisioningSpec
+		expectedValue bool
+	}{
+		{
+			name:          "Default",
+			spec:          managedProvisioning().build(),
+			expectedValue: false,
+		},
+		{
+			name:          "Single Namespace",
+			spec:          disableMultiNamespace().build(),
+			expectedValue: false,
+		},
+		{
+			name:          "Multiple Namespaces",
+			spec:          enableMultiNamespace().build(),
+			expectedValue: true,
+		},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing tc : %s", tc.name)
+			actualValue := tc.spec.EnableMultiNamespaces
+			assert.NotNil(t, actualValue)
+			assert.Equal(t, tc.expectedValue, tc.spec.EnableMultiNamespaces, fmt.Sprintf("EnableMultiNamespaces : Expected : %s Actual : %s", strconv.FormatBool(tc.expectedValue), strconv.FormatBool(tc.spec.EnableMultiNamespaces)))
+			return
+		})
+	}
 }
