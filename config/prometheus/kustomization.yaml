@@ -1,8 +1,5 @@
-commonAnnotations:
-  include.release.openshift.io/self-managed-high-availability: "true"
 resources:
 - monitor.yaml
 - service.yaml
-- alertrules.yaml
 - proxyconfig.yaml
 - rbac.yaml
