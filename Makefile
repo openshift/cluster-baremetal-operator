@@ -68,7 +68,6 @@ manifests: generate
 	mv $(TMP_DIR)/apps_v1_deployment_cluster-baremetal-operator.yaml manifests/0000_31_cluster-baremetal-operator_06_deployment.yaml
 	# manifests needed for monitoring
 	mv $(TMP_DIR)/monitoring.coreos.com_v1_servicemonitor_cluster-baremetal-operator-servicemonitor.yaml manifests/0000_90_cluster-baremetal-operator_03_servicemonitor.yaml
-	mv $(TMP_DIR)/monitoring.coreos.com_v1_prometheusrule_cluster-baremetal-operator-prometheus-rules.yaml manifests/0000_90_cluster-baremetal-operator_04_alertrules.yaml
 	mv $(TMP_DIR)/v1_service_cluster-baremetal-operator-service.yaml manifests/0000_31_cluster-baremetal-operator_03_service.yaml
 	mv $(TMP_DIR)/v1_configmap_kube-rbac-proxy.yaml manifests/0000_31_cluster-baremetal-operator_05_kube-rbac-proxy-config.yaml
 	# cluster-baremetal-operator rbacs

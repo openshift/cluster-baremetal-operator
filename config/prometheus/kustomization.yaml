@@ -3,6 +3,5 @@ commonAnnotations:
 resources:
 - monitor.yaml
 - service.yaml
-- alertrules.yaml
 - proxyconfig.yaml
 - rbac.yaml
