@@ -700,6 +700,16 @@ func createKubeProxyContainer(image, portName, upstreamPort string, exposePort i
 	}
 }
 
+func newMetal3Volumes() []corev1.Volume {
+	volumes := []corev1.Volume{}
+	volumes = append(volumes, metal3Volumes...)
+	// Include the volumes needed by createKubeProxyContainer,
+	// used to set up the proxy container for metric
+	// collection.
+	volumes = append(volumes, newRBACConfigVolumes()...)
+	return volumes
+}
+
 func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, labels *map[string]string, proxy *configv1.Proxy) *corev1.PodTemplateSpec {
 	initContainers := newMetal3InitContainers(images, config, proxy)
 	containers := newMetal3Containers(images, config, proxy)
@@ -727,12 +737,7 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 		},
 	}
 
-	volumes := []corev1.Volume{}
-	volumes = append(volumes, metal3Volumes...)
-	// Include the volumes needed by createKubeProxyContainer,
-	// used to set up the proxy container for metric
-	// collection.
-	volumes = append(volumes, newRBACConfigVolumes()...)
+	volumes := newMetal3Volumes()
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{

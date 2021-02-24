@@ -6,6 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -52,11 +53,12 @@ spec:
       serverName: cluster-baremetal-operator.openshift-machine-api.svc
 `
 
-// This NodePort Service would is created to expose metrics from pods in the
-// metal3 deployment. The Selector is used to match Pods that this Service
-// represents. Since the metal3 deployment pods could contain the 4.6 or 4.7
-// based labels, the Selector should also be constructed that way.
-// The Named port in the ServiceMonitor is defined as a ServicePort here.
+// This NodePort Service exposes  metal3 metrics.
+// The selector needs to be constructed to match the Labels on pods in the
+// metal3 deployment. The pods could contain the label,
+// "k8s-app: controller" for 4.6 based pods and "k8s-app: metal3" for 4.7
+// based pods.
+// The Named port in the ServiceMonitor is defined as the ServicePort here.
 func newMetal3MetricsService(targetNamespace string, selector *metav1.LabelSelector) *corev1.Service {
 	if selector == nil {
 		selector = &metav1.LabelSelector{
@@ -130,6 +132,6 @@ func EnsureMetal3ServiceMonitor(info *ProvisioningInfo) (updated bool, err error
 }
 
 func DeleteMetal3ServiceMonitor(info *ProvisioningInfo) error {
-	// TODO: Figure how how to delete the ServiceMonitor
-	return nil
+	serviceMonitorGVR := schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "servicemonitors"}
+	return info.DynamicClient.Resource(serviceMonitorGVR).Namespace(info.Namespace).Delete(context.TODO(), "metal3-metrics-servicemonitor", metav1.DeleteOptions{})
 }
