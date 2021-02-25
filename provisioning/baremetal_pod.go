@@ -517,7 +517,6 @@ func createContainerIronicInspectorRamdiskLogs(images *Images) corev1.Container 
 }
 
 func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
-
 	container := corev1.Container{
 		Name:            "metal3-static-ip-manager",
 		Image:           images.StaticIpManager,
