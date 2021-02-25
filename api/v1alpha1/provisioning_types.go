@@ -99,6 +99,14 @@ type ProvisioningSpec struct {
 	// accessible from the machine networks. User should provide two IPs on
 	// the external network that would be used for provisioning services.
 	ProvisioningNetwork ProvisioningNetwork `json:"provisioningNetwork,omitempty"`
+
+	// WatchAllNamespaces provides a way to explicitly allow use of this
+	// Provisioning configuration across all Namespaces. It is an
+	// optional configuration which defaults to false and in that state
+	// will be used to provision baremetal hosts in only the
+	// openshift-machine-api namespace. When set to true, this provisioning
+	// configuration would be used for baremetal hosts across all namespaces.
+	WatchAllNamespaces bool `json:"watchAllNamespaces,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning

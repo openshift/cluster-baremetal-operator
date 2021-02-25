@@ -94,6 +94,23 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
+  - baremetalhosts
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts/finalizers
+  - baremetalhosts/status
+  verbs:
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
   - provisionings
   verbs:
   - create
@@ -198,23 +215,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - metal3.io
-  resources:
-  - baremetalhosts
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
-  - baremetalhosts/finalizers
-  - baremetalhosts/status
-  verbs:
-  - update
 - apiGroups:
   - monitoring.coreos.com
   resources:

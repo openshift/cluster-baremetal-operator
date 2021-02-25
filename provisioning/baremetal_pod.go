@@ -262,6 +262,21 @@ func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSp
 	return containers
 }
 
+func getWatchNamespace(config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
+	if config.WatchAllNamespaces {
+		return corev1.EnvVar{}
+	} else {
+		return corev1.EnvVar{
+			Name: "WATCH_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
+		}
+	}
+}
+
 func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
 	container := corev1.Container{
 		Name:  "metal3-baremetal-operator",
@@ -280,14 +295,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			inspectorCredentialsMount,
 		},
 		Env: []corev1.EnvVar{
-			{
-				Name: "WATCH_NAMESPACE",
-				ValueFrom: &corev1.EnvVarSource{
-					FieldRef: &corev1.ObjectFieldSelector{
-						FieldPath: "metadata.namespace",
-					},
-				},
-			},
+			getWatchNamespace(config),
 			{
 				Name: "POD_NAMESPACE",
 				ValueFrom: &corev1.EnvVarSource{
