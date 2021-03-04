@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,7 +134,7 @@ func TestProvisioning(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
 			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.baremetalCR)
-			baremetalconfig, err := reconciler.readProvisioningCR()
+			baremetalconfig, err := reconciler.readProvisioningCR(context.TODO())
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return

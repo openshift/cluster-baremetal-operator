@@ -101,9 +101,7 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	return true, nil
 }
 
-func (r *ProvisioningReconciler) readProvisioningCR() (*metal3iov1alpha1.Provisioning, error) {
-	ctx := context.Background()
-
+func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal3iov1alpha1.Provisioning, error) {
 	// Fetch the Provisioning instance
 	instance := &metal3iov1alpha1.Provisioning{}
 	namespacedName := types.NamespacedName{Name: metal3iov1alpha1.ProvisioningSingletonName, Namespace: ""}
@@ -118,7 +116,7 @@ func (r *ProvisioningReconciler) readProvisioningCR() (*metal3iov1alpha1.Provisi
 
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
-func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// provisioning.metal3.io is a singleton
 	// Note: this check is here to make sure that the early startup configuration
 	// is correct. For day 2 operatations the webhook will validate this.
@@ -156,7 +154,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			"unable to put %q ClusterOperator in Disabled state", clusterOperatorName)
 	}
 
-	baremetalConfig, err := r.readProvisioningCR()
+	baremetalConfig, err := r.readProvisioningCR(ctx)
 	if err != nil {
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
@@ -197,7 +195,7 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	info := r.provisioningInfo(baremetalConfig, &containerImages, clusterWideProxy)
 
 	// Check if Provisioning Configuartion is being deleted
-	deleted, err := r.checkForCRDeletion(info)
+	deleted, err := r.checkForCRDeletion(ctx, info)
 	if err != nil {
 		var coErr error
 		if deleted {
@@ -263,13 +261,13 @@ func (r *ProvisioningReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			return ctrl.Result{}, err
 		}
 		if updated {
-			return result, r.Client.Status().Update(context.Background(), baremetalConfig)
+			return result, r.Client.Status().Update(ctx, baremetalConfig)
 		}
 	}
 
 	if specChanged {
 		baremetalConfig.Status.ObservedGeneration = baremetalConfig.Generation
-		err = r.Client.Status().Update(context.Background(), baremetalConfig)
+		err = r.Client.Status().Update(ctx, baremetalConfig)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to update observed generation: %w", err)
 		}
@@ -330,7 +328,7 @@ func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.P
 
 //Ensure Finalizer is present on the Provisioning CR when not deleted and
 //delete resources and remove Finalizer when it is
-func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.ProvisioningInfo) (bool, error) {
+func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *provisioning.ProvisioningInfo) (bool, error) {
 	// examine DeletionTimestamp to determine if object is under deletion
 	if info.ProvConfig.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
@@ -345,7 +343,7 @@ func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.Provision
 		controllerutil.AddFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
 
 		return false, errors.Wrap(
-			r.Client.Update(context.Background(), info.ProvConfig),
+			r.Client.Update(ctx, info.ProvConfig),
 			"failed to update Provisioning CR with its finalizer")
 	} else {
 		// The Provisioning object is being deleted
@@ -360,7 +358,7 @@ func (r *ProvisioningReconciler) checkForCRDeletion(info *provisioning.Provision
 		controllerutil.RemoveFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
 
 		return true, errors.Wrap(
-			r.Client.Update(context.Background(), info.ProvConfig),
+			r.Client.Update(ctx, info.ProvConfig),
 			"failed to remove finalizer from Provisioning CR")
 	}
 }
@@ -404,7 +402,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// If Platform is BareMetal, we could still be missing the Provisioning CR
 	if enabled {
-		baremetalConfig, err := r.readProvisioningCR()
+		baremetalConfig, err := r.readProvisioningCR(context.Background())
 		if err != nil || baremetalConfig == nil {
 			err = r.updateCOStatus(ReasonComplete, "Provisioning CR not found on BareMetal Platform; marking operator as available", "")
 			if err != nil {
