@@ -12,29 +12,7 @@ rules:
   - ""
   resources:
   - configmaps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - services
   verbs:
   - create
@@ -48,17 +26,6 @@ rules:
   - apps
   resources:
   - daemonsets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
   - deployments
   verbs:
   - create
@@ -107,17 +74,6 @@ rules:
   - ""
   resources:
   - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - services
   verbs:
   - create
@@ -131,17 +87,6 @@ rules:
   - apps
   resources:
   - daemonsets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
   - deployments
   verbs:
   - create
@@ -200,17 +145,6 @@ rules:
   - metal3.io
   resources:
   - provisionings
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
   - provisionings/finalizers
   verbs:
   - create
