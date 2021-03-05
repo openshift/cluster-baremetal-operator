@@ -14,7 +14,7 @@ KUSTOMIZE ?= go run sigs.k8s.io/kustomize/kustomize/v3
 MANIFEST_PROFILE ?= default
 TMP_DIR := $(shell mktemp -d -t manifests-$(date +%Y-%m-%d-%H-%M-%S)-XXXXXXXXXX)
 
-IMAGES_JSON := /etc/cluster-baremetal-operator/images/images.json
+IMAGES_JSON ?= /etc/cluster-baremetal-operator/images/images.json
 
 # Set VERBOSE to -v to make tests produce more output
 VERBOSE ?= ""
