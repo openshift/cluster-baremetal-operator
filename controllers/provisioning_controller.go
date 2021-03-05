@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	"github.com/stretchr/stew/slice"
 	appsv1 "k8s.io/api/apps/v1"
@@ -51,6 +52,10 @@ const (
 	ComponentNamespace = "openshift-machine-api"
 	// ComponentName is the full name of CBO
 	ComponentName = "cluster-baremetal-operator"
+	// install-config access details
+	clusterConfigName      = "cluster-config-v1"
+	clusterConfigKey       = "install-config"
+	clusterConfigNamespace = "kube-system"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
@@ -81,7 +86,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;infrastructures/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;watch;list;patch
-// +kubebuilder:rbac:groups="",resources=secrets;services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings;provisionings/finalizers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
@@ -116,6 +121,25 @@ func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal
 		return nil, errors.Wrap(err, "unable to read Provisioning CR")
 	}
 	return instance, nil
+}
+
+type InstallConfigData struct {
+	SSHKey string
+}
+
+func (r *ProvisioningReconciler) readSSHKey() string {
+	installConfigData := InstallConfigData{}
+	clusterConfig, err := r.KubeClient.CoreV1().ConfigMaps(clusterConfigNamespace).Get(context.Background(), clusterConfigName, metav1.GetOptions{})
+	if err != nil {
+		klog.Warningf("Error: %v", err)
+		return ""
+	}
+	err = yaml.Unmarshal([]byte(clusterConfig.Data[clusterConfigKey]), &installConfigData)
+	if err != nil {
+		klog.Warningf("Error: %v", err)
+		return ""
+	}
+	return strings.TrimSpace(installConfigData.SSHKey)
 }
 
 // Reconcile updates the cluster settings when the Provisioning
@@ -197,7 +221,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	info, err := r.provisioningInfo(baremetalConfig, &containerImages)
+	info, err := r.provisioningInfo(baremetalConfig, &containerImages, r.readSSHKey())
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -309,7 +333,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return result, nil
 }
 
-func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images) (*provisioning.ProvisioningInfo, error) {
+func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, sshkey string) (*provisioning.ProvisioningInfo, error) {
 	proxy, err := r.OSClient.ConfigV1().Proxies().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -325,6 +349,7 @@ func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.P
 		Proxy:              proxy,
 		NetworkStack:       r.NetworkStack,
 		MasterMacAddresses: r.MasterMacAddresses,
+		SSHKey:             sshkey,
 	}, nil
 }
 
