@@ -194,6 +194,11 @@ func updateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, 
 		}
 
 		if !expired {
+			if changed {
+				_, err = client.Secrets(targetNamespace).Update(context.Background(), secret, metav1.UpdateOptions{})
+				return err
+			}
+
 			return nil
 		}
 	}
@@ -203,14 +208,9 @@ func updateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, 
 		return errors.Wrap(err, "failed to generate new TLS certificate")
 	}
 	secret.StringData = map[string]string{tlsCertificateKey: cert.certificate, tlsPrivateKeyKey: cert.privateKey}
-	changed = true
 
-	if changed {
-		_, err = client.Secrets(targetNamespace).Update(context.Background(), secret, metav1.UpdateOptions{})
-		return err
-	}
-
-	return nil
+	_, err = client.Secrets(targetNamespace).Update(context.Background(), secret, metav1.UpdateOptions{})
+	return err
 }
 
 // CreateOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
