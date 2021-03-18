@@ -23,6 +23,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
@@ -582,6 +583,17 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 			Operator:          corev1.TolerationOpExists,
 			TolerationSeconds: pointer.Int64Ptr(120),
 		},
+	}
+
+	for _, cont := range containers {
+		// these are "default" values to pass openshift e2e tests.
+		// to set specific values, define them in the container definition.
+		if _, ok := cont.Resources.Requests[corev1.ResourceCPU]; !ok {
+			cont.Resources.Requests[corev1.ResourceCPU] = resource.MustParse("10m")
+		}
+		if _, ok := cont.Resources.Requests[corev1.ResourceMemory]; !ok {
+			cont.Resources.Requests[corev1.ResourceMemory] = resource.MustParse("50Mi")
+		}
 	}
 
 	return &corev1.PodTemplateSpec{
