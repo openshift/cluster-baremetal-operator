@@ -12,6 +12,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
@@ -118,8 +119,22 @@ func createContainerImageCache(images *Images) corev1.Container {
 				},
 			},
 		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("5m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
 	}
 	return container
+}
+
+func newImageCacheContainers(images *Images, proxy *osconfigv1.Proxy) []corev1.Container {
+	containers := []corev1.Container{
+		createContainerImageCache(images),
+	}
+
+	return injectProxyAndCA(containers, proxy)
 }
 
 func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provisioningConfig *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy) (*corev1.PodTemplateSpec, error) {
@@ -127,6 +142,8 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 	if err != nil {
 		return nil, err
 	}
+
+	containers := newImageCacheContainers(images, proxy)
 
 	tolerations := []corev1.Toleration{
 		{
@@ -182,9 +199,7 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 				createInitContainerMachineOsDownloader(images, cacheConfig),
 				createInitContainerIpaDownloader(images),
 			}, proxy),
-			Containers: injectProxyAndCA([]corev1.Container{
-				createContainerImageCache(images),
-			}, proxy),
+			Containers:        containers,
 			HostNetwork:       true,
 			DNSPolicy:         corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName: "system-node-critical",

@@ -24,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
@@ -252,6 +253,12 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 		},
 		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Env:          []corev1.EnvVar{},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
 	}
 	return initContainer
 }
@@ -269,6 +276,12 @@ func createInitContainerMachineOsDownloader(images *Images, config *metal3iov1al
 		Env: []corev1.EnvVar{
 			buildEnvVar(machineImageUrl, config),
 		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
 	}
 	return initContainer
 }
@@ -285,6 +298,12 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 		Env: []corev1.EnvVar{
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
 		},
 	}
 	return initContainer
@@ -391,6 +410,12 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 				Value: metal3AuthRootDir,
 			},
 		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("20m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
 	}
 	return container
 }
@@ -412,6 +437,12 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningInterface, config),
 			buildEnvVar(dhcpRange, config),
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("5m"),
+				corev1.ResourceMemory: resource.MustParse("5Mi"),
+			},
 		},
 	}
 	return container
@@ -435,6 +466,12 @@ func createContainerMetal3Mariadb(images *Images) corev1.Container {
 				Name:          "mysql",
 				ContainerPort: 3306,
 				HostPort:      3306,
+			},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("15m"),
+				corev1.ResourceMemory: resource.MustParse("80Mi"),
 			},
 		},
 	}
@@ -465,6 +502,12 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 				Name:          httpPortName,
 				ContainerPort: int32(port),
 				HostPort:      int32(port),
+			},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("5m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
 			},
 		},
 	}
@@ -509,6 +552,12 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 				HostPort:      8089,
 			},
 		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("500Mi"),
+			},
+		},
 	}
 	return container
 }
@@ -545,6 +594,12 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 				HostPort:      6385,
 			},
 		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("150m"),
+				corev1.ResourceMemory: resource.MustParse("300Mi"),
+			},
+		},
 	}
 	return container
 }
@@ -559,6 +614,12 @@ func createContainerIronicDeployRamdiskLogs(images *Images) corev1.Container {
 		},
 		Command:      []string{"/bin/runlogwatch.sh"},
 		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("5Mi"),
+			},
+		},
 	}
 	return container
 }
@@ -593,6 +654,12 @@ func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alph
 				HostPort:      5050,
 			},
 		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("40m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		},
 	}
 	return container
 }
@@ -607,6 +674,12 @@ func createContainerIronicInspectorRamdiskLogs(images *Images) corev1.Container 
 		},
 		Command:      []string{"/bin/runlogwatch.sh"},
 		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("5Mi"),
+			},
+		},
 	}
 	return container
 }
@@ -623,6 +696,12 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		Env: []corev1.EnvVar{
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("5m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
 		},
 	}
 	return container
