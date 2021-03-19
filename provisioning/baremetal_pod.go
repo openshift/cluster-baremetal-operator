@@ -40,11 +40,17 @@ const (
 	baremetalDeploymentName          = "metal3"
 	baremetalSharedVolume            = "metal3-shared"
 	metal3AuthRootDir                = "/auth"
+	metal3TlsRootDir                 = "/certs"
 	ironicCredentialsVolume          = "metal3-ironic-basic-auth"
 	ironicrpcCredentialsVolume       = "metal3-ironic-rpc-basic-auth"
 	inspectorCredentialsVolume       = "metal3-inspector-basic-auth"
+	ironicTlsVolume                  = "metal3-ironic-tls"
+	inspectorTlsVolume               = "metal3-inspector-tls"
 	htpasswdEnvVar                   = "HTTP_BASIC_HTPASSWD" // #nosec
 	mariadbPwdEnvVar                 = "MARIADB_PASSWORD"    // #nosec
+	ironicInsecureEnvVar             = "IRONIC_INSECURE"
+	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
+	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -73,6 +79,18 @@ var rpcCredentialsMount = corev1.VolumeMount{
 var inspectorCredentialsMount = corev1.VolumeMount{
 	Name:      inspectorCredentialsVolume,
 	MountPath: metal3AuthRootDir + "/ironic-inspector",
+	ReadOnly:  true,
+}
+
+var ironicTlsMount = corev1.VolumeMount{
+	Name:      ironicTlsVolume,
+	MountPath: metal3TlsRootDir + "/ironic",
+	ReadOnly:  true,
+}
+
+var inspectorTlsMount = corev1.VolumeMount{
+	Name:      inspectorTlsVolume,
+	MountPath: metal3TlsRootDir + "/ironic-inspector",
 	ReadOnly:  true,
 }
 
@@ -144,6 +162,22 @@ var metal3Volumes = []corev1.Volume{
 					Name: externalTrustBundleConfigMapName,
 				},
 				Optional: pointer.BoolPtr(true),
+			},
+		},
+	},
+	{
+		Name: ironicTlsVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: tlsSecretName,
+			},
+		},
+	},
+	{
+		Name: inspectorTlsVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: tlsSecretName,
 			},
 		},
 	},
@@ -311,6 +345,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
 			inspectorCredentialsMount,
+			ironicTlsMount,
 		},
 		Env: []corev1.EnvVar{
 			getWatchNamespace(config),
@@ -333,6 +368,14 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			{
 				Name:  "OPERATOR_NAME",
 				Value: "baremetal-operator",
+			},
+			{
+				Name:  ironicCertEnvVar,
+				Value: metal3TlsRootDir + "/ironic/" + tlsCertificateKey,
+			},
+			{
+				Name:  ironicInsecureEnvVar,
+				Value: "true",
 			},
 			buildEnvVar(deployKernelUrl, config),
 			buildEnvVar(deployRamdiskUrl, config),
@@ -436,9 +479,19 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			sharedVolumeMount,
 			inspectorCredentialsMount,
 			rpcCredentialsMount,
+			ironicTlsMount,
+			inspectorTlsMount,
 		},
 		Env: []corev1.EnvVar{
 			mariadbPassword,
+			{
+				Name:  ironicInsecureEnvVar,
+				Value: "true",
+			},
+			{
+				Name:  inspectorInsecureEnvVar,
+				Value: "true",
+			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
@@ -467,9 +520,14 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 		VolumeMounts: []corev1.VolumeMount{
 			sharedVolumeMount,
 			rpcCredentialsMount,
+			ironicTlsMount,
 		},
 		Env: []corev1.EnvVar{
 			mariadbPassword,
+			{
+				Name:  ironicInsecureEnvVar,
+				Value: "true",
+			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
@@ -511,8 +569,14 @@ func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alph
 		VolumeMounts: []corev1.VolumeMount{
 			sharedVolumeMount,
 			ironicCredentialsMount,
+			ironicTlsMount,
+			inspectorTlsMount,
 		},
 		Env: []corev1.EnvVar{
+			{
+				Name:  ironicInsecureEnvVar,
+				Value: "true",
+			},
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(htpasswdEnvVar, inspectorSecretName),
