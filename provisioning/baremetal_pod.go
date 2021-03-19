@@ -279,7 +279,10 @@ func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSp
 
 func getWatchNamespace(config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
 	if config.WatchAllNamespaces {
-		return corev1.EnvVar{}
+		return corev1.EnvVar{
+			Name:  "WATCH_NAMESPACE",
+			Value: "",
+		}
 	} else {
 		return corev1.EnvVar{
 			Name: "WATCH_NAMESPACE",
