@@ -16,6 +16,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -36,6 +37,7 @@ import (
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/controllers"
+	"github.com/openshift/cluster-baremetal-operator/provisioning"
 )
 
 var (
@@ -92,6 +94,7 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		Port:               9443,
+		CertDir:            "/etc/cluster-baremetal-operator/tls",
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start manager")
@@ -103,6 +106,8 @@ func main() {
 	recorder := record.NewBroadcaster().NewRecorder(clientgoscheme.Scheme, v1.EventSource{Component: controllers.ComponentName})
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
+	enableWebhook := provisioning.WebhookDependenciesReady(osClient)
+
 	if err = (&controllers.ProvisioningReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
@@ -111,9 +116,16 @@ func main() {
 		KubeClient:     kubeClient,
 		ReleaseVersion: releaseVersion,
 		ImagesFilename: imagesJSONFilename,
+		WebHookEnabled: enableWebhook,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
 		os.Exit(1)
+	}
+	if enableWebhook {
+		if err = provisioning.EnableValidatingWebhook(context.Background(), controllers.ComponentNamespace, kubeClient, mgr); err != nil {
+			klog.ErrorS(err, "problem enabling validating webhook")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

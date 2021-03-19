@@ -1,12 +1,15 @@
-
 apiVersion: v1
 kind: Service
 metadata:
-  name: webhook-service
-  namespace: system
+  name: cluster-baremetal-webhook-service
+  namespace: openshift-machine-api
+  labels:
+    k8s-app: cluster-baremetal-operator
 spec:
   ports:
     - port: 443
       targetPort: 9443
   selector:
-    control-plane: controller-manager
+    k8s-app: cluster-baremetal-operator
+  sessionAffinity: None
+  type: ClusterIP

@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
-  namespace: system
+  name: cluster-baremetal-operator
+  namespace: openshift-machine-api
 spec:
   template:
     spec:
       containers:
-      - name: manager
+      - name: cluster-baremetal-operator
         ports:
         - containerPort: 9443
           name: webhook-server
           protocol: TCP
         volumeMounts:
-        - mountPath: /tmp/k8s-webhook-server/serving-certs
+        - mountPath: /etc/cluster-baremetal-operator/tls
           name: cert
           readOnly: true
       volumes:
       - name: cert
         secret:
           defaultMode: 420
-          secretName: webhook-server-cert
+          secretName: cluster-baremetal-webhook-server-cert
