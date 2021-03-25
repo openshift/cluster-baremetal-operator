@@ -43,20 +43,17 @@ var _ webhook.Validator = &Provisioning{}
 func (r *Provisioning) ValidateCreate() error {
 	provisioninglog.Info("validate create", "name", r.Name)
 
-	// TODO(imain): fill in your validation logic upon object creation.
 	if r.Name != ProvisioningSingletonName {
 		return fmt.Errorf("Provisioning object is a singleton and must be named \"%s\"", ProvisioningSingletonName)
 	}
 
-	return nil
+	return r.ValidateBaremetalProvisioningConfig()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *Provisioning) ValidateUpdate(old runtime.Object) error {
 	provisioninglog.Info("validate update", "name", r.Name)
-
-	// TODO(imain): fill in your validation logic upon object creation.
-	return nil
+	return r.ValidateBaremetalProvisioningConfig()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

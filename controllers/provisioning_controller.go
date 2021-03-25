@@ -222,17 +222,19 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	// Check if provisioning configuration is valid
-	if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalConfig); err != nil {
-		// Provisioning configuration is not valid.
-		// Requeue request.
-		klog.ErrorS(err, "invalid config in Provisioning CR")
-		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+	if !r.WebHookEnabled {
+		// Check if provisioning configuration is valid
+		if err := baremetalConfig.ValidateBaremetalProvisioningConfig(); err != nil {
+			// Provisioning configuration is not valid.
+			// Requeue request.
+			klog.Error(err, "invalid config in Provisioning CR")
+			err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
+			}
+			// Temporarily not requeuing request
+			return ctrl.Result{}, nil
 		}
-		// Temporarily not requeuing request
-		return result, nil
 	}
 
 	//Create Secrets needed for Metal3 deployment

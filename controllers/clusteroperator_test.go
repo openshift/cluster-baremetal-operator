@@ -17,7 +17,6 @@ import (
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
-	provisioning "github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
@@ -317,12 +316,12 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 				ProvisioningInterface:     "eth0",
 				ProvisioningIP:            "172.30.20.3",
 				ProvisioningNetworkCIDR:   "172.30.20.0/24",
-				ProvisioningDHCPRange:     "172.30.20.11, 172.30.20.101",
+				ProvisioningDHCPRange:     "172.30.20.11,172.30.20.101",
 				ProvisioningOSDownloadURL: "",
 				ProvisioningNetwork:       "Managed",
 			},
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
-				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "InvalidConfiguration", "ProvisioningOSDownloadURL is required but is empty"),
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "InvalidConfiguration", "provisioningOSDownloadURL is required but is empty"),
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, "InvalidConfiguration", "Unable to apply Provisioning CR: invalid configuration"),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
@@ -337,7 +336,7 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 
 	for _, tc := range tCases {
 		baremetalCR.Spec = tc.spec
-		if err := provisioning.ValidateBaremetalProvisioningConfig(baremetalCR); err != nil {
+		if err := baremetalCR.ValidateBaremetalProvisioningConfig(); err != nil {
 			err = reconciler.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
 			if err != nil {
 				t.Error(err)
