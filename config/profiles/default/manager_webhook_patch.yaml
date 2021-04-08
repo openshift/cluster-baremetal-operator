@@ -5,6 +5,9 @@ metadata:
   namespace: openshift-machine-api
 spec:
   template:
+    metadata:
+      annotations:
+        workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
     spec:
       containers:
       - name: cluster-baremetal-operator
