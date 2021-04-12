@@ -1,11 +1,13 @@
 package provisioning
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -209,18 +211,18 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 			if apierrors.IsNotFound(err) {
 				t.Errorf("Error creating TLS secret.")
 			}
-			original := secret.(*v1.Secret).StringData[tlsCertificateKey]
+			original := secret.(*v1.Secret).Data[corev1.TLSCertKey]
 			assert.NotEmpty(t, original)
 
 			if tc.expire {
 				// Inject an expired certificate
-				secret.(*v1.Secret).StringData[tlsCertificateKey] = expiredTlsCertificate
+				secret.(*v1.Secret).Data[corev1.TLSCertKey] = []byte(expiredTlsCertificate)
 				err = kubeClient.Tracker().Update(secretsResource, secret, testNamespace)
 				if err != nil {
 					t.Errorf("unexpected error when faking expirted certificate: %v", err)
 					return
 				}
-				original = expiredTlsCertificate
+				original = []byte(expiredTlsCertificate)
 			}
 
 			err = CreateOrUpdateTlsSecret(kubeClient.CoreV1(), testNamespace, baremetalCR, scheme)
@@ -233,10 +235,10 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 			if apierrors.IsNotFound(err) {
 				t.Errorf("Error creating TLS secret.")
 			}
-			recreated := newSecret.(*v1.Secret).StringData[tlsCertificateKey]
+			recreated := newSecret.(*v1.Secret).Data[corev1.TLSCertKey]
 
 			// In case of expiration, the certificate must be re-created
-			assert.Equal(t, tc.expire, strings.Compare(original, recreated) != 0, "re-created Tls certificate is invalid")
+			assert.Equal(t, tc.expire, bytes.Compare(original, recreated) != 0, "re-created Tls certificate is invalid")
 		})
 	}
 }
