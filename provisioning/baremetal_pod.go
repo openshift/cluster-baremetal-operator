@@ -29,23 +29,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	configv1 "github.com/openshift/api/config/v1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
 
 const (
-	metal3AppName              = "metal3"
-	baremetalDeploymentName    = "metal3"
-	baremetalSharedVolume      = "metal3-shared"
-	metal3AuthRootDir          = "/auth"
-	ironicCredentialsVolume    = "metal3-ironic-basic-auth"
-	ironicrpcCredentialsVolume = "metal3-ironic-rpc-basic-auth"
-	inspectorCredentialsVolume = "metal3-inspector-basic-auth"
-	htpasswdEnvVar             = "HTTP_BASIC_HTPASSWD" // #nosec
-	mariadbPwdEnvVar           = "MARIADB_PASSWORD"    // #nosec
-	cboOwnedAnnotation         = "baremetal.openshift.io/owned"
-	cboLabelName               = "baremetal.openshift.io/cluster-baremetal-operator"
+	metal3AppName                    = "metal3"
+	baremetalDeploymentName          = "metal3"
+	baremetalSharedVolume            = "metal3-shared"
+	metal3AuthRootDir                = "/auth"
+	ironicCredentialsVolume          = "metal3-ironic-basic-auth"
+	ironicrpcCredentialsVolume       = "metal3-ironic-rpc-basic-auth"
+	inspectorCredentialsVolume       = "metal3-inspector-basic-auth"
+	htpasswdEnvVar                   = "HTTP_BASIC_HTPASSWD" // #nosec
+	mariadbPwdEnvVar                 = "MARIADB_PASSWORD"    // #nosec
+	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
+	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
+	externalTrustBundleConfigMapName = "cbo-trusted-ca"
 )
 
 var deploymentRolloutStartTime = time.Now()
@@ -133,6 +135,18 @@ var metal3Volumes = []corev1.Volume{
 			},
 		},
 	},
+	{
+		Name: "trusted-ca",
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				Items: []corev1.KeyToPath{{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}},
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: externalTrustBundleConfigMapName,
+				},
+				Optional: pointer.BoolPtr(true),
+			},
+		},
+	},
 }
 
 func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
@@ -172,7 +186,7 @@ func setIronicHtpasswdHash(name string, secretName string) corev1.EnvVar {
 	}
 }
 
-func newMetal3InitContainers(images *Images, config *metal3iov1alpha1.ProvisioningSpec) []corev1.Container {
+func newMetal3InitContainers(images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *configv1.Proxy) []corev1.Container {
 	initContainers := []corev1.Container{
 		createInitContainerIpaDownloader(images),
 		createInitContainerMachineOsDownloader(images, config),
@@ -185,7 +199,7 @@ func newMetal3InitContainers(images *Images, config *metal3iov1alpha1.Provisioni
 		initContainers = append(initContainers, createInitContainerStaticIpSet(images, config))
 	}
 
-	return initContainers
+	return injectProxyAndCA(initContainers, proxy)
 }
 
 func createInitContainerIpaDownloader(images *Images) corev1.Container {
@@ -237,7 +251,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 	return initContainer
 }
 
-func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSpec) []corev1.Container {
+func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *configv1.Proxy) []corev1.Container {
 	containers := []corev1.Container{
 		createContainerMetal3BaremetalOperator(images, config),
 		createContainerMetal3Mariadb(images),
@@ -259,7 +273,8 @@ func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSp
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
 		containers = append(containers, createContainerMetal3Dnsmasq(images, config))
 	}
-	return containers
+
+	return injectProxyAndCA(containers, proxy)
 }
 
 func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
@@ -526,9 +541,10 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 	return container
 }
 
-func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, labels *map[string]string) *corev1.PodTemplateSpec {
-	initContainers := newMetal3InitContainers(images, config)
-	containers := newMetal3Containers(images, config)
+func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, labels *map[string]string, proxy *configv1.Proxy) *corev1.PodTemplateSpec {
+	initContainers := newMetal3InitContainers(images, config, proxy)
+	containers := newMetal3Containers(images, config, proxy)
+
 	tolerations := []corev1.Toleration{
 		{
 			Key:      "node-role.kubernetes.io/master",
@@ -574,7 +590,56 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 	}
 }
 
-func newMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, selector *metav1.LabelSelector) *appsv1.Deployment {
+func mountsWithTrustedCA(mounts []corev1.VolumeMount) []corev1.VolumeMount {
+	mounts = append(mounts, corev1.VolumeMount{
+		MountPath: "/etc/pki/ca-trust/extracted/pem",
+		Name:      "trusted-ca",
+		ReadOnly:  true,
+	})
+
+	return mounts
+}
+
+func injectProxyAndCA(containers []corev1.Container, proxy *configv1.Proxy) []corev1.Container {
+	var injectedContainers []corev1.Container
+
+	for _, container := range containers {
+		container.Env = envWithProxy(proxy, container.Env)
+		container.VolumeMounts = mountsWithTrustedCA(container.VolumeMounts)
+		injectedContainers = append(injectedContainers, container)
+	}
+
+	return injectedContainers
+}
+
+func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar) []corev1.EnvVar {
+	if proxy == nil {
+		return envVars
+	}
+
+	if proxy.Status.HTTPProxy != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "HTTP_PROXY",
+			Value: proxy.Status.HTTPProxy,
+		})
+	}
+	if proxy.Status.HTTPSProxy != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "HTTPS_PROXY",
+			Value: proxy.Status.HTTPSProxy,
+		})
+	}
+	if proxy.Status.NoProxy != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "NO_PROXY",
+			Value: proxy.Status.NoProxy,
+		})
+	}
+
+	return envVars
+}
+
+func newMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, selector *metav1.LabelSelector, proxy *configv1.Proxy) *appsv1.Deployment {
 	if selector == nil {
 		selector = &metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -600,7 +665,7 @@ func newMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 	if apiLabelValue != "" {
 		podSpecLabels["api"] = apiLabelValue
 	}
-	template := newMetal3PodTemplateSpec(images, config, &podSpecLabels)
+	template := newMetal3PodTemplateSpec(images, config, &podSpecLabels, proxy)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      baremetalDeploymentName,
@@ -636,7 +701,7 @@ func CheckExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, target
 func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 	// Create metal3 deployment object based on current baremetal configuration
 	// It will be created with the cboOwnedAnnotation
-	metal3Deployment := newMetal3Deployment(info.Namespace, info.Images, &info.ProvConfig.Spec, info.PodLabelSelector)
+	metal3Deployment := newMetal3Deployment(info.Namespace, info.Images, &info.ProvConfig.Spec, info.PodLabelSelector, info.Proxy)
 
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
 
