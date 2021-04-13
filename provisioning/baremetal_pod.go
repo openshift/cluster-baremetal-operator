@@ -371,7 +371,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			},
 			{
 				Name:  ironicCertEnvVar,
-				Value: metal3TlsRootDir + "/ironic/" + tlsCertificateKey,
+				Value: metal3TlsRootDir + "/ironic/" + corev1.TLSCertKey,
 			},
 			{
 				Name:  ironicInsecureEnvVar,

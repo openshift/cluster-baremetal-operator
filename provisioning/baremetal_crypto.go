@@ -27,8 +27,8 @@ import (
 )
 
 type TlsCertificate struct {
-	privateKey  string
-	certificate string
+	privateKey  []byte
+	certificate []byte
 }
 
 const (
@@ -82,13 +82,13 @@ func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
 	}
 
 	return TlsCertificate{
-		privateKey:  string(keyBytes),
-		certificate: string(certBytes),
+		privateKey:  keyBytes,
+		certificate: certBytes,
 	}, nil
 }
 
-func IsTlsCertificateExpired(certificate string) (bool, error) {
-	certs, err := cert.ParseCertsPEM([]byte(certificate))
+func IsTlsCertificateExpired(certificate []byte) (bool, error) {
+	certs, err := cert.ParseCertsPEM(certificate)
 	if err != nil {
 		return false, err
 	}

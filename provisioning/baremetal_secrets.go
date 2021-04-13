@@ -32,8 +32,6 @@ const (
 	inspectorSecretName = "metal3-ironic-inspector-password"
 	inspectorUsername   = "inspector-user"
 	tlsSecretName       = "metal3-ironic-tls" // #nosec
-	tlsCertificateKey   = "tls.crt"
-	tlsPrivateKeyKey    = "tls.key"
 )
 
 // CreateMariadbPasswordSecret creates a Secret for Mariadb password
@@ -186,8 +184,8 @@ func updateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, 
 		changed = true
 	}
 
-	existingCert := secret.StringData[tlsCertificateKey]
-	if existingCert != "" {
+	existingCert := secret.Data[corev1.TLSCertKey]
+	if len(existingCert) > 0 {
 		expired, err := IsTlsCertificateExpired(existingCert)
 		if err != nil {
 			return errors.Wrap(err, "failed to determine expiration date of TLS certificate")
@@ -207,7 +205,7 @@ func updateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, 
 	if err != nil {
 		return errors.Wrap(err, "failed to generate new TLS certificate")
 	}
-	secret.StringData = map[string]string{tlsCertificateKey: cert.certificate, tlsPrivateKeyKey: cert.privateKey}
+	secret.Data = map[string][]byte{corev1.TLSCertKey: cert.certificate, corev1.TLSPrivateKeyKey: cert.privateKey}
 
 	_, err = client.Secrets(targetNamespace).Update(context.Background(), secret, metav1.UpdateOptions{})
 	return err
@@ -236,9 +234,9 @@ func CreateOrUpdateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace 
 			Name:      tlsSecretName,
 			Namespace: targetNamespace,
 		},
-		StringData: map[string]string{
-			tlsCertificateKey: cert.certificate,
-			tlsPrivateKeyKey:  cert.privateKey,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       cert.certificate,
+			corev1.TLSPrivateKeyKey: cert.privateKey,
 		},
 	}
 
