@@ -23,7 +23,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
@@ -31,7 +30,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
-func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error {
+func EnableValidatingWebhook(info *ProvisioningInfo) error {
 	ignore := admissionregistration.Ignore
 	noSideEffects := admissionregistration.SideEffectClassNone
 	instance := &admissionregistration.ValidatingWebhookConfiguration{

@@ -24,7 +24,9 @@ spec:
         k8s-app: cluster-baremetal-operator
     spec:
       containers:
-      - command:
+      - args:
+        - --listen=0.0.0.0:9443
+        command:
         - /usr/bin/cluster-baremetal-operator
         env:
         - name: RELEASE_VERSION

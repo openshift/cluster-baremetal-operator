@@ -7,28 +7,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
+	fakeclient "github.com/openshift/cluster-baremetal-operator/client/versioned/fake"
 )
 
-func setUpSchemeForReconciler() *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	// we need to add the openshift/api to the scheme to be able to read
-	// the infrastructure CR
-	utilruntime.Must(configv1.AddToScheme(scheme))
-	utilruntime.Must(metal3iov1alpha1.AddToScheme(scheme))
-	return scheme
-}
-
-func newFakeProvisioningReconciler(scheme *runtime.Scheme, object runtime.Object) *ProvisioningReconciler {
-	return &ProvisioningReconciler{
-		Client:   fakeclient.NewFakeClientWithScheme(scheme, object),
-		Scheme:   scheme,
-		OSClient: fakeconfigclientset.NewSimpleClientset(),
+func newFakeProvisioningReconciler(provObjs, infraObjs []runtime.Object) *ProvisioningController {
+	return &ProvisioningController{
+		client:   fakeclient.NewSimpleClientset(provObjs...),
+		osClient: fakeconfigclientset.NewSimpleClientset(infraObjs...),
 	}
 }
 
@@ -84,8 +73,8 @@ func TestIsEnabled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
-			reconciler := ProvisioningReconciler{
-				OSClient: fakeconfigclientset.NewSimpleClientset(tc.infra),
+			reconciler := ProvisioningController{
+				osClient: fakeconfigclientset.NewSimpleClientset(tc.infra),
 			}
 			enabled, err := reconciler.isEnabled()
 			if tc.expectedError && err == nil {
@@ -133,7 +122,7 @@ func TestProvisioning(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
-			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.baremetalCR)
+			reconciler := newFakeProvisioningReconciler([]runtime.Object{tc.baremetalCR}, nil)
 			baremetalconfig, err := reconciler.readProvisioningCR(context.TODO())
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)

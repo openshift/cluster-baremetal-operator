@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -69,23 +70,23 @@ func TestUpdateCOStatus(t *testing.T) {
 		},
 	}
 
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	reconciler := newFakeProvisioningReconciler(nil, []runtime.Object{&osconfigv1.Infrastructure{}})
 
 	for _, tc := range tCases {
 		co, _ := reconciler.createClusterOperator()
-		reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+		reconciler.osClient = fakeconfigclientset.NewSimpleClientset(co)
 
 		err := reconciler.updateCOStatus(tc.reason, tc.msg, tc.progressMsg)
 		if err != nil {
 			t.Error(err)
 		}
-		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+		gotCO, _ := reconciler.osClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
 		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
 		if diff != "" {
 			t.Fatal(diff)
 		}
-		_ = reconciler.OSClient.ConfigV1().ClusterOperators().Delete(context.Background(), clusterOperatorName, metav1.DeleteOptions{})
+		_ = reconciler.osClient.ConfigV1().ClusterOperators().Delete(context.Background(), clusterOperatorName, metav1.DeleteOptions{})
 	}
 }
 
@@ -221,9 +222,9 @@ func TestEnsureClusterOperator(t *testing.T) {
 			} else {
 				osClient = fakeconfigclientset.NewSimpleClientset()
 			}
-			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
-			reconciler.OSClient = osClient
-			reconciler.ReleaseVersion = "test-version"
+			reconciler := newFakeProvisioningReconciler(nil, []runtime.Object{&osconfigv1.Infrastructure{}})
+			reconciler.osClient = osClient
+			reconciler.releaseVersion = "test-version"
 
 			err := reconciler.ensureClusterOperator(&metal3iov1alpha1.Provisioning{
 				TypeMeta: metav1.TypeMeta{
@@ -237,7 +238,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			co, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+			co, err := reconciler.osClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -330,9 +331,9 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 		},
 	}
 
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	reconciler := newFakeProvisioningReconciler(nil, []runtime.Object{&osconfigv1.Infrastructure{}})
 	co, _ := reconciler.createClusterOperator()
-	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+	reconciler.osClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {
 		baremetalCR.Spec = tc.spec
@@ -342,7 +343,7 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 				t.Error(err)
 			}
 		}
-		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+		gotCO, _ := reconciler.osClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
 		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
 		if diff != "" {
@@ -380,16 +381,16 @@ func TestUpdateCOStatusAvailable(t *testing.T) {
 			},
 		},
 	}
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	reconciler := newFakeProvisioningReconciler(nil, []runtime.Object{&osconfigv1.Infrastructure{}})
 	co, _ := reconciler.createClusterOperator()
-	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+	reconciler.osClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {
 		err := reconciler.updateCOStatus(ReasonComplete, tc.msg, "")
 		if err != nil {
 			t.Error(err)
 		}
-		gotCO, _ := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+		gotCO, _ := reconciler.osClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 
 		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
 		if diff != "" {

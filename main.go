@@ -16,122 +16,132 @@ limitations under the License.
 package main
 
 import (
-	"flag"
+	"context"
+	goflag "flag"
+	"fmt"
 	"os"
+	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/spf13/pflag"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
+	utilflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/version"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	// +kubebuilder:scaffold:imports
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
+	configv1informers "github.com/openshift/client-go/config/informers/externalversions"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
+	metal3externalinformers "github.com/openshift/cluster-baremetal-operator/client/informers/externalversions"
+	metal3ioClient "github.com/openshift/cluster-baremetal-operator/client/versioned"
 	"github.com/openshift/cluster-baremetal-operator/controllers"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
+	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/events"
 )
 
 var (
-	scheme = runtime.NewScheme()
+	imagesJSONFilename string
+	metricsAddr        string
 )
 
 func init() {
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		klog.ErrorS(err, "Error adding k8s client to scheme.")
-		os.Exit(1)
-	}
-
-	if err := metal3iov1alpha1.AddToScheme(scheme); err != nil {
-		klog.ErrorS(err, "Error adding k8s client to scheme.")
-		os.Exit(1)
-	}
-
-	if err := osconfigv1.AddToScheme(scheme); err != nil {
-		klog.ErrorS(err, "Error adding k8s client to scheme.")
-		os.Exit(1)
-	}
-
-	// +kubebuilder:scaffold:scheme
-	// The following is needed to read the Infrastructure CR
-	if err := osconfigv1.Install(scheme); err != nil {
-		klog.ErrorS(err, "")
-		os.Exit(1)
-	}
+	utilruntime.Must(metal3iov1alpha1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(osconfigv1.AddToScheme(clientgoscheme.Scheme))
 }
 
-func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var imagesJSONFilename string
+func run(ctx context.Context, controllerContext *controllercmd.ControllerContext) error {
+	ns := os.Getenv("COMPONENT_NAMESPACE")
+	if ns == "" {
+		if controllerContext.ComponentConfig != nil {
+			ns = controllerContext.ComponentConfig.GetNamespace()
+		}
+		if ns == "" {
+			ns = controllers.ComponentNamespace
+		}
+	}
 
-	klog.InitFlags(nil)
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
-		"The location of the file containing the images to use for our operands.")
-	flag.Parse()
+	client, err := metal3ioClient.NewForConfig(controllerContext.KubeConfig)
+	if err != nil {
+		return err
+	}
+	metal3Informers := metal3externalinformers.NewSharedInformerFactory(client, 10*time.Minute)
 
-	ctrl.SetLogger(klogr.New())
+	kubeClient, err := kubernetes.NewForConfig(controllerContext.KubeConfig)
+	if err != nil {
+		return err
+	}
+	kubeInformersForNamespace := informers.NewSharedInformerFactoryWithOptions(kubeClient, 10*time.Minute, informers.WithNamespace(ns))
+
+	osClient, err := osclientset.NewForConfig(rest.AddUserAgent(controllerContext.KubeConfig, "config-shared-informer"))
+	if err != nil {
+		return err
+	}
+	configInformers := configv1informers.NewSharedInformerFactory(osClient, 10*time.Minute)
 
 	releaseVersion := os.Getenv("RELEASE_VERSION")
 	if releaseVersion == "" {
 		klog.Info("Environment variable RELEASE_VERSION not provided")
 	}
 
-	config := ctrl.GetConfigOrDie()
-	mgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		LeaderElection:     enableLeaderElection,
-		Port:               9443,
-		CertDir:            "/etc/cluster-baremetal-operator/tls",
-	})
-	if err != nil {
-		klog.ErrorS(err, "unable to start manager")
-		os.Exit(1)
-	}
+	enableWebhook := false // TODO provisioning.WebhookDependenciesReady(osClient)
 
-	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
-	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
+	provisioningController := controllers.NewProvisioningController(
+		client,
+		kubeClient,
+		osClient,
+		kubeInformersForNamespace,
+		metal3Informers,
+		configInformers,
+		controllerContext.EventRecorder,
+		releaseVersion,
+		imagesJSONFilename,
+		enableWebhook,
+	)
 
-	enableWebhook := provisioning.WebhookDependenciesReady(osClient)
+	metal3Informers.Start(ctx.Done())
+	kubeInformersForNamespace.Start(ctx.Done())
+	configInformers.Start(ctx.Done())
 
-	if err = (&controllers.ProvisioningReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		OSClient:       osClient,
-		KubeClient:     kubeClient,
-		ReleaseVersion: releaseVersion,
-		ImagesFilename: imagesJSONFilename,
-		WebHookEnabled: enableWebhook,
-	}).SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
-		os.Exit(1)
-	}
 	if enableWebhook {
 		info := &provisioning.ProvisioningInfo{
 			Client:        kubeClient,
 			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
 			Namespace:     controllers.ComponentNamespace,
 		}
-		if err = provisioning.EnableValidatingWebhook(info, mgr); err != nil {
+		if err = provisioning.EnableValidatingWebhook(info); err != nil {
 			klog.ErrorS(err, "problem enabling validating webhook")
 			os.Exit(1)
 		}
 	}
-	// +kubebuilder:scaffold:builder
+	go provisioningController.Run(ctx, 1)
 
-	klog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		klog.ErrorS(err, "problem running manager")
+	<-ctx.Done()
+	return nil
+}
+
+func main() {
+	pflag.CommandLine.SetNormalizeFunc(utilflag.WordSepNormalizeFunc)
+	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+
+	ccc := controllercmd.NewControllerCommandConfig("cluster-baremetal-operator", version.Get(), run)
+	ccc.DisableLeaderElection = true
+
+	cmd := ccc.NewCommand()
+	cmd.Use = "cluster-baremetal-operator"
+	cmd.Short = "Start the Cluster Baremetal Operator"
+	cmd.Flags().StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	cmd.Flags().StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
+		"The location of the file containing the images to use for our operands.")
+	if err := cmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }

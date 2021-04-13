@@ -2,7 +2,6 @@ package provisioning
 
 import (
 	"bytes"
-	"os"
 	"strings"
 	"testing"
 
@@ -14,10 +13,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	fakekube "k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	faketesting "k8s.io/client-go/testing"
 
+	osconfigv1 "github.com/openshift/api/config/v1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/events"
 )
@@ -46,18 +47,9 @@ bPnmpVQ+hguo1JNC/lbo5zmZ2mHDA+tUbUhxCYWKq8v/qWLj
 -----END CERTIFICATE-----
 `
 
-var (
-	scheme = runtime.NewScheme()
-)
-
 func init() {
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		os.Exit(1)
-	}
-
-	if err := metal3iov1alpha1.AddToScheme(scheme); err != nil {
-		os.Exit(1)
-	}
+	utilruntime.Must(metal3iov1alpha1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(osconfigv1.AddToScheme(clientgoscheme.Scheme))
 }
 
 func TestCreateMariadbPasswordSecret(t *testing.T) {
@@ -116,7 +108,7 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 				Client:        kubeClient,
 				Namespace:     testNamespace,
 				ProvConfig:    baremetalCR,
-				Scheme:        scheme,
+				Scheme:        clientgoscheme.Scheme,
 				EventRecorder: events.NewLoggingEventRecorder("tests"),
 			}
 			switch tc.name {
@@ -211,7 +203,7 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 				Client:        kubeClient,
 				Namespace:     testNamespace,
 				ProvConfig:    baremetalCR,
-				Scheme:        scheme,
+				Scheme:        clientgoscheme.Scheme,
 				EventRecorder: events.NewLoggingEventRecorder("tests"),
 			}
 

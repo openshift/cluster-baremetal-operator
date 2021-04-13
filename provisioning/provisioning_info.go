@@ -17,4 +17,5 @@ type ProvisioningInfo struct {
 	Namespace     string
 	Images        *Images
 	Proxy         *configv1.Proxy
+	Scheme        *runtime.Scheme
 }
