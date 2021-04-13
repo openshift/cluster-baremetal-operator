@@ -87,7 +87,7 @@ func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
 	}, nil
 }
 
-func IsTlsCertificateExpired(certificate []byte) (bool, error) {
+func isTlsCertificateExpired(certificate []byte) (bool, error) {
 	certs, err := cert.ParseCertsPEM(certificate)
 	if err != nil {
 		return false, err
