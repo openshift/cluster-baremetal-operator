@@ -128,14 +128,29 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 	return r.OSClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
 }
 
-// ensureClusterOperator makes sure that the CO exists
-func (r *ProvisioningReconciler) ensureClusterOperator(baremetalConfig *metal3iov1alpha1.Provisioning) error {
+// getClusterOperator returns ClusterOperator whose name is clusterOperatorName
+// and it creates if operator does not exist.
+func (r *ProvisioningReconciler) getClusterOperator() (*osconfigv1.ClusterOperator, error) {
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if k8serrors.IsNotFound(err) {
 		co, err = r.createClusterOperator()
 	}
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	return co, nil
+}
+
+// ensureClusterOperator makes sure that the CO exists
+func (r *ProvisioningReconciler) ensureClusterOperator(co *osconfigv1.ClusterOperator, baremetalConfig *metal3iov1alpha1.Provisioning) error {
+	var err error
+
+	if co == nil {
+		co, err = r.getClusterOperator()
+		if err != nil {
+			return err
+		}
 	}
 
 	// if the CO has been created with the manifest then we need to update the ownership
@@ -199,12 +214,16 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 	return err
 }
 
-func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
-	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
-	if err != nil {
-		klog.ErrorS(err, "failed to get or create ClusterOperator")
-		return fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
+func (r *ProvisioningReconciler) updateCOStatus(co *osconfigv1.ClusterOperator, newReason StatusReason, msg, progressMsg string) error {
+	var err error
+	if co == nil {
+		co, err = r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+		if err != nil {
+			klog.ErrorS(err, "failed to get or create ClusterOperator")
+			return fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
+		}
 	}
+
 	conds := defaultStatusConditions()
 	switch newReason {
 	case ReasonUnsupported:

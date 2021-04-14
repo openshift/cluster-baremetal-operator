@@ -75,7 +75,7 @@ func TestUpdateCOStatus(t *testing.T) {
 		co, _ := reconciler.createClusterOperator()
 		reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
 
-		err := reconciler.updateCOStatus(tc.reason, tc.msg, tc.progressMsg)
+		err := reconciler.updateCOStatus(co, tc.reason, tc.msg, tc.progressMsg)
 		if err != nil {
 			t.Error(err)
 		}
@@ -224,8 +224,12 @@ func TestEnsureClusterOperator(t *testing.T) {
 			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
 			reconciler.OSClient = osClient
 			reconciler.ReleaseVersion = "test-version"
+			co, err := reconciler.getClusterOperator()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			err := reconciler.ensureClusterOperator(&metal3iov1alpha1.Provisioning{
+			err = reconciler.ensureClusterOperator(co, &metal3iov1alpha1.Provisioning{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "Provisioning",
 					APIVersion: "v1",
@@ -237,7 +241,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			co, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+			co, err = reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -337,7 +341,7 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 	for _, tc := range tCases {
 		baremetalCR.Spec = tc.spec
 		if err := baremetalCR.ValidateBaremetalProvisioningConfig(); err != nil {
-			err = reconciler.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
+			err = reconciler.updateCOStatus(co, ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
 			if err != nil {
 				t.Error(err)
 			}
@@ -385,7 +389,7 @@ func TestUpdateCOStatusAvailable(t *testing.T) {
 	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {
-		err := reconciler.updateCOStatus(ReasonComplete, tc.msg, "")
+		err := reconciler.updateCOStatus(co, ReasonComplete, tc.msg, "")
 		if err != nil {
 			t.Error(err)
 		}
