@@ -56,6 +56,10 @@ const (
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
 )
 
+var podTemplateAnnotations = map[string]string{
+	"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+}
+
 var deploymentRolloutStartTime = time.Now()
 var deploymentRolloutTimeout = 5 * time.Minute
 
@@ -653,7 +657,8 @@ func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.Provision
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels: *labels,
+			Annotations: podTemplateAnnotations,
+			Labels:      *labels,
 		},
 		Spec: corev1.PodSpec{
 			Volumes:           metal3Volumes,

@@ -153,6 +153,7 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
+			Annotations: podTemplateAnnotations,
 			Labels: map[string]string{
 				"k8s-app":    metal3AppName,
 				cboLabelName: imageCacheService,
