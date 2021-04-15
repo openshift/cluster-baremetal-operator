@@ -3,8 +3,8 @@ commonAnnotations:
   include.release.openshift.io/single-node-developer: "true"
 
 resources:
-- manifests.yaml
 - service.yaml
+- apiservice.yaml
 
 configurations:
 - kustomizeconfig.yaml

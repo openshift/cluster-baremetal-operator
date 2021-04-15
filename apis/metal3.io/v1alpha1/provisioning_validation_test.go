@@ -28,8 +28,8 @@ const testBaremetalProvisioningCR = "test-provisioning-configuration"
 func TestValidateManagedProvisioningConfig(t *testing.T) {
 	baremetalCR := &Provisioning{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Provisioning",
-			APIVersion: "v1",
+			Kind:       ProvisioningKindSingular,
+			APIVersion: GroupVersion.Version,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testBaremetalProvisioningCR,
@@ -162,8 +162,8 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 	baremetalCR := &Provisioning{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Provisioning",
-			APIVersion: "v1",
+			Kind:       ProvisioningKindSingular,
+			APIVersion: GroupVersion.Version,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testBaremetalProvisioningCR,
@@ -236,8 +236,8 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 func TestValidateDisabledProvisioningConfig(t *testing.T) {
 	baremetalCR := &Provisioning{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Provisioning",
-			APIVersion: "v1",
+			Kind:       ProvisioningKindSingular,
+			APIVersion: GroupVersion.Version,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testBaremetalProvisioningCR,

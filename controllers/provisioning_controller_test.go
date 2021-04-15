@@ -101,8 +101,8 @@ func TestProvisioning(t *testing.T) {
 			name: "ValidCR",
 			baremetalCR: &metal3iov1alpha1.Provisioning{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       "Provisioning",
-					APIVersion: "v1",
+					Kind:       metal3iov1alpha1.ProvisioningKindSingular,
+					APIVersion: metal3iov1alpha1.GroupVersion.Version,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: metal3iov1alpha1.ProvisioningSingletonName,

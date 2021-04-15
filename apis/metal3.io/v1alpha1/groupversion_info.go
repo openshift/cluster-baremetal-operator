@@ -21,9 +21,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+const (
+	ProvisioningKindSingular = "Provisioning"
+	ProvisioningKindPlural   = "provisionings"
+	Metal3Group              = "metal3.io"
+	Metal3Version            = "v1alpha1"
+)
+
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "metal3.io", Version: "v1alpha1"}
+	GroupVersion = schema.GroupVersion{Group: Metal3Group, Version: Metal3Version}
 
 	// SchemeGroupVersion manual hack
 	SchemeGroupVersion = GroupVersion

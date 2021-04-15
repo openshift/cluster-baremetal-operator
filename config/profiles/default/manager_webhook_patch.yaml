@@ -10,15 +10,32 @@ spec:
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
     spec:
       containers:
-      - name: cluster-baremetal-operator
+      - name: cluster-baremetal-webhook
+        image: registry.svc.ci.openshift.org/openshift:cluster-baremetal-operator
+        command:
+        - "/usr/bin/cluster-baremetal-operator"
+        args:
+        - webhook
+        - --tls-cert-file=/etc/cluster-baremetal-operator/tls/tls.crt
+        - --tls-private-key-file=/etc/cluster-baremetal-operator/tls/tls.key
+        - --secure-port=9442
         ports:
-        - containerPort: 9443
+        - containerPort: 9442
           name: webhook-server
           protocol: TCP
         volumeMounts:
         - mountPath: /etc/cluster-baremetal-operator/tls
           name: cert
           readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9442
+            scheme: HTTPS
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
       volumes:
       - name: cert
         secret:

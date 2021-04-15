@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -777,7 +778,7 @@ func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
 
-	err = controllerutil.SetControllerReference(info.ProvConfig, metal3Deployment, info.Scheme)
+	err = controllerutil.SetControllerReference(info.ProvConfig, metal3Deployment, clientgoscheme.Scheme)
 	if err != nil {
 		err = fmt.Errorf("unable to set controllerReference on deployment: %w", err)
 		return

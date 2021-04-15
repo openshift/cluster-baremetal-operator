@@ -25,25 +25,23 @@ spec:
     spec:
       containers:
       - args:
-        - --listen=0.0.0.0:9443
+        - webhook
+        - --tls-cert-file=/etc/cluster-baremetal-operator/tls/tls.crt
+        - --tls-private-key-file=/etc/cluster-baremetal-operator/tls/tls.key
+        - --secure-port=9442
         command:
         - /usr/bin/cluster-baremetal-operator
-        env:
-        - name: RELEASE_VERSION
-          value: 0.0.1-snapshot
-        - name: COMPONENT_NAMESPACE
-          valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.namespace
-        - name: METRICS_PORT
-          value: "8080"
         image: registry.svc.ci.openshift.org/openshift:cluster-baremetal-operator
-        name: cluster-baremetal-operator
+        name: cluster-baremetal-webhook
         ports:
-        - containerPort: 9443
+        - containerPort: 9442
           name: webhook-server
           protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9442
+            scheme: HTTPS
         resources:
           requests:
             cpu: 10m
@@ -51,9 +49,6 @@ spec:
         volumeMounts:
         - mountPath: /etc/cluster-baremetal-operator/tls
           name: cert
-          readOnly: true
-        - mountPath: /etc/cluster-baremetal-operator/images
-          name: images
           readOnly: true
       - args:
         - --secure-listen-address=0.0.0.0:8443
@@ -78,6 +73,31 @@ spec:
           name: config
         - mountPath: /etc/tls/private
           name: cluster-baremetal-operator-tls
+      - args:
+        - operator
+        - --listen=0.0.0.0:9443
+        command:
+        - /usr/bin/cluster-baremetal-operator
+        env:
+        - name: RELEASE_VERSION
+          value: 0.0.1-snapshot
+        - name: COMPONENT_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: METRICS_PORT
+          value: "8080"
+        image: registry.svc.ci.openshift.org/openshift:cluster-baremetal-operator
+        name: cluster-baremetal-operator
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        volumeMounts:
+        - mountPath: /etc/cluster-baremetal-operator/images
+          name: images
+          readOnly: true
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: system-node-critical

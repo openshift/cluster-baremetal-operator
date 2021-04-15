@@ -73,7 +73,7 @@ func TestUpdateCOStatus(t *testing.T) {
 	reconciler := newFakeProvisioningReconciler(nil, []runtime.Object{&osconfigv1.Infrastructure{}})
 
 	for _, tc := range tCases {
-		co, _ := reconciler.createClusterOperator()
+		co, _ := reconciler.createClusterOperator(nil)
 		reconciler.osClient = fakeconfigclientset.NewSimpleClientset(co)
 
 		err := reconciler.updateCOStatus(tc.reason, tc.msg, tc.progressMsg)
@@ -144,8 +144,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 		expectedCO *osconfigv1.ClusterOperator
 	}{
 		{
-			name:       "No clusteroperator",
-			existingCO: nil,
+			name: "No clusteroperator",
 			expectedCO: &osconfigv1.ClusterOperator{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ClusterOperator",
@@ -161,7 +160,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 					OwnerReferences: []v1.OwnerReference{
 						{
 							APIVersion:         "metal3.io/v1alpha1",
-							Kind:               "Provisioning",
+							Kind:               metal3iov1alpha1.ProvisioningKindSingular,
 							Name:               "provisioning-configuration",
 							Controller:         pointer.BoolPtr(true),
 							BlockOwnerDeletion: pointer.BoolPtr(true),
@@ -199,8 +198,8 @@ func TestEnsureClusterOperator(t *testing.T) {
 					OwnerReferences: []v1.OwnerReference{
 						{
 							APIVersion:         "metal3.io/v1alpha1",
-							Kind:               "Provisioning",
-							Name:               "provisioning-configuration",
+							Kind:               metal3iov1alpha1.ProvisioningKindSingular,
+							Name:               metal3iov1alpha1.ProvisioningSingletonName,
 							Controller:         pointer.BoolPtr(true),
 							BlockOwnerDeletion: pointer.BoolPtr(true),
 						},
@@ -228,8 +227,8 @@ func TestEnsureClusterOperator(t *testing.T) {
 
 			err := reconciler.ensureClusterOperator(&metal3iov1alpha1.Provisioning{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       "Provisioning",
-					APIVersion: "v1",
+					Kind:       metal3iov1alpha1.ProvisioningKindSingular,
+					APIVersion: metal3iov1alpha1.GroupVersion.Version,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: metal3iov1alpha1.ProvisioningSingletonName,
@@ -298,8 +297,8 @@ func getStatusConditionsDiff(oldConditions []configv1.ClusterOperatorStatusCondi
 func TestUpdateCOStatusDegraded(t *testing.T) {
 	baremetalCR := &metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Provisioning",
-			APIVersion: "v1",
+			Kind:       metal3iov1alpha1.ProvisioningKindSingular,
+			APIVersion: metal3iov1alpha1.GroupVersion.Version,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: metal3iov1alpha1.ProvisioningSingletonName,
@@ -332,7 +331,7 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 	}
 
 	reconciler := newFakeProvisioningReconciler(nil, []runtime.Object{&osconfigv1.Infrastructure{}})
-	co, _ := reconciler.createClusterOperator()
+	co, _ := reconciler.createClusterOperator(baremetalCR)
 	reconciler.osClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {
@@ -382,7 +381,7 @@ func TestUpdateCOStatusAvailable(t *testing.T) {
 		},
 	}
 	reconciler := newFakeProvisioningReconciler(nil, []runtime.Object{&osconfigv1.Infrastructure{}})
-	co, _ := reconciler.createClusterOperator()
+	co, _ := reconciler.createClusterOperator(nil)
 	reconciler.osClient = fakeconfigclientset.NewSimpleClientset(co)
 
 	for _, tc := range tCases {

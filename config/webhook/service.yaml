@@ -7,8 +7,9 @@ metadata:
     k8s-app: cluster-baremetal-operator
 spec:
   ports:
-    - port: 443
-      targetPort: 9443
+  - name: https
+    port: 443
+    targetPort: webhook-server
   selector:
     k8s-app: cluster-baremetal-operator
   sessionAffinity: None

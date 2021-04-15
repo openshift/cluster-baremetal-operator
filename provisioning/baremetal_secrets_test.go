@@ -55,8 +55,8 @@ func init() {
 func TestCreateMariadbPasswordSecret(t *testing.T) {
 	baremetalCR := &metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Provisioning",
-			APIVersion: "v1",
+			Kind:       metal3iov1alpha1.ProvisioningKindSingular,
+			APIVersion: metal3iov1alpha1.GroupVersion.Version,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test",
@@ -174,8 +174,8 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 func TestCreateAndUpdateTlsSecret(t *testing.T) {
 	baremetalCR := &metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Provisioning",
-			APIVersion: "v1",
+			Kind:       metal3iov1alpha1.ProvisioningKindSingular,
+			APIVersion: metal3iov1alpha1.GroupVersion.Version,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test",

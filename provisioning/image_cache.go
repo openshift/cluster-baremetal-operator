@@ -15,6 +15,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -236,7 +237,7 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 	}
 	expectedGeneration := resourcemerge.ExpectedDaemonSetGeneration(imageCacheDaemonSet, info.ProvConfig.Status.Generations)
 
-	err = controllerutil.SetControllerReference(info.ProvConfig, imageCacheDaemonSet, info.Scheme)
+	err = controllerutil.SetControllerReference(info.ProvConfig, imageCacheDaemonSet, clientgoscheme.Scheme)
 	if err != nil {
 		err = fmt.Errorf("unable to set controllerReference on daemonset: %w", err)
 		return

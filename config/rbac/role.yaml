@@ -18,8 +18,28 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - secrets
   - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - admission.metal3.io
+  resources:
+  - provisionings
   verbs:
   - create
   - delete
@@ -34,6 +54,7 @@ rules:
   - validatingwebhookconfigurations
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
@@ -44,6 +65,18 @@ rules:
   resources:
   - daemonsets
   - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
   verbs:
   - create
   - delete
@@ -87,6 +120,25 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - flowcontrol.apiserver.k8s.io
+  resources:
+  - flowschemas
+  - prioritylevelconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - flowcontrol.apiserver.k8s.io
+  resources:
+  - flowschemas/status
+  verbs:
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - metal3.io

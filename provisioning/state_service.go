@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -43,7 +44,7 @@ func newMetal3StateService(targetNamespace string) *corev1.Service {
 func EnsureMetal3StateService(info *ProvisioningInfo) (updated bool, err error) {
 	metal3StateService := newMetal3StateService(info.Namespace)
 
-	err = controllerutil.SetControllerReference(info.ProvConfig, metal3StateService, info.Scheme)
+	err = controllerutil.SetControllerReference(info.ProvConfig, metal3StateService, clientgoscheme.Scheme)
 	if err != nil {
 		err = fmt.Errorf("unable to set controllerReference on service: %w", err)
 		return

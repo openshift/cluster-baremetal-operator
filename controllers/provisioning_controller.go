@@ -18,7 +18,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/stew/slice"
@@ -28,7 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -58,10 +56,13 @@ type ProvisioningController struct {
 
 	releaseVersion string
 	imagesFilename string
-	webHookEnabled bool
+	preStartDone   bool
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
+
+// required by library-go to determine the namespace
+// +kubebuilder:rbac:groups="",resources=pods,verbs=watch;list;get
 
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
@@ -80,7 +81,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
-// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;update;patch;create
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;update;patch;create;delete
 
 func (r *ProvisioningController) isEnabled() (bool, error) {
 	ctx := context.Background()
@@ -110,13 +111,16 @@ func (r *ProvisioningController) readProvisioningCR(ctx context.Context) (*metal
 }
 
 // sync updates the cluster settings when the Provisioning
-// resource changes
+// resource or owned resources change.
 func (r *ProvisioningController) sync(ctx context.Context, controllerContext factory.SyncContext) error {
-	// Make sure ClusterOperator exists
-	err := r.ensureClusterOperator(nil)
-	if err != nil {
-		return err
+	if !r.preStartDone {
+		err := r.ensureClusterOperator(nil)
+		if err != nil {
+			return errors.Wrap(err, "unable to ensure the baremetal ClusterOperator")
+		}
+		r.preStartDone = true
 	}
+	klog.InfoS("starting", "cbo", "sync()")
 
 	enabled, err := r.isEnabled()
 	if err != nil {
@@ -125,6 +129,7 @@ func (r *ProvisioningController) sync(ctx context.Context, controllerContext fac
 	if !enabled {
 		// set ClusterOperator status to disabled=true, available=true
 		// We're disabled; don't requeue
+		klog.InfoS("disabled", "cbo", "sync()")
 		return errors.Wrapf(
 			r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", ""),
 			"unable to put %q ClusterOperator in Disabled state", clusterOperatorName)
@@ -132,7 +137,6 @@ func (r *ProvisioningController) sync(ctx context.Context, controllerContext fac
 
 	baremetalConfig, err := r.readProvisioningCR(ctx)
 	if err != nil {
-		// Error reading the object - requeue the request.
 		return err
 	}
 	if baremetalConfig == nil {
@@ -140,15 +144,6 @@ func (r *ProvisioningController) sync(ctx context.Context, controllerContext fac
 		// Cannot proceed wtih metal3 deployment.
 		klog.Info("Provisioning CR not found")
 		return nil
-	}
-
-	if !r.webHookEnabled {
-		if provisioning.WebhookDependenciesReady(r.osClient) &&
-			slice.Contains(baremetalConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
-			klog.Info("restarting to enable the webhook")
-			os.Exit(1)
-		}
-		klog.Info("Webhook Dependencies not Ready checking later")
 	}
 
 	// Make sure ClusterOperator's ownership is updated
@@ -163,7 +158,7 @@ func (r *ProvisioningController) sync(ctx context.Context, controllerContext fac
 		// Images config map is not valid
 		// Provisioning configuration is not valid.
 		// Requeue request.
-		klog.ErrorS(err, "invalid contents in images Config Map")
+		klog.Error(err, "invalid contents in images Config Map")
 		co_err := r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "invalid contents in images Config Map")
 		if co_err != nil {
 			return fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, co_err)
@@ -207,19 +202,14 @@ func (r *ProvisioningController) sync(ctx context.Context, controllerContext fac
 		}
 	}
 
-	if !r.webHookEnabled {
-		// Check if provisioning configuration is valid
-		if err := baremetalConfig.ValidateBaremetalProvisioningConfig(); err != nil {
-			// Provisioning configuration is not valid.
-			// Requeue request.
-			klog.Error(err, "invalid config in Provisioning CR")
-			err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
-			if err != nil {
-				return fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
-			}
-			// Temporarily not requeuing request
-			return nil
+	// Check if provisioning configuration is valid
+	if err := baremetalConfig.ValidateBaremetalProvisioningConfig(); err != nil {
+		klog.Error(err, "invalid config in Provisioning CR")
+		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
+		if err != nil {
+			return fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
 		}
+		return nil
 	}
 
 	for _, ensureResource := range []ensureFunc{
@@ -280,10 +270,11 @@ func (r *ProvisioningController) sync(ctx context.Context, controllerContext fac
 	if deploymentState == appsv1.DeploymentAvailable && daemonSetState == provisioning.DaemonSetAvailable {
 		err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
 		if err != nil {
-			return fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
+			return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
 		}
 	}
 
+	klog.InfoS("complete", "cbo", "sync()")
 	return nil
 }
 
@@ -292,15 +283,14 @@ func (r *ProvisioningController) provisioningInfo(provConfig *metal3iov1alpha1.P
 		Client:        r.kubeClient,
 		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
 		ProvConfig:    provConfig,
-		Scheme:        clientgoscheme.Scheme,
 		Namespace:     ComponentNamespace,
 		Images:        images,
 		Proxy:         proxy,
 	}
 }
 
-//Ensure Finalizer is present on the Provisioning CR when not deleted and
-//delete resources and remove Finalizer when it is
+// Ensure Finalizer is present on the Provisioning CR when not deleted and
+// delete resources and remove Finalizer when it is
 func (r *ProvisioningController) checkForCRDeletion(ctx context.Context, info *provisioning.ProvisioningInfo) (bool, error) {
 	// examine DeletionTimestamp to determine if object is under deletion
 	if info.ProvConfig.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -334,7 +324,7 @@ func (r *ProvisioningController) checkForCRDeletion(ctx context.Context, info *p
 	}
 }
 
-//Delete Secrets and the Metal3 Deployment objects
+// Delete Secrets and the Metal3 Deployment objects
 func (r *ProvisioningController) deleteMetal3Resources(info *provisioning.ProvisioningInfo) error {
 	if err := provisioning.DeleteAllSecrets(info); err != nil {
 		return errors.Wrap(err, "failed to delete one or more metal3 secrets")
@@ -351,71 +341,28 @@ func (r *ProvisioningController) deleteMetal3Resources(info *provisioning.Provis
 	return nil
 }
 
-func (r *ProvisioningController) preStart(ctx context.Context, syncContext factory.SyncContext) error {
-	err := r.ensureClusterOperator(nil)
-	if err != nil {
-		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
-	}
-
-	// Check the Platform Type to determine the state of the CO
-	enabled, err := r.isEnabled()
-	if err != nil {
-		return errors.Wrap(err, "could not determine whether to run")
-	}
-	if !enabled {
-		//Set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
-		if err != nil {
-			return fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %w", clusterOperatorName, err)
-		}
-		return nil
-	}
-
-	// If Platform is BareMetal, we could still be missing the Provisioning CR
-	baremetalConfig, err := r.readProvisioningCR(ctx)
-	if err != nil || baremetalConfig == nil {
-		err = r.updateCOStatus(ReasonComplete, "Provisioning CR not found on BareMetal Platform; marking operator as available", "")
-		if err != nil {
-			return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
-		}
-	}
-
-	return nil
-}
-
 // this fakes out a function called HasSyned, so return true when we don't
 // want to visit an object.
 func filterOutNotOwned(obj interface{}) bool {
 	object := obj.(metav1.Object)
 	for _, owner := range object.GetOwnerReferences() {
-		if owner.APIVersion == metal3iov1alpha1.GroupVersion.Version &&
-			owner.Kind == "Provisioning" &&
-			owner.Name == metal3iov1alpha1.ProvisioningSingletonName {
+		if referProvioningObject(owner) {
 			return false
 		}
 	}
 	return true
 }
 
-func filterOutClusterOperators(obj interface{}) bool {
-	object := obj.(metav1.Object)
-	if object.GetName() == "baremetal" || object.GetName() == "service-ca" || object.GetName() == "authentication" {
-		return false
-	}
-	return true
-}
-
 func NewProvisioningController(
 	client metal3ioClient.Interface,
-	kubeClient kubernetes.Interface,
-	osClient osclientset.Interface,
-	kubeInformersForNamespace informers.SharedInformerFactory,
 	metal3Informers metal3externalinformers.SharedInformerFactory,
+	kubeClient kubernetes.Interface,
+	kubeInformersForNamespace informers.SharedInformerFactory,
+	osClient osclientset.Interface,
 	configInformer configinformers.SharedInformerFactory,
 	eventRecorder events.Recorder,
 	releaseVersion string,
 	imagesFilename string,
-	webHookEnabled bool,
 ) factory.Controller {
 	c := &ProvisioningController{
 		client:         client,
@@ -423,10 +370,10 @@ func NewProvisioningController(
 		osClient:       osClient,
 		releaseVersion: releaseVersion,
 		imagesFilename: imagesFilename,
-		webHookEnabled: webHookEnabled,
+		preStartDone:   false,
 	}
 
-	return factory.New().WithPostStartHooks(c.preStart).WithInformers(
+	return factory.New().WithInformers(
 		metal3Informers.Metal3().V1alpha1().Provisionings().Informer(),
 		configInformer.Config().V1().Proxies().Informer(),
 	).WithFilteredEventsInformers(filterOutNotOwned,
@@ -434,7 +381,5 @@ func NewProvisioningController(
 		kubeInformersForNamespace.Core().V1().Services().Informer(),
 		kubeInformersForNamespace.Apps().V1().Deployments().Informer(),
 		kubeInformersForNamespace.Apps().V1().DaemonSets().Informer(),
-	).WithFilteredEventsInformers(filterOutClusterOperators,
-		configInformer.Config().V1().ClusterOperators().Informer(),
 	).WithSync(c.sync).ToController("ProvisioningController", eventRecorder.WithComponentSuffix(ComponentName))
 }

@@ -5,12 +5,12 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -109,8 +109,8 @@ func operandVersions(version string) []osconfigv1.OperandVersion {
 	return operandVersions
 }
 
-// createClusterOperator creates the ClusterOperator and updates its status.
-func (r *ProvisioningController) createClusterOperator() (*osconfigv1.ClusterOperator, error) {
+// createClusterOperator creates the ClusterOperator
+func (r *ProvisioningController) createClusterOperator(baremetalConfig *metal3iov1alpha1.Provisioning) (*osconfigv1.ClusterOperator, error) {
 	b, err := Asset("../manifests/0000_31_cluster-baremetal-operator_07_clusteroperator.cr.yaml")
 	if err != nil {
 		return nil, err
@@ -126,29 +126,53 @@ func (r *ProvisioningController) createClusterOperator() (*osconfigv1.ClusterOpe
 	if !ok {
 		return nil, fmt.Errorf("could not convert deserialized asset into ClusterOperoator")
 	}
-
+	if baremetalConfig != nil {
+		err = controllerutil.SetControllerReference(baremetalConfig, defaultCO, clientgoscheme.Scheme)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return r.osClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
+}
+
+func referProvioningObject(a metav1.OwnerReference) bool {
+	aGV, err := schema.ParseGroupVersion(a.APIVersion)
+	if err != nil {
+		return false
+	}
+
+	return aGV.Group == metal3iov1alpha1.GroupVersion.Group &&
+		a.Kind == metal3iov1alpha1.ProvisioningKindSingular &&
+		a.Name == metal3iov1alpha1.ProvisioningSingletonName
 }
 
 // ensureClusterOperator makes sure that the CO exists
 func (r *ProvisioningController) ensureClusterOperator(baremetalConfig *metal3iov1alpha1.Provisioning) error {
 	co, err := r.osClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if k8serrors.IsNotFound(err) {
-		co, err = r.createClusterOperator()
+		co, err = r.createClusterOperator(baremetalConfig)
 	}
 	if err != nil {
 		return err
 	}
 
 	// if the CO has been created with the manifest then we need to update the ownership
+	needsOwnerUpdate := baremetalConfig != nil
 	if baremetalConfig != nil {
+		existingOwner := metav1.GetControllerOf(co)
+		if existingOwner != nil && referProvioningObject(*existingOwner) {
+			// don't update if it is already set
+			needsOwnerUpdate = false
+		}
+	}
+	if needsOwnerUpdate {
 		err = controllerutil.SetControllerReference(baremetalConfig, co, clientgoscheme.Scheme)
-		if err != nil && !errors.Is(err, &controllerutil.AlreadyOwnedError{}) {
+		if err != nil {
 			return err
 		}
 		co, err = r.osClient.ConfigV1().ClusterOperators().Update(context.Background(), co, metav1.UpdateOptions{})
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed to update SetControllerReference on baremetal clusteroperator %w", err)
 		}
 	}
 
@@ -168,8 +192,11 @@ func (r *ProvisioningController) ensureClusterOperator(baremetalConfig *metal3io
 
 	if needsUpdate {
 		_, err = r.osClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("Failed to updateStatus on baremetal clusteroperator %w", err)
+		}
 	}
-	return err
+	return nil
 }
 
 // setStatusCondition initalizes and returns a ClusterOperatorStatusCondition

@@ -19,11 +19,14 @@ import (
 	"context"
 	goflag "flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -42,9 +45,10 @@ import (
 	metal3externalinformers "github.com/openshift/cluster-baremetal-operator/client/informers/externalversions"
 	metal3ioClient "github.com/openshift/cluster-baremetal-operator/client/versioned"
 	"github.com/openshift/cluster-baremetal-operator/controllers"
-	"github.com/openshift/cluster-baremetal-operator/provisioning"
+	"github.com/openshift/cluster-baremetal-operator/webhooks"
+	"github.com/openshift/generic-admission-server/pkg/apiserver"
+	"github.com/openshift/generic-admission-server/pkg/cmd/server"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
-	"github.com/openshift/library-go/pkg/operator/events"
 )
 
 var (
@@ -57,7 +61,7 @@ func init() {
 	utilruntime.Must(osconfigv1.AddToScheme(clientgoscheme.Scheme))
 }
 
-func run(ctx context.Context, controllerContext *controllercmd.ControllerContext) error {
+func runOperator(ctx context.Context, controllerContext *controllercmd.ControllerContext) error {
 	ns := os.Getenv("COMPONENT_NAMESPACE")
 	if ns == "" {
 		if controllerContext.ComponentConfig != nil {
@@ -91,56 +95,89 @@ func run(ctx context.Context, controllerContext *controllercmd.ControllerContext
 		klog.Info("Environment variable RELEASE_VERSION not provided")
 	}
 
-	enableWebhook := false // TODO provisioning.WebhookDependenciesReady(osClient)
-
 	provisioningController := controllers.NewProvisioningController(
-		client,
-		kubeClient,
-		osClient,
-		kubeInformersForNamespace,
-		metal3Informers,
-		configInformers,
+		client, metal3Informers,
+		kubeClient, kubeInformersForNamespace,
+		osClient, configInformers,
 		controllerContext.EventRecorder,
 		releaseVersion,
 		imagesJSONFilename,
-		enableWebhook,
+	)
+
+	webhookController := controllers.NewWebhookController(
+		ns,
+		osClient, configInformers,
+		kubeClient, kubeInformersForNamespace,
+		controllerContext.EventRecorder,
 	)
 
 	metal3Informers.Start(ctx.Done())
 	kubeInformersForNamespace.Start(ctx.Done())
 	configInformers.Start(ctx.Done())
 
-	if enableWebhook {
-		info := &provisioning.ProvisioningInfo{
-			Client:        kubeClient,
-			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
-			Namespace:     controllers.ComponentNamespace,
-		}
-		if err = provisioning.EnableValidatingWebhook(info); err != nil {
-			klog.ErrorS(err, "problem enabling validating webhook")
-			os.Exit(1)
-		}
-	}
 	go provisioningController.Run(ctx, 1)
+	go webhookController.Run(ctx, 1)
 
 	<-ctx.Done()
 	return nil
+}
+
+func newCommandStartAdmissionServer(out, errOut io.Writer, admissionHooks ...apiserver.AdmissionHook) *cobra.Command {
+	o := server.NewAdmissionServerOptions(out, errOut, admissionHooks...)
+
+	cmd := &cobra.Command{
+		Use:   "webhook",
+		Short: "Start the Provisioning validation webhook server",
+		RunE: func(c *cobra.Command, args []string) error {
+			stopCh := genericapiserver.SetupSignalHandler()
+			if err := o.Complete(); err != nil {
+				return err
+			}
+			if err := o.Validate(args); err != nil {
+				return err
+			}
+			if err := o.RunAdmissionServer(stopCh); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
+	cmd.Long = cmd.Short
+
+	flags := cmd.Flags()
+	o.RecommendedOptions.AddFlags(flags)
+
+	return cmd
 }
 
 func main() {
 	pflag.CommandLine.SetNormalizeFunc(utilflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 
-	ccc := controllercmd.NewControllerCommandConfig("cluster-baremetal-operator", version.Get(), run)
+	rootCmd := &cobra.Command{
+		Use:   controllers.ComponentName,
+		Short: "OpenShift Cluster Baremetal Operator",
+		Run: func(cmd *cobra.Command, args []string) {
+			_ = cmd.Help()
+			os.Exit(1)
+		},
+	}
+
+	ccc := controllercmd.NewControllerCommandConfig("cluster-baremetal-operator", version.Get(), runOperator)
 	ccc.DisableLeaderElection = true
 
-	cmd := ccc.NewCommand()
-	cmd.Use = "cluster-baremetal-operator"
-	cmd.Short = "Start the Cluster Baremetal Operator"
-	cmd.Flags().StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	cmd.Flags().StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
+	opCmd := ccc.NewCommand()
+	opCmd.Use = "operator"
+	opCmd.Short = "Start the Cluster Baremetal Operator"
+	opCmd.Flags().StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	opCmd.Flags().StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
 		"The location of the file containing the images to use for our operands.")
-	if err := cmd.Execute(); err != nil {
+
+	rootCmd.AddCommand(opCmd)
+
+	rootCmd.AddCommand(newCommandStartAdmissionServer(os.Stdout, os.Stderr, &webhooks.ProvisioningValidatingWebHook{}))
+
+	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}

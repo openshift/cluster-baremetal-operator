@@ -35,9 +35,12 @@ unit: test
 cluster-baremetal-operator: generate lint
 	go build -o bin/cluster-baremetal-operator main.go
 
-# Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate lint manifests
-	go run ./main.go -images-json $(IMAGES_JSON)
+# Run against the configured Kubernetes cluster in $KUBECONFIG
+run:
+	go run ./main.go operator --images-json $(IMAGES_JSON) --listen=0.0.0.0:9443 --kubeconfig=${KUBECONFIG}
+
+run-webhook:
+	go run ./main.go webhook --cert-dir=/etc/cluster-baremetal-operator/tls --secure-port=9442 --kubeconfig=${KUBECONFIG}
 
 # Install CRDs into a cluster
 install: manifests
@@ -56,7 +59,9 @@ deploy: generate
 RBAC_LIST = rbac.authorization.k8s.io_v1_role_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_clusterrole_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_rolebinding_cluster-baremetal-operator.yaml \
-	rbac.authorization.k8s.io_v1_clusterrolebinding_cluster-baremetal-operator.yaml
+    rbac.authorization.k8s.io_v1_rolebinding_cluster-baremetal-operator:extension-apiserver-authentication-reader.yaml \
+	rbac.authorization.k8s.io_v1_clusterrolebinding_cluster-baremetal-operator.yaml \
+    rbac.authorization.k8s.io_v1_clusterrolebinding_cluster-baremetal-operator:auth-delegator.yaml
 
 PROMETHEUS_RBAC_LIST = rbac.authorization.k8s.io_v1_rolebinding_prometheus-k8s-cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_role_prometheus-k8s-cluster-baremetal-operator.yaml
@@ -78,8 +83,7 @@ manifests: generate
 
 	# manifests needed for the webhook
 	mv $(TMP_DIR)/v1_service_cluster-baremetal-webhook-service.yaml manifests/0000_31_cluster-baremetal-operator_03_webhookservice.yaml
-	# This is created in code once the we are in a "final" state
-	# mv $(TMP_DIR)/admissionregistration.k8s.io_v1beta1_validatingwebhookconfiguration_cluster-baremetal-validating-webhook-configuration.yaml manifests/0000_31_cluster-baremetal-operator_04_validatingwebhook.yaml
+	mv $(TMP_DIR)/apiregistration.k8s.io_v1beta1_apiservice_v1alpha1.admission.metal3.io.yaml manifests/0000_31_cluster-baremetal-operator_03_webhookapiservice.yaml
 
 	# cluster-baremetal-operator rbacs
 	rm -f manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml

@@ -27,6 +27,7 @@ spec:
         command:
         - "/usr/bin/cluster-baremetal-operator"
         args:
+        - operator
         - "--listen=0.0.0.0:9443"
         env:
         - name: RELEASE_VERSION
