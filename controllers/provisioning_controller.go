@@ -37,7 +37,7 @@ import (
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
 )

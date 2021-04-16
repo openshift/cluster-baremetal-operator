@@ -23,17 +23,13 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/errors"
-	ctrl "sigs.k8s.io/controller-runtime"
-)
-
-var (
-	log = ctrl.Log.WithName("provisioning_validation")
+	"k8s.io/klog/v2"
 )
 
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
 func (prov *Provisioning) ValidateBaremetalProvisioningConfig() error {
 	provisioningNetworkMode := prov.getProvisioningNetworkMode()
-	log.V(1).Info("provisioning network", "mode", provisioningNetworkMode)
+	klog.V(1).Info("provisioning network", "mode", provisioningNetworkMode)
 
 	/*
 	   Managed:
@@ -102,10 +98,10 @@ func (prov *Provisioning) getProvisioningNetworkMode() ProvisioningNetwork {
 		// Set it to the default Managed mode
 		provisioningNetworkMode = ProvisioningNetworkManaged
 		if prov.Spec.ProvisioningDHCPExternal {
-			log.V(1).Info("provisioningDHCPExternal is deprecated and will be removed in the next release. Use provisioningNetwork instead.")
+			klog.V(1).Info("provisioningDHCPExternal is deprecated and will be removed in the next release. Use provisioningNetwork instead.")
 			provisioningNetworkMode = ProvisioningNetworkUnmanaged
 		} else {
-			log.V(1).Info("provisioningNetwork and provisioningDHCPExternal not set, defaulting to managed network")
+			klog.V(1).Info("provisioningNetwork and provisioningDHCPExternal not set, defaulting to managed network")
 		}
 	}
 	return provisioningNetworkMode
