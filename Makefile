@@ -7,9 +7,12 @@ endif
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
-CONTROLLER_GEN ?= go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go
+CONTROLLER_GEN ?= go run sigs.k8s.io/controller-tools/cmd/controller-gen
 CRD_OPTIONS="crd:trivialVersions=true,crdVersions=v1"
-GOLANGCI_LINT ?= GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) go run vendor/github.com/golangci/golangci-lint/cmd/golangci-lint/main.go
+GOLANGCI_LINT ?= GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) go run github.com/golangci/golangci-lint/cmd/golangci-lint
+CLIENT_GEN ?= go run k8s.io/code-generator/cmd/client-gen
+INFORMER_GEN ?= go run k8s.io/code-generator/cmd/informer-gen
+LISTER_GEN ?= go run k8s.io/code-generator/cmd/lister-gen
 KUSTOMIZE ?= go run sigs.k8s.io/kustomize/kustomize/v3
 MANIFEST_PROFILE ?= default
 TMP_DIR := $(shell mktemp -d -t manifests-$(date +%Y-%m-%d-%H-%M-%S)-XXXXXXXXXX)
@@ -111,8 +114,17 @@ vet: lint
 generate:
 	go generate -x ./...
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=cluster-baremetal-operator webhook paths=./... output:crd:artifacts:config=config/crd/bases
-	sed -i '/^    controller-gen.kubebuilder.io\/version: (devel)/d' config/crd/bases/*
+	sed -i '/^    controller-gen.kubebuilder.io\/version: .*/d' config/crd/bases/*
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
+	$(CLIENT_GEN) --clientset-name versioned --input-base github.com/openshift/cluster-baremetal-operator/apis/ --input metal3.io/v1alpha1 --output-package github.com/openshift/cluster-baremetal-operator/client --go-header-file ./hack/boilerplate.go.txt
+	$(LISTER_GEN)  --input-dirs github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1 \
+		--output-package github.com/openshift/cluster-baremetal-operator/client/listers \
+		--go-header-file ./hack/boilerplate.go.txt
+	$(INFORMER_GEN) --input-dirs github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1 \
+		--versioned-clientset-package github.com/openshift/cluster-baremetal-operator/client/versioned \
+		--listers-package github.com/openshift/cluster-baremetal-operator/client/listers \
+		--output-package github.com/openshift/cluster-baremetal-operator/client/informers  \
+		--go-header-file ./hack/boilerplate.go.txt
 	$(GOLANGCI_LINT) run --fix
 
 # Build the docker image

@@ -27,7 +27,6 @@ import (
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
@@ -82,7 +81,7 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error 
 		return err
 	}
 
-	return (&metal3iov1alpha1.Provisioning{}).SetupWebhookWithManager(mgr)
+	return nil //(&metal3iov1alpha1.Provisioning{}).SetupWebhookWithManager(mgr)
 }
 
 func WebhookDependenciesReady(client osclientset.Interface) bool {

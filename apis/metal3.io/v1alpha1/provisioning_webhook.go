@@ -19,29 +19,25 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"k8s.io/klog/v2"
 )
 
-// log is for logging in this package.
-var provisioninglog = logf.Log.WithName("provisioning-resource")
-
+/* TODO
 func (r *Provisioning) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()
 }
-
+*/
 // see https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html
 // +kubebuilder:webhook:verbs=create;update,path=/validate-metal3-io-v1alpha1-provisioning,mutating=false,failurePolicy=ignore,groups=metal3.io,resources=provisionings,versions=v1alpha1,name=vprovisioning.kb.io
 
 // https://golangbyexample.com/go-check-if-type-implements-interface/
-var _ webhook.Validator = &Provisioning{}
+//var _ webhook.Validator = &Provisioning{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *Provisioning) ValidateCreate() error {
-	provisioninglog.Info("validate create", "name", r.Name)
+	klog.Info("validate create", "name", r.Name)
 
 	if r.Name != ProvisioningSingletonName {
 		return fmt.Errorf("Provisioning object is a singleton and must be named \"%s\"", ProvisioningSingletonName)
@@ -52,12 +48,12 @@ func (r *Provisioning) ValidateCreate() error {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *Provisioning) ValidateUpdate(old runtime.Object) error {
-	provisioninglog.Info("validate update", "name", r.Name)
+	klog.Info("validate update", "name", r.Name)
 	return r.ValidateBaremetalProvisioningConfig()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *Provisioning) ValidateDelete() error {
-	provisioninglog.Info("validate delete", "name", r.Name)
+	klog.Info("validate delete", "name", r.Name)
 	return nil
 }

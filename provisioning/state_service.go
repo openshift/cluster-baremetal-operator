@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -58,5 +58,9 @@ func EnsureMetal3StateService(info *ProvisioningInfo) (updated bool, err error) 
 }
 
 func DeleteMetal3StateService(info *ProvisioningInfo) error {
-	return client.IgnoreNotFound(info.Client.CoreV1().Services(info.Namespace).Delete(context.Background(), stateService, metav1.DeleteOptions{}))
+	err := info.Client.CoreV1().Services(info.Namespace).Delete(context.Background(), stateService, metav1.DeleteOptions{})
+	if err != nil && apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
 }

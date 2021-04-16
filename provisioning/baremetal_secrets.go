@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -162,7 +161,8 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 func DeleteAllSecrets(info *ProvisioningInfo) error {
 	var secretErrors []error
 	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName} {
-		if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{})); err != nil {
+		err := info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
 			secretErrors = append(secretErrors, err)
 		}
 	}

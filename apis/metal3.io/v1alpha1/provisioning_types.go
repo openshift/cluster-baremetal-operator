@@ -12,7 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package v1alpha1
 
 import (
@@ -117,8 +116,12 @@ type ProvisioningStatus struct {
 	operatorv1.OperatorStatus `json:",inline"`
 }
 
-// +kubebuilder:resource:path=provisionings,scope=Cluster
+// +kubebuilder:object:root=true
+// +genclient
+// +genclient:nonNamespaced
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Provisioning contains configuration used by the Provisioning
 // service (Ironic) to provision baremetal hosts.
@@ -128,7 +131,6 @@ type ProvisioningStatus struct {
 // This CR is a singleton, created by the installer and currently only
 // consumed by the cluster-baremetal-operator to bring up and update
 // containers in a metal3 cluster.
-// +kubebuilder:object:root=true
 type Provisioning struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -140,12 +142,9 @@ type Provisioning struct {
 // +kubebuilder:object:root=true
 
 // ProvisioningList contains a list of Provisioning
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ProvisioningList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Provisioning `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&Provisioning{}, &ProvisioningList{})
 }
