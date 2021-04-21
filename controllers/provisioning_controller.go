@@ -35,6 +35,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
@@ -382,6 +385,14 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	return nil
 }
 
+func mapObjectToCR(o client.Object) []reconcile.Request {
+	return []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{Name: metal3iov1alpha1.ProvisioningSingletonName, Namespace: ""},
+		},
+	}
+}
+
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	err := r.ensureClusterOperator(nil)
@@ -420,6 +431,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&osconfigv1.ClusterOperator{}).
-		Owns(&osconfigv1.Proxy{}).
+		Watches(&source.Kind{Type: &osconfigv1.Proxy{}}, handler.EnqueueRequestsFromMapFunc(mapObjectToCR)).
 		Complete(r)
 }
