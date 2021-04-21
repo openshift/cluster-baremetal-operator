@@ -87,7 +87,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 	images := Images{
 		BaremetalOperator:   expectedBaremetalOperator,
 		Ironic:              expectedIronic,
-		IronicInspector:     expectedIronicInspector,
 		IpaDownloader:       expectedIronicIpaDownloader,
 		MachineOsDownloader: expectedMachineOsDownloader,
 		StaticIpManager:     expectedIronicStaticIpManager,
@@ -158,7 +157,6 @@ func TestNewMetal3Containers(t *testing.T) {
 	images := Images{
 		BaremetalOperator:   expectedBaremetalOperator,
 		Ironic:              expectedIronic,
-		IronicInspector:     expectedIronicInspector,
 		IpaDownloader:       expectedIronicIpaDownloader,
 		MachineOsDownloader: expectedMachineOsDownloader,
 		StaticIpManager:     expectedIronicStaticIpManager,
@@ -226,7 +224,6 @@ func TestProxyAndCAInjection(t *testing.T) {
 		Images: &Images{
 			BaremetalOperator:   expectedBaremetalOperator,
 			Ironic:              expectedIronic,
-			IronicInspector:     expectedIronicInspector,
 			IpaDownloader:       expectedIronicIpaDownloader,
 			MachineOsDownloader: expectedMachineOsDownloader,
 			StaticIpManager:     expectedIronicStaticIpManager,

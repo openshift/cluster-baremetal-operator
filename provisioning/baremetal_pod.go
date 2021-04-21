@@ -678,11 +678,12 @@ func createContainerIronicDeployRamdiskLogs(images *Images) corev1.Container {
 func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-ironic-inspector",
-		Image:           images.IronicInspector,
+		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
+		Command: []string{"/bin/runironic-inspector"},
 		VolumeMounts: []corev1.VolumeMount{
 			sharedVolumeMount,
 			ironicCredentialsMount,
@@ -721,7 +722,7 @@ func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alph
 func createContainerIronicInspectorRamdiskLogs(images *Images) corev1.Container {
 	container := corev1.Container{
 		Name:            "ironic-inspector-ramdisk-logs",
-		Image:           images.IronicInspector,
+		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
