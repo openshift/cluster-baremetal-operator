@@ -23,6 +23,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
@@ -726,31 +727,16 @@ func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar) []corev1.EnvVa
 	return envVars
 }
 
-func newMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, selector *metav1.LabelSelector, proxy *configv1.Proxy) *appsv1.Deployment {
-	if selector == nil {
-		selector = &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"k8s-app":    metal3AppName,
-				cboLabelName: stateService,
-			},
-		}
-	}
-	k8sAppLabel := metal3AppName
-	apiLabelValue := ""
-	for k, v := range selector.MatchLabels {
-		if k == "k8s-app" {
-			k8sAppLabel = v
-		}
-		if k == "api" {
-			apiLabelValue = v
-		}
+func newMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *configv1.Proxy) *appsv1.Deployment {
+	selector := &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"k8s-app":    metal3AppName,
+			cboLabelName: stateService,
+		},
 	}
 	podSpecLabels := map[string]string{
-		"k8s-app":    k8sAppLabel,
+		"k8s-app":    metal3AppName,
 		cboLabelName: stateService,
-	}
-	if apiLabelValue != "" {
-		podSpecLabels["api"] = apiLabelValue
 	}
 	template := newMetal3PodTemplateSpec(images, config, &podSpecLabels, proxy)
 	return &appsv1.Deployment{
@@ -761,7 +747,7 @@ func newMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 				cboOwnedAnnotation: "",
 			},
 			Labels: map[string]string{
-				"k8s-app":    k8sAppLabel,
+				"k8s-app":    metal3AppName,
 				cboLabelName: stateService,
 			},
 		},
@@ -776,19 +762,18 @@ func newMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 	}
 }
 
-func CheckExistingMetal3Deployment(client appsclientv1.DeploymentsGetter, targetNamespace string) (*metav1.LabelSelector, bool, error) {
+func getMetal3DeploymentSelector(client appsclientv1.DeploymentsGetter, targetNamespace string) (*metav1.LabelSelector, error) {
 	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
 	if existing != nil && err == nil {
-		_, maoOwned := existing.Annotations["machine.openshift.io/owned"]
-		return existing.Spec.Selector, maoOwned, nil
+		return existing.Spec.Selector, nil
 	}
-	return nil, false, err
+	return nil, err
 }
 
 func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 	// Create metal3 deployment object based on current baremetal configuration
 	// It will be created with the cboOwnedAnnotation
-	metal3Deployment := newMetal3Deployment(info.Namespace, info.Images, &info.ProvConfig.Spec, info.PodLabelSelector, info.Proxy)
+	metal3Deployment := newMetal3Deployment(info.Namespace, info.Images, &info.ProvConfig.Spec, info.Proxy)
 
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
 
@@ -803,13 +788,25 @@ func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 		info.EventRecorder, metal3Deployment, expectedGeneration)
 	if err != nil {
 		err = fmt.Errorf("unable to apply Metal3 deployment: %w", err)
-		return
+		// Check if ApplyDeployment failed because the existing Pod had an outdated
+		// Pod Selector.
+		selector, get_err := getMetal3DeploymentSelector(info.Client.AppsV1(), info.Namespace)
+		if get_err != nil || equality.Semantic.DeepEqual(selector, metal3Deployment.Spec.Selector) {
+			return
+		}
+		// This is an older deployment with the incorrect Pod Selector.
+		// Delete deployment now and re-create in the next reconcile.
+		// The operator is watching deployments so the reconcile should be triggered when metal3 deployment
+		// is deleted.
+		if delete_err := DeleteMetal3Deployment(info); delete_err != nil {
+			err = fmt.Errorf("unable to delete Metal3 deployment with incorrect Pod Selector: %w", delete_err)
+			return
+		}
 	}
-
 	if updated {
 		resourcemerge.SetDeploymentGeneration(&info.ProvConfig.Status.Generations, deployment)
 	}
-	return
+	return updated, nil
 }
 
 func getDeploymentCondition(deployment *appsv1.Deployment) appsv1.DeploymentConditionType {

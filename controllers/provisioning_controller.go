@@ -242,17 +242,6 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	// Check Metal3 Deployment already exists and managed by MAO.
-	metal3DeploymentSelector, maoOwned, err := provisioning.CheckExistingMetal3Deployment(r.KubeClient.AppsV1(), ComponentNamespace)
-	info.PodLabelSelector = metal3DeploymentSelector
-	if err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, errors.Wrap(err, "failed to check for existing Metal3 Deployment")
-	}
-
-	if maoOwned {
-		klog.Info("Adding annotation for CBO to take ownership of metal3 deployment created by MAO")
-	}
-
 	for _, ensureResource := range []ensureFunc{
 		provisioning.EnsureMetal3Deployment,
 		provisioning.EnsureMetal3StateService,
