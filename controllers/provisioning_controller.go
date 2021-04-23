@@ -28,16 +28,15 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
+	metal3ioClient "github.com/openshift/cluster-baremetal-operator/client/versioned"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
 )
@@ -51,9 +50,7 @@ const (
 
 // ProvisioningReconciler reconciles a Provisioning object
 type ProvisioningReconciler struct {
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
-	Client         client.Client
+	Client         metal3ioClient.Interface
 	Scheme         *runtime.Scheme
 	OSClient       osclientset.Interface
 	KubeClient     kubernetes.Interface
@@ -100,10 +97,8 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 }
 
 func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal3iov1alpha1.Provisioning, error) {
-	// Fetch the Provisioning instance
-	instance := &metal3iov1alpha1.Provisioning{}
-	namespacedName := types.NamespacedName{Name: metal3iov1alpha1.ProvisioningSingletonName, Namespace: ""}
-	if err := r.Client.Get(ctx, namespacedName, instance); err != nil {
+	instance, err := r.Client.Metal3V1alpha1().Provisionings().Get(ctx, metal3iov1alpha1.ProvisioningSingletonName, metav1.GetOptions{})
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, nil
 		}
@@ -246,13 +241,14 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, err
 		}
 		if updated {
-			return result, r.Client.Status().Update(ctx, baremetalConfig)
+			_, err = r.Client.Metal3V1alpha1().Provisionings().UpdateStatus(ctx, baremetalConfig, metav1.UpdateOptions{})
+			return result, err
 		}
 	}
 
 	if specChanged {
 		baremetalConfig.Status.ObservedGeneration = baremetalConfig.Generation
-		err = r.Client.Status().Update(ctx, baremetalConfig)
+		_, err = r.Client.Metal3V1alpha1().Provisionings().UpdateStatus(ctx, baremetalConfig, metav1.UpdateOptions{})
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to update observed generation: %w", err)
 		}
@@ -327,9 +323,8 @@ func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *p
 		// Add finalizer becasue it doesn't already exist
 		controllerutil.AddFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
 
-		return false, errors.Wrap(
-			r.Client.Update(ctx, info.ProvConfig),
-			"failed to update Provisioning CR with its finalizer")
+		_, err := r.Client.Metal3V1alpha1().Provisionings().Update(ctx, info.ProvConfig, metav1.UpdateOptions{})
+		return false, errors.Wrap(err, "failed to update Provisioning CR with its finalizer")
 	} else {
 		// The Provisioning object is being deleted
 		if !slice.Contains(info.ProvConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
@@ -342,9 +337,8 @@ func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *p
 		// Remove our finalizer from the list and update it.
 		controllerutil.RemoveFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
 
-		return true, errors.Wrap(
-			r.Client.Update(ctx, info.ProvConfig),
-			"failed to remove finalizer from Provisioning CR")
+		_, err := r.Client.Metal3V1alpha1().Provisionings().Update(ctx, info.ProvConfig, metav1.UpdateOptions{})
+		return true, errors.Wrap(err, "failed to remove finalizer from Provisioning CR")
 	}
 }
 

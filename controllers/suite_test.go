@@ -16,12 +16,15 @@ limitations under the License.
 package controllers
 
 import (
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
-
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
 	// +kubebuilder:scaffold:imports
+
+	configv1 "github.com/openshift/api/config/v1"
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -32,5 +35,6 @@ func init() {
 		o.Development = true
 	}))
 	// Register our package types with the global scheme
-	_ = metal3iov1alpha1.AddToScheme(scheme.Scheme)
+	utilruntime.Must(configv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(metal3iov1alpha1.AddToScheme(scheme.Scheme))
 }

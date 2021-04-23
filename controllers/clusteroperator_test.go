@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -69,7 +70,7 @@ func TestUpdateCOStatus(t *testing.T) {
 		},
 	}
 
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), nil, []runtime.Object{&osconfigv1.Infrastructure{}})
 
 	for _, tc := range tCases {
 		co, _ := reconciler.createClusterOperator()
@@ -221,7 +222,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 			} else {
 				osClient = fakeconfigclientset.NewSimpleClientset()
 			}
-			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), nil, []runtime.Object{&osconfigv1.Infrastructure{}})
 			reconciler.OSClient = osClient
 			reconciler.ReleaseVersion = "test-version"
 
@@ -330,7 +331,7 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 		},
 	}
 
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), nil, []runtime.Object{&osconfigv1.Infrastructure{}})
 	co, _ := reconciler.createClusterOperator()
 	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
 
@@ -380,7 +381,7 @@ func TestUpdateCOStatusAvailable(t *testing.T) {
 			},
 		},
 	}
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), nil, []runtime.Object{&osconfigv1.Infrastructure{}})
 	co, _ := reconciler.createClusterOperator()
 	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
 

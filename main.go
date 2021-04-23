@@ -33,6 +33,7 @@ import (
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
+	metal3ioClient "github.com/openshift/cluster-baremetal-operator/client/versioned"
 	"github.com/openshift/cluster-baremetal-operator/controllers"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -101,11 +102,12 @@ func main() {
 
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
+	metalClient := metal3ioClient.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
 	enableWebhook := provisioning.WebhookDependenciesReady(osClient)
 
 	if err = (&controllers.ProvisioningReconciler{
-		Client:         mgr.GetClient(),
+		Client:         metalClient,
 		Scheme:         mgr.GetScheme(),
 		OSClient:       osClient,
 		KubeClient:     kubeClient,

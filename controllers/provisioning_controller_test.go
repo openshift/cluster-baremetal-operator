@@ -8,11 +8,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/apis/metal3.io/v1alpha1"
+	fakeclient "github.com/openshift/cluster-baremetal-operator/client/versioned/fake"
 )
 
 func setUpSchemeForReconciler() *runtime.Scheme {
@@ -24,11 +24,11 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 	return scheme
 }
 
-func newFakeProvisioningReconciler(scheme *runtime.Scheme, object runtime.Object) *ProvisioningReconciler {
+func newFakeProvisioningReconciler(scheme *runtime.Scheme, provObjs, infraObjs []runtime.Object) *ProvisioningReconciler {
 	return &ProvisioningReconciler{
-		Client:   fakeclient.NewFakeClientWithScheme(scheme, object),
+		Client:   fakeclient.NewSimpleClientset(provObjs...),
 		Scheme:   scheme,
-		OSClient: fakeconfigclientset.NewSimpleClientset(),
+		OSClient: fakeconfigclientset.NewSimpleClientset(infraObjs...),
 	}
 }
 
@@ -133,7 +133,7 @@ func TestProvisioning(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
-			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.baremetalCR)
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), []runtime.Object{tc.baremetalCR}, nil)
 			baremetalconfig, err := reconciler.readProvisioningCR(context.TODO())
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)
