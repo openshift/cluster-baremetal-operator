@@ -55,9 +55,6 @@ RBAC_LIST = rbac.authorization.k8s.io_v1_role_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_rolebinding_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_clusterrolebinding_cluster-baremetal-operator.yaml
 
-PROMETHEUS_RBAC_LIST = rbac.authorization.k8s.io_v1_rolebinding_prometheus-k8s-cluster-baremetal-operator.yaml \
-	rbac.authorization.k8s.io_v1_role_prometheus-k8s-cluster-baremetal-operator.yaml
-
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
 manifests: generate
@@ -67,11 +64,6 @@ manifests: generate
 	# now rename/join the output files into the files we expect
 	mv $(TMP_DIR)/apiextensions.k8s.io_v1_customresourcedefinition_provisionings.metal3.io.yaml manifests/0000_31_cluster-baremetal-operator_02_metal3provisioning.crd.yaml
 	mv $(TMP_DIR)/apps_v1_deployment_cluster-baremetal-operator.yaml manifests/0000_31_cluster-baremetal-operator_06_deployment.yaml
-
-	# manifests needed for monitoring
-	mv $(TMP_DIR)/monitoring.coreos.com_v1_servicemonitor_cluster-baremetal-operator-servicemonitor.yaml manifests/0000_90_cluster-baremetal-operator_03_servicemonitor.yaml
-	mv $(TMP_DIR)/v1_service_cluster-baremetal-operator-service.yaml manifests/0000_31_cluster-baremetal-operator_03_service.yaml
-	mv $(TMP_DIR)/v1_configmap_kube-rbac-proxy.yaml manifests/0000_31_cluster-baremetal-operator_05_kube-rbac-proxy-config.yaml
 
 	# manifests needed for the webhook
 	mv $(TMP_DIR)/v1_service_cluster-baremetal-webhook-service.yaml manifests/0000_31_cluster-baremetal-operator_03_webhookservice.yaml
@@ -85,12 +77,6 @@ manifests: generate
 	echo '---' >> manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml ;\
 	done
 
-	# prometheus rbacs
-	rm -rf manifests/0000_31_cluster-baremetal-operator_05_prometheus_rbac.yaml
-	for rbac in $(PROMETHEUS_RBAC_LIST) ; do \
-	cat $(TMP_DIR)/$${rbac} >> manifests/0000_31_cluster-baremetal-operator_05_prometheus_rbac.yaml ;\
-	echo '---' >> manifests/0000_31_cluster-baremetal-operator_05_prometheus_rbac.yaml ;\
-	done
 	rm -rf $(TMP_DIR)
 
 # Run go fmt against code

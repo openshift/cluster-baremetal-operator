@@ -1,5 +1,0 @@
-resources:
-- monitor.yaml
-- service.yaml
-- proxyconfig.yaml
-- rbac.yaml
