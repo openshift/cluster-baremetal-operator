@@ -19,7 +19,7 @@ spec:
       annotations:
         include.release.openshift.io/self-managed-high-availability: "true"
         include.release.openshift.io/single-node-developer: "true"
-        workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
         k8s-app: cluster-baremetal-operator
     spec:
