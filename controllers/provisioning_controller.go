@@ -85,22 +85,6 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;update;patch;create
 
-func (r *ProvisioningReconciler) isEnabled() (bool, error) {
-	ctx := context.Background()
-
-	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
-	if err != nil {
-		return false, errors.Wrap(err, "unable to determine Platform")
-	}
-
-	// Disable ourselves on platforms other than bare metal
-	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
-		return false, nil
-	}
-
-	return true, nil
-}
-
 func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal3iov1alpha1.Provisioning, error) {
 	// Fetch the Provisioning instance
 	instance := &metal3iov1alpha1.Provisioning{}
@@ -140,18 +124,6 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// Keep checking for our webhook dependencies to be ready, so we can
 		// enable the webhook.
 		result.RequeueAfter = 5 * time.Minute
-	}
-
-	enabled, err := r.isEnabled()
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
-	}
-	if !enabled {
-		// set ClusterOperator status to disabled=true, available=true
-		// We're disabled; don't requeue
-		return ctrl.Result{}, errors.Wrapf(
-			r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", ""),
-			"unable to put %q ClusterOperator in Disabled state", clusterOperatorName)
 	}
 
 	baremetalConfig, err := r.readProvisioningCR(ctx)
@@ -378,27 +350,11 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
 	}
 
-	// Check the Platform Type to determine the state of the CO
-	enabled, err := r.isEnabled()
-	if err != nil {
-		return errors.Wrap(err, "could not determine whether to run")
-	}
-	if !enabled {
-		//Set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
+	baremetalConfig, err := r.readProvisioningCR(context.Background())
+	if err != nil || baremetalConfig == nil {
+		err = r.updateCOStatus(ReasonComplete, "Provisioning CR not found; marking operator as available", "")
 		if err != nil {
-			return fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %w", clusterOperatorName, err)
-		}
-	}
-
-	// If Platform is BareMetal, we could still be missing the Provisioning CR
-	if enabled {
-		baremetalConfig, err := r.readProvisioningCR(context.Background())
-		if err != nil || baremetalConfig == nil {
-			err = r.updateCOStatus(ReasonComplete, "Provisioning CR not found on BareMetal Platform; marking operator as available", "")
-			if err != nil {
-				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
-			}
+			return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
 		}
 	}
 

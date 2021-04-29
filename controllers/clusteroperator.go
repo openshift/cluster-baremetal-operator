@@ -26,9 +26,6 @@ type StatusReason string
 const (
 	clusterOperatorName = "baremetal"
 
-	// OperatorDisabled represents a Disabled ClusterStatusConditionTypes
-	OperatorDisabled osconfigv1.ClusterStatusConditionType = "Disabled"
-
 	// ReasonEmpty is an empty StatusReason
 	ReasonEmpty StatusReason = ""
 
@@ -52,9 +49,6 @@ const (
 
 	// ReasonNotFound indicates that the deployment is not found
 	ReasonNotFound StatusReason = "ResourceNotFound"
-
-	// ReasonUnsupported is an unsupported StatusReason
-	ReasonUnsupported StatusReason = "UnsupportedPlatform"
 )
 
 // defaultStatusConditions returns the default set of status conditions for the
@@ -65,7 +59,6 @@ func defaultStatusConditions() []osconfigv1.ClusterOperatorStatusCondition {
 		setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
 		setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
 		setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
-		setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 	}
 }
 
@@ -207,9 +200,6 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 	}
 	conds := defaultStatusConditions()
 	switch newReason {
-	case ReasonUnsupported:
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"))
 	case ReasonSyncing:
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))

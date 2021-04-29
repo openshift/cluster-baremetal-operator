@@ -29,19 +29,6 @@ func TestUpdateCOStatus(t *testing.T) {
 		expectedConditions []osconfigv1.ClusterOperatorStatusCondition
 	}{
 		{
-			name:        "Disabled",
-			reason:      ReasonUnsupported,
-			msg:         "Operator is non-functional",
-			progressMsg: "",
-			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
-				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
-				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(ReasonUnsupported), "Operator is non-functional"),
-				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
-				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
-			},
-		},
-		{
 			name:        "Progressing",
 			reason:      ReasonSyncing,
 			msg:         "",
@@ -49,7 +36,6 @@ func TestUpdateCOStatus(t *testing.T) {
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
 				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonSyncing), ""),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(ReasonSyncing), "syncing metal3 pod"),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
 			},
@@ -64,7 +50,6 @@ func TestUpdateCOStatus(t *testing.T) {
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(ReasonComplete), ""),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonComplete), "metal3 pod running"),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 			},
 		},
 	}
@@ -109,11 +94,6 @@ func TestEnsureClusterOperator(t *testing.T) {
 		setStatusCondition(
 			osconfigv1.OperatorUpgradeable,
 			osconfigv1.ConditionTrue,
-			"", "",
-		),
-		setStatusCondition(
-			OperatorDisabled,
-			osconfigv1.ConditionFalse,
 			"", "",
 		),
 	}
@@ -325,7 +305,6 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, "InvalidConfiguration", "Unable to apply Provisioning CR: invalid configuration"),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 			},
 		},
 	}
@@ -365,7 +344,6 @@ func TestUpdateCOStatusAvailable(t *testing.T) {
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(ReasonComplete), ""),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonComplete), "found existing Metal3 deployment"),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 			},
 		},
 		{
@@ -376,7 +354,6 @@ func TestUpdateCOStatusAvailable(t *testing.T) {
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(ReasonComplete), ""),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonComplete), "new Metal3 deployment completed"),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
-				setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 			},
 		},
 	}
