@@ -48,6 +48,14 @@ func TestProvisioningValidateCreate(t *testing.T) {
 			wantErr: "Provisioning object is a singleton and must be named \"provisioning-configuration\"",
 		},
 	}
+	enabledFeatures = EnabledFeatures{
+		ProvisioningNetwork: map[ProvisioningNetwork]bool{
+			ProvisioningNetworkDisabled:  true,
+			ProvisioningNetworkUnmanaged: true,
+			ProvisioningNetworkManaged:   true,
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.p.Spec = *disabledProvisioning().build()
