@@ -42,6 +42,7 @@ import (
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
+	"github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -71,6 +72,7 @@ type ProvisioningReconciler struct {
 	WebHookEnabled     bool
 	NetworkStack       provisioning.NetworkStackType
 	MasterMacAddresses []string
+	EnabledFeatures    v1alpha1.EnabledFeatures
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -93,22 +95,6 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;update;patch;create
-
-func (r *ProvisioningReconciler) isEnabled() (bool, error) {
-	ctx := context.Background()
-
-	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
-	if err != nil {
-		return false, errors.Wrap(err, "unable to determine Platform")
-	}
-
-	// Disable ourselves on platforms other than bare metal
-	if infra.Status.Platform != osconfigv1.BareMetalPlatformType {
-		return false, nil
-	}
-
-	return true, nil
-}
 
 func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal3iov1alpha1.Provisioning, error) {
 	// Fetch the Provisioning instance
@@ -170,7 +156,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		result.RequeueAfter = 5 * time.Minute
 	}
 
-	enabled, err := r.isEnabled()
+	enabled, err := IsEnabled(ctx, r.OSClient)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
 	}
@@ -473,7 +459,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	klog.InfoS("Network stack calculation", "APIServerInternalHost", apiInt, "NetworkStack", r.NetworkStack)
 
 	// Check the Platform Type to determine the state of the CO
-	enabled, err := r.isEnabled()
+	enabled, err := IsEnabled(ctx, r.OSClient)
 	if err != nil {
 		return errors.Wrap(err, "could not determine whether to run")
 	}

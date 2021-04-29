@@ -32,7 +32,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
-func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error {
+func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager, enabledFeatures metal3iov1alpha1.EnabledFeatures) error {
 	ignore := admissionregistration.Ignore
 	noSideEffects := admissionregistration.SideEffectClassNone
 	instance := &admissionregistration.ValidatingWebhookConfiguration{
@@ -82,7 +82,7 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error 
 		return err
 	}
 
-	return (&metal3iov1alpha1.Provisioning{}).SetupWebhookWithManager(mgr)
+	return (&metal3iov1alpha1.Provisioning{}).SetupWebhookWithManager(mgr, enabledFeatures)
 }
 
 func WebhookDependenciesReady(client osclientset.Interface) bool {
