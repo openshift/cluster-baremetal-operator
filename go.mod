@@ -5,7 +5,6 @@ go 1.15
 require (
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/golangci/golangci-lint v1.32.0
-	github.com/google/go-cmp v0.5.2
 	github.com/openshift/api v0.0.0-20201216151826-78a19e96f9eb
 	github.com/openshift/client-go v0.0.0-20201214125552-e615e336eb49
 	github.com/openshift/generic-admission-server v1.14.1-0.20210126171102-c9c786658775

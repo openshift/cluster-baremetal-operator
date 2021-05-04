@@ -25,6 +25,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
@@ -49,6 +51,8 @@ import (
 	"github.com/openshift/generic-admission-server/pkg/apiserver"
 	"github.com/openshift/generic-admission-server/pkg/cmd/server"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
+	"github.com/openshift/library-go/pkg/operator/genericoperatorclient"
+	"github.com/openshift/library-go/pkg/operator/status"
 )
 
 var (
@@ -90,18 +94,38 @@ func runOperator(ctx context.Context, controllerContext *controllercmd.Controlle
 	}
 	configInformers := configv1informers.NewSharedInformerFactory(osClient, 10*time.Minute)
 
+	operatorClient, dynamicInformers, err := genericoperatorclient.NewClusterScopedOperatorClientWithConfigName(
+		controllerContext.KubeConfig,
+		metal3iov1alpha1.GroupVersion.WithResource("provisionings"),
+		metal3iov1alpha1.ProvisioningSingletonName)
+	if err != nil {
+		return err
+	}
+
+	versionRecorder := status.NewVersionGetter()
+	clusterOperator, err := osClient.ConfigV1().ClusterOperators().Get(ctx, "baremetal", metav1.GetOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	for _, version := range clusterOperator.Status.Versions {
+		versionRecorder.SetVersion(version.Name, version.Version)
+	}
+
 	releaseVersion := os.Getenv("RELEASE_VERSION")
 	if releaseVersion == "" {
 		klog.Info("Environment variable RELEASE_VERSION not provided")
+	} else {
+		versionRecorder.SetVersion("operator", releaseVersion)
 	}
 
 	provisioningController := controllers.NewProvisioningController(
+		operatorClient,
 		client, metal3Informers,
 		kubeClient, kubeInformersForNamespace,
 		osClient, configInformers,
 		controllerContext.EventRecorder,
-		releaseVersion,
 		imagesJSONFilename,
+		ns,
 	)
 
 	webhookController := controllers.NewWebhookController(
@@ -111,10 +135,36 @@ func runOperator(ctx context.Context, controllerContext *controllercmd.Controlle
 		controllerContext.EventRecorder,
 	)
 
+	isBaremetalPlatform, err := controllers.IsBaremetalPlatform(ctx, osClient)
+	if err != nil {
+		return err
+	}
+
 	metal3Informers.Start(ctx.Done())
 	kubeInformersForNamespace.Start(ctx.Done())
 	configInformers.Start(ctx.Done())
+	dynamicInformers.Start(ctx.Done())
 
+	if isBaremetalPlatform {
+		clusterOperatorStatus := status.NewClusterOperatorStatusController(
+			controllers.ClusterOperatorName,
+			controllers.RelatedObjects(ns),
+			osClient.ConfigV1(),
+			configInformers.Config().V1().ClusterOperators(),
+			operatorClient,
+			versionRecorder,
+			controllerContext.EventRecorder,
+		)
+		go clusterOperatorStatus.Run(ctx, 1)
+	} else {
+		versions := []osconfigv1.OperandVersion{}
+		for n, v := range versionRecorder.GetVersions() {
+			versions = append(versions, osconfigv1.OperandVersion{Name: n, Version: v})
+		}
+		if err := controllers.SetClusterOperatorDisabled(ctx, osClient, controllers.RelatedObjects(ns), versions); err != nil {
+			return err
+		}
+	}
 	go provisioningController.Run(ctx, 1)
 	go webhookController.Run(ctx, 1)
 

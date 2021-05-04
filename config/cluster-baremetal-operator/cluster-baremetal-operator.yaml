@@ -29,6 +29,7 @@ spec:
         args:
         - operator
         - "--listen=0.0.0.0:9443"
+        - "--v=2"
         env:
         - name: RELEASE_VERSION
           value: "0.0.1-snapshot"

@@ -73,10 +73,7 @@ func TestIsEnabled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
-			reconciler := ProvisioningController{
-				osClient: fakeconfigclientset.NewSimpleClientset(tc.infra),
-			}
-			enabled, err := reconciler.isEnabled()
+			enabled, err := IsBaremetalPlatform(context.TODO(), fakeconfigclientset.NewSimpleClientset(tc.infra))
 			if tc.expectedError && err == nil {
 				t.Error("should have produced an error")
 				return

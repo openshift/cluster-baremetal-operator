@@ -76,6 +76,7 @@ spec:
       - args:
         - operator
         - --listen=0.0.0.0:9443
+        - --v=2
         command:
         - /usr/bin/cluster-baremetal-operator
         env:

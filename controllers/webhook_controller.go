@@ -123,14 +123,14 @@ func (c *WebhookController) dependenciesReady(ctx context.Context) bool {
 			osconfigv1.OperatorProgressing: osconfigv1.ConditionFalse,
 			osconfigv1.OperatorAvailable:   osconfigv1.ConditionTrue} {
 			if !v1helpers.IsStatusConditionPresentAndEqual(co.Status.Conditions, condName, condVal) {
-				klog.Infof("dependenciesReady: %s not ready %s!=%s", operator, condName, condVal)
+				klog.V(1).InfoS("dependenciesReady", operator, "not ready", condName, condVal)
 				return false
 			}
 		}
 	}
 	sec, err := c.kubeClient.CoreV1().Secrets(c.targetNamespace).Get(ctx, validatingWebhookSecretName, metav1.GetOptions{})
 	if err != nil || len(sec.Data) == 0 {
-		klog.Infof("dependenciesReady: secret not ready err=%s, dataLen:%d", err.Error(), len(sec.Data))
+		klog.V(1).InfoS("dependenciesReady", validatingWebhookSecretName, "not ready", "err", err.Error(), "dataLen", len(sec.Data))
 		return false
 	}
 
@@ -182,7 +182,7 @@ func (c *WebhookController) apply() error {
 		},
 	}
 
-	// we might not have a baremetalCR (when disabled), so we have no where to store
+	// we do not have a baremetalCR (when disabled), so we have no where to store
 	// the expectedGeneration, so just fake it.
 	expectedGeneration := int64(1)
 	_, _, err := resourceapply.ApplyValidatingWebhookConfiguration(c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, instance, expectedGeneration)
