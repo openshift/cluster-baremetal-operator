@@ -16,17 +16,14 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"flag"
 	"os"
 
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,6 +35,7 @@ import (
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/controllers"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
+	"github.com/openshift/library-go/pkg/operator/events"
 )
 
 var (
@@ -102,8 +100,6 @@ func main() {
 	}
 
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
-
-	recorder := record.NewBroadcaster().NewRecorder(clientgoscheme.Scheme, v1.EventSource{Component: controllers.ComponentName})
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
 	enableWebhook := provisioning.WebhookDependenciesReady(osClient)
@@ -112,7 +108,6 @@ func main() {
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		OSClient:       osClient,
-		EventRecorder:  recorder,
 		KubeClient:     kubeClient,
 		ReleaseVersion: releaseVersion,
 		ImagesFilename: imagesJSONFilename,
@@ -122,7 +117,12 @@ func main() {
 		os.Exit(1)
 	}
 	if enableWebhook {
-		if err = provisioning.EnableValidatingWebhook(context.Background(), controllers.ComponentNamespace, kubeClient, mgr); err != nil {
+		info := &provisioning.ProvisioningInfo{
+			Client:        kubeClient,
+			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
+			Namespace:     controllers.ComponentNamespace,
+		}
+		if err = provisioning.EnableValidatingWebhook(info, mgr); err != nil {
 			klog.ErrorS(err, "problem enabling validating webhook")
 			os.Exit(1)
 		}

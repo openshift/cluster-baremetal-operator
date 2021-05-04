@@ -7,8 +7,8 @@ require (
 	github.com/golangci/golangci-lint v1.32.0
 	github.com/google/go-cmp v0.5.2
 	github.com/openshift/api v0.0.0-20201214114959-164a2fb63b5f
-	github.com/openshift/client-go v0.0.0-20200827190008-3062137373b5
-	github.com/openshift/library-go v0.0.0-20200910214143-887092e305c1
+	github.com/openshift/client-go v0.0.0-20201020074620-f8fd44879f7c
+	github.com/openshift/library-go v0.0.0-20201203122949-352bc2d14339
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/stew v0.0.0-20130812190256-80ef0842b48b
 	github.com/stretchr/testify v1.6.1
