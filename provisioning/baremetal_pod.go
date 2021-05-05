@@ -52,7 +52,6 @@ const (
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
 	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
-	ironicWebserverCertVar           = "WEBSERVER_CACERT_FILE"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -497,10 +496,6 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			{
 				Name:  inspectorInsecureEnvVar,
 				Value: "true",
-			},
-			{
-				Name:  ironicWebserverCertVar,
-				Value: "/etc/pki/ca-trust/extracted/pem/trusted-ca",
 			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
