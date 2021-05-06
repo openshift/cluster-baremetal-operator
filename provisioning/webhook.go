@@ -19,10 +19,8 @@ import (
 	"context"
 	"os"
 
-	admissionregistration "k8s.io/api/admissionregistration/v1beta1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	admissionregistration "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -31,9 +29,10 @@ import (
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
-func EnableValidatingWebhook(ctx context.Context, namespace string, client *kubernetes.Clientset, mgr manager.Manager) error {
+func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error {
 	ignore := admissionregistration.Ignore
 	noSideEffects := admissionregistration.SideEffectClassNone
 	instance := &admissionregistration.ValidatingWebhookConfiguration{
@@ -51,7 +50,7 @@ func EnableValidatingWebhook(ctx context.Context, namespace string, client *kube
 					CABundle: []byte("Cg=="),
 					Service: &admissionregistration.ServiceReference{
 						Name:      "cluster-baremetal-webhook-service",
-						Namespace: namespace,
+						Namespace: info.Namespace,
 						Path:      pointer.StringPtr("/validate-metal3-io-v1alpha1-provisioning"),
 					},
 				},
@@ -61,7 +60,10 @@ func EnableValidatingWebhook(ctx context.Context, namespace string, client *kube
 				Name:                    "vprovisioning.kb.io",
 				Rules: []admissionregistration.RuleWithOperations{
 					{
-						Operations: []admissionregistration.OperationType{admissionregistration.Create, admissionregistration.Update},
+						Operations: []admissionregistration.OperationType{
+							admissionregistration.Create,
+							admissionregistration.Update,
+						},
 						Rule: admissionregistration.Rule{
 							Resources:   []string{"provisionings"},
 							APIGroups:   []string{"metal3.io"},
@@ -72,9 +74,11 @@ func EnableValidatingWebhook(ctx context.Context, namespace string, client *kube
 			},
 		},
 	}
-
-	_, err := client.AdmissionregistrationV1beta1().ValidatingWebhookConfigurations().Create(ctx, instance, metav1.CreateOptions{})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
+	// we might not have a baremetalCR (when disabled), so we have no where to store
+	// the expectedGeneration, so just fake it.
+	expectedGeneration := int64(0)
+	_, _, err := resourceapply.ApplyValidatingWebhookConfiguration(info.Client.AdmissionregistrationV1(), info.EventRecorder, instance, expectedGeneration)
+	if err != nil {
 		return err
 	}
 
