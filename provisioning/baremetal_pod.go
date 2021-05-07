@@ -306,7 +306,7 @@ func newMetal3Containers(images *Images, config *metal3iov1alpha1.ProvisioningSp
 	// If the provisioning network is disabled, and the user hasn't requested a
 	// particular provisioning IP on the machine CIDR, we have nothing for this container
 	// to manage.
-	if config.ProvisioningIP != "" {
+	if config.ProvisioningIP != "" || config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
 		containers = append(containers, createContainerMetal3StaticIpManager(images, config))
 	}
 
