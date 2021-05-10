@@ -225,10 +225,10 @@ func setIronicHtpasswdHash(name string, secretName string) corev1.EnvVar {
 	}
 }
 
-func newMetal3InitContainers(images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *configv1.Proxy) []corev1.Container {
+func newMetal3InitContainers(images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *configv1.Proxy, apiIP string) []corev1.Container {
 	initContainers := []corev1.Container{
 		createInitContainerIpaDownloader(images),
-		createInitContainerMachineOsDownloader(images, config),
+		createInitContainerMachineOsDownloader(images, config, apiIP),
 	}
 
 	// If the provisioning network is disabled, and the user hasn't requested a
@@ -256,7 +256,7 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 	return initContainer
 }
 
-func createInitContainerMachineOsDownloader(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createInitContainerMachineOsDownloader(images *Images, config *metal3iov1alpha1.ProvisioningSpec, apiIP string) corev1.Container {
 	initContainer := corev1.Container{
 		Name:            "metal3-machine-os-downloader",
 		Image:           images.MachineOsDownloader,
@@ -268,6 +268,10 @@ func createInitContainerMachineOsDownloader(images *Images, config *metal3iov1al
 		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Env: []corev1.EnvVar{
 			buildEnvVar(machineImageUrl, config),
+			{
+				Name:  apiServerInternalIP,
+				Value: apiIP,
+			},
 		},
 	}
 	return initContainer
@@ -628,8 +632,8 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 	return container
 }
 
-func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, labels *map[string]string, proxy *configv1.Proxy) *corev1.PodTemplateSpec {
-	initContainers := newMetal3InitContainers(images, config, proxy)
+func newMetal3PodTemplateSpec(images *Images, config *metal3iov1alpha1.ProvisioningSpec, labels *map[string]string, proxy *configv1.Proxy, apiIP string) *corev1.PodTemplateSpec {
+	initContainers := newMetal3InitContainers(images, config, proxy, apiIP)
 	containers := newMetal3Containers(images, config, proxy)
 
 	tolerations := []corev1.Toleration{
@@ -727,7 +731,7 @@ func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar) []corev1.EnvVa
 	return envVars
 }
 
-func newMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *configv1.Proxy) *appsv1.Deployment {
+func newMetal3Deployment(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *configv1.Proxy, apiIP string) *appsv1.Deployment {
 	selector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"k8s-app":    metal3AppName,
@@ -738,7 +742,7 @@ func newMetal3Deployment(targetNamespace string, images *Images, config *metal3i
 		"k8s-app":    metal3AppName,
 		cboLabelName: stateService,
 	}
-	template := newMetal3PodTemplateSpec(images, config, &podSpecLabels, proxy)
+	template := newMetal3PodTemplateSpec(images, config, &podSpecLabels, proxy, apiIP)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      baremetalDeploymentName,
@@ -773,7 +777,7 @@ func getMetal3DeploymentSelector(client appsclientv1.DeploymentsGetter, targetNa
 func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 	// Create metal3 deployment object based on current baremetal configuration
 	// It will be created with the cboOwnedAnnotation
-	metal3Deployment := newMetal3Deployment(info.Namespace, info.Images, &info.ProvConfig.Spec, info.Proxy)
+	metal3Deployment := newMetal3Deployment(info.Namespace, info.Images, &info.ProvConfig.Spec, info.Proxy, info.APIServerInternalIP)
 
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
 

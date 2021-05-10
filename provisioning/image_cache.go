@@ -122,7 +122,7 @@ func createContainerImageCache(images *Images) corev1.Container {
 	return container
 }
 
-func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provisioningConfig *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy) (*corev1.PodTemplateSpec, error) {
+func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provisioningConfig *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy, apiIP string) (*corev1.PodTemplateSpec, error) {
 	cacheConfig, err := imageCacheConfig(targetNamespace, *provisioningConfig)
 	if err != nil {
 		return nil, err
@@ -179,7 +179,7 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 				},
 			},
 			InitContainers: injectProxyAndCA([]corev1.Container{
-				createInitContainerMachineOsDownloader(images, cacheConfig),
+				createInitContainerMachineOsDownloader(images, cacheConfig, apiIP),
 				createInitContainerIpaDownloader(images),
 			}, proxy),
 			Containers: injectProxyAndCA([]corev1.Container{
@@ -197,8 +197,8 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 	}, nil
 }
 
-func newImageCacheDaemonSet(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy) (*appsv1.DaemonSet, error) {
-	template, err := newImageCachePodTemplateSpec(targetNamespace, images, config, proxy)
+func newImageCacheDaemonSet(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy, apiIP string) (*appsv1.DaemonSet, error) {
+	template, err := newImageCachePodTemplateSpec(targetNamespace, images, config, proxy, apiIP)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +230,7 @@ func newImageCacheDaemonSet(targetNamespace string, images *Images, config *meta
 }
 
 func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
-	imageCacheDaemonSet, err := newImageCacheDaemonSet(info.Namespace, info.Images, &info.ProvConfig.Spec, info.Proxy)
+	imageCacheDaemonSet, err := newImageCacheDaemonSet(info.Namespace, info.Images, &info.ProvConfig.Spec, info.Proxy, info.APIServerInternalIP)
 	if err != nil {
 		return
 	}

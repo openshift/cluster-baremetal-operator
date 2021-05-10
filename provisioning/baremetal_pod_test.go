@@ -131,7 +131,7 @@ func TestNewMetal3InitContainers(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualContainers := newMetal3InitContainers(&images, tc.config, nil)
+			actualContainers := newMetal3InitContainers(&images, tc.config, nil, "")
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Init Containers : %d Actual number of Init Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 		})
 	}
@@ -208,7 +208,7 @@ func TestProxyAndCAInjection(t *testing.T) {
 	}{
 		{
 			name:       "init containers have proxy and CA information",
-			containers: newMetal3InitContainers(&images, managedProvisioning().build(), &proxy),
+			containers: newMetal3InitContainers(&images, managedProvisioning().build(), &proxy, ""),
 		},
 		{
 			name:       "metal3 containers have proxy and CA information",

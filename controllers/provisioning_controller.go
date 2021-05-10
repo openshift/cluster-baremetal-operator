@@ -190,7 +190,12 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	info := r.provisioningInfo(baremetalConfig, &containerImages, clusterWideProxy)
+	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	info := r.provisioningInfo(baremetalConfig, &containerImages, clusterWideProxy, infra)
 
 	// Check if Provisioning Configuartion is being deleted
 	deleted, err := r.checkForCRDeletion(ctx, info)
@@ -303,15 +308,16 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return result, nil
 }
 
-func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, proxy *osconfigv1.Proxy) *provisioning.ProvisioningInfo {
+func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, proxy *osconfigv1.Proxy, infra *osconfigv1.Infrastructure) *provisioning.ProvisioningInfo {
 	return &provisioning.ProvisioningInfo{
-		Client:        r.KubeClient,
-		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
-		ProvConfig:    provConfig,
-		Scheme:        r.Scheme,
-		Namespace:     ComponentNamespace,
-		Images:        images,
-		Proxy:         proxy,
+		Client:              r.KubeClient,
+		EventRecorder:       events.NewLoggingEventRecorder(ComponentName),
+		ProvConfig:          provConfig,
+		Scheme:              r.Scheme,
+		Namespace:           ComponentNamespace,
+		Images:              images,
+		Proxy:               proxy,
+		APIServerInternalIP: infra.Status.PlatformStatus.BareMetal.APIServerInternalIP,
 	}
 }
 
