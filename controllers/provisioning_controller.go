@@ -235,12 +235,8 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	//Create Secrets needed for Metal3 deployment
-	if err := provisioning.CreateAllSecrets(r.KubeClient.CoreV1(), ComponentNamespace, baremetalConfig, r.Scheme); err != nil {
-		return ctrl.Result{}, err
-	}
-
 	for _, ensureResource := range []ensureFunc{
+		provisioning.EnsureAllSecrets,
 		provisioning.EnsureMetal3Deployment,
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,

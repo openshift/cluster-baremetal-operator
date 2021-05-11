@@ -9,13 +9,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
 const (
@@ -34,22 +34,38 @@ const (
 	tlsSecretName       = "metal3-ironic-tls" // #nosec
 )
 
-// CreateMariadbPasswordSecret creates a Secret for Mariadb password
-func createMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	existing, err := client.Secrets(targetNamespace).Get(context.Background(), baremetalSecretName, metav1.GetOptions{})
-	if err == nil && len(existing.ObjectMeta.OwnerReferences) == 0 {
-		err = controllerutil.SetControllerReference(baremetalConfig, existing, scheme)
+type shouldUpdateDataFn func(existing *corev1.Secret) (bool, error)
+
+func doNotUpdateData(existing *corev1.Secret) (bool, error) {
+	return false, nil
+}
+
+// applySecret merges objectmeta, applies data if the secret does not exist or shouldUpdateDataFn returns false.
+func applySecret(client coreclientv1.SecretsGetter, recorder events.Recorder, requiredInput *corev1.Secret, shouldUpdateData shouldUpdateDataFn) error {
+	needsApply := false
+	existing, err := client.Secrets(requiredInput.Namespace).Get(context.TODO(), requiredInput.Name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		err = nil
+		needsApply = true
+	} else if err != nil {
+		return err
+	} else {
+		// Allow the caller to decide whether update.
+		needsApply, err = shouldUpdateData(existing)
 		if err != nil {
 			return err
 		}
-		_, err = client.Secrets(targetNamespace).Update(context.Background(), existing, metav1.UpdateOptions{})
-		return err
-	}
-	if !apierrors.IsNotFound(err) {
-		return err
 	}
 
-	// Secret does not already exist. So, create one.
+	if needsApply {
+		_, _, err = resourceapply.ApplySecret(client, recorder, requiredInput)
+	}
+
+	return err
+}
+
+// createMariadbPasswordSecret creates a Secret for Mariadb password
+func createMariadbPasswordSecret(info *ProvisioningInfo) error {
 	password, err := generateRandomPassword()
 	if err != nil {
 		return err
@@ -58,39 +74,21 @@ func createMariadbPasswordSecret(client coreclientv1.SecretsGetter, targetNamesp
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      baremetalSecretName,
-			Namespace: targetNamespace,
+			Namespace: info.Namespace,
 		},
 		StringData: map[string]string{
 			baremetalSecretKey: password,
 		},
 	}
 
-	err = controllerutil.SetControllerReference(baremetalConfig, secret, scheme)
-	if err != nil {
+	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
 		return err
 	}
 
-	_, err = client.Secrets(targetNamespace).Create(context.Background(), secret, metav1.CreateOptions{})
-
-	return err
+	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData)
 }
 
-func createIronicSecret(client coreclientv1.SecretsGetter, targetNamespace string, name string, username string, configSection string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	existing, err := client.Secrets(targetNamespace).Get(context.Background(), name, metav1.GetOptions{})
-	if err == nil && len(existing.ObjectMeta.OwnerReferences) == 0 {
-		err = controllerutil.SetControllerReference(baremetalConfig, existing, scheme)
-		if err != nil {
-			return err
-		}
-		_, err = client.Secrets(targetNamespace).Update(context.Background(), existing, metav1.UpdateOptions{})
-		return err
-	}
-
-	if !apierrors.IsNotFound(err) {
-		return err
-	}
-
-	// Secret does not already exist. So, create one.
+func createIronicSecret(info *ProvisioningInfo, name string, username string, configSection string) error {
 	password, err := generateRandomPassword()
 	if err != nil {
 		return err
@@ -115,7 +113,7 @@ func createIronicSecret(client coreclientv1.SecretsGetter, targetNamespace strin
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: targetNamespace,
+			Namespace: info.Namespace,
 		},
 		StringData: map[string]string{
 			ironicUsernameKey: username,
@@ -130,37 +128,35 @@ password = %s
 		},
 	}
 
-	err = controllerutil.SetControllerReference(baremetalConfig, secret, scheme)
-	if err != nil {
+	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
 		return err
 	}
 
-	_, err = client.Secrets(targetNamespace).Create(context.Background(), secret, metav1.CreateOptions{})
-	return err
+	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData)
 }
 
-func CreateAllSecrets(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
+func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	// Create a Secret for the Mariadb Password
-	if err := createMariadbPasswordSecret(client, targetNamespace, baremetalConfig, scheme); err != nil {
-		return errors.Wrap(err, "failed to create Mariadb password")
+	if err := createMariadbPasswordSecret(info); err != nil {
+		return false, errors.Wrap(err, "failed to create Mariadb password")
 	}
 	// Create a Secret for the Ironic Password
-	if err := createIronicSecret(client, targetNamespace, ironicSecretName, ironicUsername, "ironic", baremetalConfig, scheme); err != nil {
-		return errors.Wrap(err, "failed to create Ironic password")
+	if err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic"); err != nil {
+		return false, errors.Wrap(err, "failed to create Ironic password")
 	}
 	// Create a Secret for the Ironic RPC Password
-	if err := createIronicSecret(client, targetNamespace, ironicrpcSecretName, ironicrpcUsername, "json_rpc", baremetalConfig, scheme); err != nil {
-		return errors.Wrap(err, "failed to create Ironic rpc password")
+	if err := createIronicSecret(info, ironicrpcSecretName, ironicrpcUsername, "json_rpc"); err != nil {
+		return false, errors.Wrap(err, "failed to create Ironic rpc password")
 	}
 	// Create a Secret for the Ironic Inspector Password
-	if err := createIronicSecret(client, targetNamespace, inspectorSecretName, inspectorUsername, "inspector", baremetalConfig, scheme); err != nil {
-		return errors.Wrap(err, "failed to create Inspector password")
+	if err := createIronicSecret(info, inspectorSecretName, inspectorUsername, "inspector"); err != nil {
+		return false, errors.Wrap(err, "failed to create Inspector password")
 	}
 	// Generate/update TLS certificate
-	if err := CreateOrUpdateTlsSecret(client, targetNamespace, baremetalConfig, scheme); err != nil {
-		return errors.Wrap(err, "failed to create TLS certificate")
+	if err := createOrUpdateTlsSecret(info); err != nil {
+		return false, errors.Wrap(err, "failed to create TLS certificate")
 	}
-	return nil
+	return false, nil // ApplySecret does not use Generation, so just return false for updated
 }
 
 func DeleteAllSecrets(info *ProvisioningInfo) error {
@@ -173,58 +169,10 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 	return utilerrors.NewAggregate(secretErrors)
 }
 
-func updateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme, secret *corev1.Secret) error {
-	changed := false
-
-	if len(secret.ObjectMeta.OwnerReferences) == 0 {
-		err := controllerutil.SetControllerReference(baremetalConfig, secret, scheme)
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("failed to set controller reference of Secret %s", tlsSecretName))
-		}
-		changed = true
-	}
-
-	existingCert := secret.Data[corev1.TLSCertKey]
-	if len(existingCert) > 0 {
-		expired, err := IsTlsCertificateExpired(existingCert)
-		if err != nil {
-			return errors.Wrap(err, "failed to determine expiration date of TLS certificate")
-		}
-
-		if !expired {
-			if changed {
-				_, err = client.Secrets(targetNamespace).Update(context.Background(), secret, metav1.UpdateOptions{})
-				return err
-			}
-
-			return nil
-		}
-	}
-
-	cert, err := generateTlsCertificate(baremetalConfig.Spec.ProvisioningIP)
-	if err != nil {
-		return errors.Wrap(err, "failed to generate new TLS certificate")
-	}
-	secret.Data = map[string][]byte{corev1.TLSCertKey: cert.certificate, corev1.TLSPrivateKeyKey: cert.privateKey}
-
-	_, err = client.Secrets(targetNamespace).Update(context.Background(), secret, metav1.UpdateOptions{})
-	return err
-}
-
-// CreateOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
+// createOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
 // It updates the secret if the existing certificate is close to expiration.
-func CreateOrUpdateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace string, baremetalConfig *metal3iov1alpha1.Provisioning, scheme *runtime.Scheme) error {
-	existing, err := client.Secrets(targetNamespace).Get(context.Background(), tlsSecretName, metav1.GetOptions{})
-	if err != nil && !apierrors.IsNotFound(err) {
-		return err
-	}
-
-	if err == nil {
-		return updateTlsSecret(client, targetNamespace, baremetalConfig, scheme, existing)
-	}
-
-	// Secret does not already exist. So, create one.
-	cert, err := generateTlsCertificate(baremetalConfig.Spec.ProvisioningIP)
+func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
+	cert, err := generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
 	if err != nil {
 		return err
 	}
@@ -232,7 +180,7 @@ func CreateOrUpdateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      tlsSecretName,
-			Namespace: targetNamespace,
+			Namespace: info.Namespace,
 		},
 		Data: map[string][]byte{
 			corev1.TLSCertKey:       cert.certificate,
@@ -240,12 +188,15 @@ func CreateOrUpdateTlsSecret(client coreclientv1.SecretsGetter, targetNamespace 
 		},
 	}
 
-	err = controllerutil.SetControllerReference(baremetalConfig, secret, scheme)
-	if err != nil {
+	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
 		return err
 	}
 
-	_, err = client.Secrets(targetNamespace).Create(context.Background(), secret, metav1.CreateOptions{})
-
-	return err
+	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, func(existing *corev1.Secret) (bool, error) {
+		expired, err := isTlsCertificateExpired(existing.Data[corev1.TLSCertKey])
+		if err != nil {
+			return false, err
+		}
+		return expired, nil
+	})
 }
