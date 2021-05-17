@@ -51,7 +51,7 @@ spec:
                 - Disabled
                 type: string
               provisioningNetworkCIDR:
-                description: ProvisioningNetworkCIDR is the network on which the baremetal nodes are provisioned. The provisioningIP and the IPs in the dhcpRange all come from within this network.
+                description: ProvisioningNetworkCIDR is the network on which the baremetal nodes are provisioned. The provisioningIP and the IPs in the dhcpRange all come from within this network. IPv6 networks cannot be larger than a /64.
                 type: string
               provisioningOSDownloadURL:
                 description: ProvisioningOSDownloadURL is the location from which the OS Image used to boot baremetal host machines can be downloaded by the metal3 cluster.
