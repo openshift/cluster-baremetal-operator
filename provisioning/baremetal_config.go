@@ -40,6 +40,7 @@ var (
 	httpPort                       = "HTTP_PORT"
 	dhcpRange                      = "DHCP_RANGE"
 	machineImageUrl                = "RHCOS_IMAGE_URL"
+	ipOptions                      = "IP_OPTIONS"
 )
 
 func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
