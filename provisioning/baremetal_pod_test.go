@@ -164,7 +164,7 @@ func TestNewMetal3Containers(t *testing.T) {
 		{
 			name:               "DisabledSpec",
 			config:             disabledProvisioning().build(),
-			expectedContainers: 9,
+			expectedContainers: 8,
 		},
 		{
 			name:               "DisabledSpecWithoutProvisioningIP",
