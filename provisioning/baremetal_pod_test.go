@@ -27,6 +27,8 @@ import (
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
+var nodeMacAddresses = []string{"34:b3:2d:81:f8:fb", "34:b3:2d:81:f8:fc", "34:b3:2d:81:f8:fd"}
+
 func TestBuildEnvVar(t *testing.T) {
 	tCases := []struct {
 		name           string
@@ -176,7 +178,11 @@ func TestNewMetal3Containers(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			info := &ProvisioningInfo{Images: &images, ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *tc.config}}
+			info := &ProvisioningInfo{
+				Images:             &images,
+				ProvConfig:         &metal3iov1alpha1.Provisioning{Spec: *tc.config},
+				MasterMacAddresses: nodeMacAddresses,
+			}
 			actualContainers := newMetal3Containers(info)
 			assert.Equal(t, tc.expectedContainers, len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, tc.expectedContainers, len(actualContainers)))
 		})

@@ -12,6 +12,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -24,6 +25,7 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 	// the infrastructure CR
 	utilruntime.Must(configv1.AddToScheme(scheme))
 	utilruntime.Must(metal3iov1alpha1.AddToScheme(scheme))
+	utilruntime.Must(baremetalv1alpha1.AddToScheme(scheme))
 	return scheme
 }
 
@@ -217,5 +219,55 @@ func TestAPIServerInternalHost(t *testing.T) {
 	}
 	if got != want {
 		t.Errorf("ProvisioningReconciler.apiServerInternalHost() = %v, want %v", got, want)
+	}
+}
+
+func TestProvisioningReconciler_masterMacAddresses(t *testing.T) {
+	sc := setUpSchemeForReconciler()
+	bmhl := []runtime.Object{
+		&baremetalv1alpha1.BareMetalHost{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-master-0", Namespace: ComponentNamespace},
+			Spec: baremetalv1alpha1.BareMetalHostSpec{
+				BootMACAddress: "00:3d:25:45:bf:e5",
+			},
+		},
+		&baremetalv1alpha1.BareMetalHost{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-master-1", Namespace: ComponentNamespace},
+			Spec: baremetalv1alpha1.BareMetalHostSpec{
+				BootMACAddress: "00:3d:25:45:bf:e6",
+			},
+		},
+		&baremetalv1alpha1.BareMetalHost{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-master-2", Namespace: ComponentNamespace},
+			Spec: baremetalv1alpha1.BareMetalHostSpec{
+				BootMACAddress: "00:3d:25:45:bf:e7",
+			},
+		},
+		&baremetalv1alpha1.BareMetalHost{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-worker-0", Namespace: ComponentNamespace},
+			Spec: baremetalv1alpha1.BareMetalHostSpec{
+				BootMACAddress: "00:3d:25:45:bf:e8",
+			},
+		},
+		&baremetalv1alpha1.BareMetalHost{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-worker-1", Namespace: ComponentNamespace},
+			Spec: baremetalv1alpha1.BareMetalHostSpec{
+				BootMACAddress: "00:3d:25:45:bf:e9",
+			},
+		},
+	}
+	r := &ProvisioningReconciler{
+		Scheme: sc,
+		Client: fakeclient.NewFakeClientWithScheme(sc, bmhl...),
+	}
+
+	want := []string{"00:3d:25:45:bf:e5", "00:3d:25:45:bf:e6", "00:3d:25:45:bf:e7"}
+	got, err := r.masterMacAddresses(context.TODO())
+	if err != nil {
+		t.Errorf("ProvisioningReconciler.masterMacAddresses() error = %v", err)
+		return
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ProvisioningReconciler.masterMacAddresses() = %v, want %v", got, want)
 	}
 }

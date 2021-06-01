@@ -20,6 +20,7 @@ import (
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -30,6 +31,7 @@ import (
 
 	// +kubebuilder:scaffold:imports
 
+	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -43,27 +45,14 @@ var (
 )
 
 func init() {
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		klog.ErrorS(err, "Error adding k8s client to scheme.")
-		os.Exit(1)
-	}
-
-	if err := metal3iov1alpha1.AddToScheme(scheme); err != nil {
-		klog.ErrorS(err, "Error adding k8s client to scheme.")
-		os.Exit(1)
-	}
-
-	if err := osconfigv1.AddToScheme(scheme); err != nil {
-		klog.ErrorS(err, "Error adding k8s client to scheme.")
-		os.Exit(1)
-	}
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(metal3iov1alpha1.AddToScheme(scheme))
+	utilruntime.Must(osconfigv1.AddToScheme(scheme))
+	utilruntime.Must(baremetalv1alpha1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 	// The following is needed to read the Infrastructure CR
-	if err := osconfigv1.Install(scheme); err != nil {
-		klog.ErrorS(err, "")
-		os.Exit(1)
-	}
+	utilruntime.Must(osconfigv1.Install(scheme))
 }
 
 func main() {

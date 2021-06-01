@@ -25,7 +25,7 @@ linters:
 
 linters-settings:
   goimports:
-    local-prefixes: "github.com/openshift"
+    local-prefixes: github.com/openshift,github.com/metal3-io
   govet:
     check-shadowing: false
 
