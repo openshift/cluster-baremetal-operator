@@ -75,8 +75,6 @@ manifests: generate
 
 	# manifests needed for the webhook
 	mv $(TMP_DIR)/v1_service_cluster-baremetal-webhook-service.yaml manifests/0000_31_cluster-baremetal-operator_03_webhookservice.yaml
-	# This is created in code once the we are in a "final" state
-	# mv $(TMP_DIR)/admissionregistration.k8s.io_v1beta1_validatingwebhookconfiguration_cluster-baremetal-validating-webhook-configuration.yaml manifests/0000_31_cluster-baremetal-operator_04_validatingwebhook.yaml
 
 	# cluster-baremetal-operator rbacs
 	rm -f manifests/0000_31_cluster-baremetal-operator_05_rbac.yaml

@@ -33,9 +33,6 @@ func (r *Provisioning) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// see https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html
-// +kubebuilder:webhook:verbs=create;update,path=/validate-metal3-io-v1alpha1-provisioning,mutating=false,failurePolicy=ignore,groups=metal3.io,resources=provisionings,versions=v1alpha1,name=vprovisioning.kb.io
-
 // https://golangbyexample.com/go-check-if-type-implements-interface/
 var _ webhook.Validator = &Provisioning{}
 

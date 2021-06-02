@@ -3,7 +3,6 @@ commonAnnotations:
   include.release.openshift.io/single-node-developer: "true"
 
 resources:
-- manifests.yaml
 - service.yaml
 
 configurations:

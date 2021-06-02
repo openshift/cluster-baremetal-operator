@@ -22,5 +22,4 @@ patchesStrategicMerge:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in crd/kustomization.yaml
 - manager_webhook_patch.yaml
 - webhookcainjection_patch.yaml
-- validating_webhook_client_config_patch.yaml
 
