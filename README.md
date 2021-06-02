@@ -55,7 +55,7 @@ The configurable portions of the Provisioning CRD are:
 This IP address should be within the provisioning subnet, and outside of the DHCP range.
 
 - ProvisioningInterface: This is the name of the network interface on the baremetal masters which will be used to provision new nodes.
-Note that all masters must have the same network interface name.
+Note that all masters must have the same network interface name (if one is provided).
 
 - ProvisioningNetwork: This specifies the way in which you want to have your provisioning network configured.
 
