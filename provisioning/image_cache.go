@@ -137,13 +137,14 @@ func newImageCacheContainers(images *Images, proxy *osconfigv1.Proxy) []corev1.C
 	return injectProxyAndCA(containers, proxy)
 }
 
-func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provisioningConfig *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy) (*corev1.PodTemplateSpec, error) {
-	cacheConfig, err := imageCacheConfig(targetNamespace, *provisioningConfig)
+func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSpec, error) {
+	cacheConfig, err := imageCacheConfig(info.Namespace, info.ProvConfig.Spec)
 	if err != nil {
 		return nil, err
 	}
+	info.ProvConfig.Spec = *cacheConfig
 
-	containers := newImageCacheContainers(images, proxy)
+	containers := newImageCacheContainers(info.Images, info.Proxy)
 
 	tolerations := []corev1.Toleration{
 		{
@@ -196,9 +197,9 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 				},
 			},
 			InitContainers: injectProxyAndCA([]corev1.Container{
-				createInitContainerMachineOsDownloader(images, cacheConfig),
-				createInitContainerIpaDownloader(images),
-			}, proxy),
+				createInitContainerMachineOsDownloader(info),
+				createInitContainerIpaDownloader(info.Images),
+			}, info.Proxy),
 			Containers:        containers,
 			HostNetwork:       true,
 			DNSPolicy:         corev1.DNSClusterFirstWithHostNet,
@@ -212,8 +213,8 @@ func newImageCachePodTemplateSpec(targetNamespace string, images *Images, provis
 	}, nil
 }
 
-func newImageCacheDaemonSet(targetNamespace string, images *Images, config *metal3iov1alpha1.ProvisioningSpec, proxy *osconfigv1.Proxy) (*appsv1.DaemonSet, error) {
-	template, err := newImageCachePodTemplateSpec(targetNamespace, images, config, proxy)
+func newImageCacheDaemonSet(info *ProvisioningInfo) (*appsv1.DaemonSet, error) {
+	template, err := newImageCachePodTemplateSpec(info)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +223,7 @@ func newImageCacheDaemonSet(targetNamespace string, images *Images, config *meta
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      imageCacheService,
-			Namespace: targetNamespace,
+			Namespace: info.Namespace,
 			Labels: map[string]string{
 				"k8s-app": metal3AppName,
 			},
@@ -245,7 +246,7 @@ func newImageCacheDaemonSet(targetNamespace string, images *Images, config *meta
 }
 
 func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
-	imageCacheDaemonSet, err := newImageCacheDaemonSet(info.Namespace, info.Images, &info.ProvConfig.Spec, info.Proxy)
+	imageCacheDaemonSet, err := newImageCacheDaemonSet(info)
 	if err != nil {
 		return
 	}

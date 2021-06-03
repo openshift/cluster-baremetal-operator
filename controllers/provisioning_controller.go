@@ -18,7 +18,10 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -60,6 +63,7 @@ type ProvisioningReconciler struct {
 	ReleaseVersion string
 	ImagesFilename string
 	WebHookEnabled bool
+	APIServerHost  string
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -184,13 +188,10 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	// Get cluster-wide proxy information
-	clusterWideProxy, err := r.OSClient.ConfigV1().Proxies().Get(context.Background(), "cluster", metav1.GetOptions{})
+	info, err := r.provisioningInfo(baremetalConfig, &containerImages)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	info := r.provisioningInfo(baremetalConfig, &containerImages, clusterWideProxy)
 
 	// Check if Provisioning Configuartion is being deleted
 	deleted, err := r.checkForCRDeletion(ctx, info)
@@ -299,7 +300,26 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return result, nil
 }
 
-func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, proxy *osconfigv1.Proxy) *provisioning.ProvisioningInfo {
+func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images) (*provisioning.ProvisioningInfo, error) {
+	clusterWideProxy, err := r.OSClient.ConfigV1().Proxies().Get(context.Background(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	ips, err := net.LookupIP(r.APIServerHost)
+	if err != nil {
+		return nil, err
+	}
+
+	ns := provisioning.NetworkStackType(0)
+	for _, ip := range ips {
+		if len(ip) == net.IPv4len {
+			ns |= provisioning.NetworkStackV4
+		} else if len(ip) == net.IPv6len {
+			ns |= provisioning.NetworkStackV6
+		}
+	}
+
 	return &provisioning.ProvisioningInfo{
 		Client:        r.KubeClient,
 		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
@@ -307,8 +327,9 @@ func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.P
 		Scheme:        r.Scheme,
 		Namespace:     ComponentNamespace,
 		Images:        images,
-		Proxy:         proxy,
-	}
+		Proxy:         clusterWideProxy,
+		NetworkStack:  ns,
+	}, nil
 }
 
 //Ensure Finalizer is present on the Provisioning CR when not deleted and
@@ -365,11 +386,33 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	return nil
 }
 
+func apiServerHost() (string, error) {
+	config, err := ctrl.GetConfig()
+	if err != nil {
+		return "", err
+	}
+
+	apiServerURL, err := url.Parse(config.Host)
+	if err != nil {
+		return "", err
+	}
+	host := config.Host
+	if strings.Contains(apiServerURL.Host, ":") {
+		host = strings.Split(apiServerURL.Host, ":")[0]
+	}
+	return host, nil
+}
+
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	err := r.ensureClusterOperator(nil)
 	if err != nil {
 		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
+	}
+
+	r.APIServerHost, err = apiServerHost()
+	if err != nil {
+		return errors.Wrap(err, "could not get APIServer")
 	}
 
 	// Check the Platform Type to determine the state of the CO
