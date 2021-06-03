@@ -64,6 +64,7 @@ type ProvisioningSpec struct {
 	// ProvisioningNetworkCIDR is the network on which the
 	// baremetal nodes are provisioned. The provisioningIP and the
 	// IPs in the dhcpRange all come from within this network.
+	// IPv6 networks cannot be larger than a /64.
 	ProvisioningNetworkCIDR string `json:"provisioningNetworkCIDR,omitempty"`
 
 	// ProvisioningDHCPExternal indicates whether the DHCP server
@@ -128,6 +129,16 @@ type ProvisioningSpec struct {
 	// If the boot iso image is already served by an httpd server, setting
 	// this option to http allows to directly provide the image from there.
 	BootIsoSource BootIsoSource `json:"bootIsoSource,omitempty"`
+
+	// VirtualMediaViaExternalNetwork flag when set to "true" allows for workers
+	// to boot via Virtual Media and contact metal3 over the External Network.
+	// When the flag is set to "false" (which is the default), virtual media
+	// deployments can still happen based on the configuration specified in the
+	// ProvisioningNetwork i.e when in Disabled mode, over the External Network
+	// and over Provisioning Network when in Managed mode.
+	// PXE deployments will always use the Provisioning Network and will not be
+	// affected by this flag.
+	VirtualMediaViaExternalNetwork bool `json:"virtualMediaViaExternalNetwork,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning

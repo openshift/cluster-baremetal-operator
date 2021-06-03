@@ -57,11 +57,14 @@ spec:
                 - Disabled
                 type: string
               provisioningNetworkCIDR:
-                description: ProvisioningNetworkCIDR is the network on which the baremetal nodes are provisioned. The provisioningIP and the IPs in the dhcpRange all come from within this network.
+                description: ProvisioningNetworkCIDR is the network on which the baremetal nodes are provisioned. The provisioningIP and the IPs in the dhcpRange all come from within this network. IPv6 networks cannot be larger than a /64.
                 type: string
               provisioningOSDownloadURL:
                 description: ProvisioningOSDownloadURL is the location from which the OS Image used to boot baremetal host machines can be downloaded by the metal3 cluster.
                 type: string
+              virtualMediaViaExternalNetwork:
+                description: VirtualMediaViaExternalNetwork flag when set to "true" allows for workers to boot via Virtual Media and contact metal3 over the External Network. When the flag is set to "false" (which is the default), virtual media deployments can still happen based on the configuration specified in the ProvisioningNetwork i.e when in Disabled mode, over the External Network and over Provisioning Network when in Managed mode. PXE deployments will always use the Provisioning Network and will not be affected by this flag.
+                type: boolean
               watchAllNamespaces:
                 description: WatchAllNamespaces provides a way to explicitly allow use of this Provisioning configuration across all Namespaces. It is an optional configuration which defaults to false and in that state will be used to provision baremetal hosts in only the openshift-machine-api namespace. When set to true, this provisioning configuration would be used for baremetal hosts across all namespaces.
                 type: boolean
