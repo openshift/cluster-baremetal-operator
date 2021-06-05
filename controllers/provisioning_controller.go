@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -396,9 +395,9 @@ func apiServerHost() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	host := config.Host
-	if strings.Contains(apiServerURL.Host, ":") {
-		host = strings.Split(apiServerURL.Host, ":")[0]
+	host, _, err := net.SplitHostPort(apiServerURL.Host)
+	if err != nil {
+		return "", err
 	}
 	return host, nil
 }
