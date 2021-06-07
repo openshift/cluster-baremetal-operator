@@ -264,12 +264,14 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 }
 
 func createInitContainerMachineOsDownloader(info *ProvisioningInfo) corev1.Container {
-	optionValue := ""
+	var optionValue string
 	switch info.NetworkStack {
 	case NetworkStackV4:
 		optionValue = "ip=dhcp"
 	case NetworkStackV6:
 		optionValue = "ip=dhcp6"
+	case NetworkStackDual:
+		optionValue = ""
 	}
 
 	initContainer := corev1.Container{
