@@ -9,14 +9,6 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 )
 
-type NetworkStackType int
-
-const (
-	NetworkStackV4   NetworkStackType = 1 << iota
-	NetworkStackV6   NetworkStackType = 1 << iota
-	NetworkStackDual NetworkStackType = (NetworkStackV4 & NetworkStackV6)
-)
-
 type ProvisioningInfo struct {
 	Client        kubernetes.Interface
 	EventRecorder events.Recorder
@@ -25,5 +17,4 @@ type ProvisioningInfo struct {
 	Namespace     string
 	Images        *Images
 	Proxy         *configv1.Proxy
-	NetworkStack  NetworkStackType
 }

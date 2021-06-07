@@ -131,8 +131,7 @@ func TestNewMetal3InitContainers(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			info := &ProvisioningInfo{Images: &images, ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *tc.config}}
-			actualContainers := newMetal3InitContainers(info)
+			actualContainers := newMetal3InitContainers(&images, tc.config, nil)
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Init Containers : %d Actual number of Init Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 		})
 	}
@@ -176,33 +175,30 @@ func TestNewMetal3Containers(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			info := &ProvisioningInfo{Images: &images, ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *tc.config}}
-			actualContainers := newMetal3Containers(info)
+			actualContainers := newMetal3Containers(&images, tc.config, nil)
 			assert.Equal(t, tc.expectedContainers, len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, tc.expectedContainers, len(actualContainers)))
 		})
 	}
 }
 
 func TestProxyAndCAInjection(t *testing.T) {
-	info := &ProvisioningInfo{
-		Images: &Images{
-			BaremetalOperator:   expectedBaremetalOperator,
-			Ironic:              expectedIronic,
-			IronicInspector:     expectedIronicInspector,
-			IpaDownloader:       expectedIronicIpaDownloader,
-			MachineOsDownloader: expectedMachineOsDownloader,
-			StaticIpManager:     expectedIronicStaticIpManager,
+	images := Images{
+		BaremetalOperator:   expectedBaremetalOperator,
+		Ironic:              expectedIronic,
+		IronicInspector:     expectedIronicInspector,
+		IpaDownloader:       expectedIronicIpaDownloader,
+		MachineOsDownloader: expectedMachineOsDownloader,
+		StaticIpManager:     expectedIronicStaticIpManager,
+	}
+
+	proxy := v1.Proxy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
 		},
-		ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
-		Proxy: &v1.Proxy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "cluster",
-			},
-			Status: v1.ProxyStatus{
-				HTTPProxy:  "https://172.2.0.1:3128",
-				HTTPSProxy: "https://172.2.0.1:3128",
-				NoProxy:    ".example.com",
-			},
+		Status: v1.ProxyStatus{
+			HTTPProxy:  "https://172.2.0.1:3128",
+			HTTPSProxy: "https://172.2.0.1:3128",
+			NoProxy:    ".example.com",
 		},
 	}
 
@@ -212,11 +208,11 @@ func TestProxyAndCAInjection(t *testing.T) {
 	}{
 		{
 			name:       "init containers have proxy and CA information",
-			containers: newMetal3InitContainers(info),
+			containers: newMetal3InitContainers(&images, managedProvisioning().build(), &proxy),
 		},
 		{
 			name:       "metal3 containers have proxy and CA information",
-			containers: newMetal3Containers(info),
+			containers: newMetal3Containers(&images, managedProvisioning().build(), &proxy),
 		},
 	}
 	for _, tc := range tCases {
