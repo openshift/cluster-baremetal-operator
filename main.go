@@ -90,6 +90,7 @@ func main() {
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
+		Namespace:          controllers.ComponentNamespace,
 		LeaderElection:     enableLeaderElection,
 		Port:               9443,
 		CertDir:            "/etc/cluster-baremetal-operator/tls",
