@@ -503,6 +503,8 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		VolumeMounts: []corev1.VolumeMount{
 			sharedVolumeMount,
 			imageVolumeMount,
+			ironicTlsMount,
+			inspectorTlsMount,
 		},
 		Env: []corev1.EnvVar{
 			buildEnvVar(httpPort, config),
