@@ -385,20 +385,35 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	return nil
 }
 
-func apiServerHost() (string, error) {
-	config, err := ctrl.GetConfig()
+func (r *ProvisioningReconciler) apiServerHost() (string, error) {
+	ctx := context.Background()
+
+	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "unable to read Infrastructure CR")
 	}
 
-	apiServerURL, err := url.Parse(config.Host)
+	if infra.Status.APIServerInternalURL != "" {
+		//TODO: Present only for debugging purposes. Remove before merge
+		klog.Info("Infrastructure API Server ", "Internal URL ", infra.Status.APIServerInternalURL)
+	} else {
+		return "", errors.Wrap(err, "invalid APIServerInternalURL in Infrastructure CR")
+	}
+	apiServerInternalURL, err := url.Parse(infra.Status.APIServerInternalURL)
+	if err != nil {
+		return "", errors.Wrap(err, "unable to parse API Server Internal URL")
+	} else {
+		//TODO: Present only for debugging purposes. Remove before merge
+		klog.Info("API Server Internal URL : ", apiServerInternalURL)
+	}
+	host, _, err := net.SplitHostPort(apiServerInternalURL.Host)
 	if err != nil {
 		return "", err
+	} else {
+		//TODO: Present only for debugging purposes. Remove before merge
+		klog.Info("API Server Host : ", host)
 	}
-	host, _, err := net.SplitHostPort(apiServerURL.Host)
-	if err != nil {
-		return "", err
-	}
+
 	return host, nil
 }
 
@@ -409,7 +424,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
 	}
 
-	r.APIServerHost, err = apiServerHost()
+	r.APIServerHost, err = r.apiServerHost()
 	if err != nil {
 		return errors.Wrap(err, "could not get APIServer")
 	}
