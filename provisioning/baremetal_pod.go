@@ -263,15 +263,20 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 	return initContainer
 }
 
-func createInitContainerMachineOsDownloader(info *ProvisioningInfo) corev1.Container {
-	optionValue := ""
+func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
+	var optionValue string
 	switch info.NetworkStack {
 	case NetworkStackV4:
 		optionValue = "ip=dhcp"
 	case NetworkStackV6:
 		optionValue = "ip=dhcp6"
+	case NetworkStackDual:
+		optionValue = ""
 	}
+	return optionValue
+}
 
+func createInitContainerMachineOsDownloader(info *ProvisioningInfo) corev1.Container {
 	initContainer := corev1.Container{
 		Name:            "metal3-machine-os-downloader",
 		Image:           info.Images.MachineOsDownloader,
@@ -285,7 +290,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo) corev1.Conta
 			buildEnvVar(machineImageUrl, &info.ProvConfig.Spec),
 			{
 				Name:  ipOptions,
-				Value: optionValue,
+				Value: ipOptionForMachineOsDownloader(info),
 			},
 		},
 		Resources: corev1.ResourceRequirements{
