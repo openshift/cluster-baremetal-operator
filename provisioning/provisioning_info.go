@@ -14,7 +14,7 @@ type NetworkStackType int
 const (
 	NetworkStackV4   NetworkStackType = 1 << iota
 	NetworkStackV6   NetworkStackType = 1 << iota
-	NetworkStackDual NetworkStackType = (NetworkStackV4 & NetworkStackV6)
+	NetworkStackDual NetworkStackType = (NetworkStackV4 | NetworkStackV6)
 )
 
 type ProvisioningInfo struct {
