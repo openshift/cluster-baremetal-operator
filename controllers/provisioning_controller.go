@@ -62,7 +62,7 @@ type ProvisioningReconciler struct {
 	ReleaseVersion string
 	ImagesFilename string
 	WebHookEnabled bool
-	APIServerHost  string
+	NetworkStack   provisioning.NetworkStackType
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -305,20 +305,6 @@ func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.P
 		return nil, err
 	}
 
-	ips, err := net.LookupIP(r.APIServerHost)
-	if err != nil {
-		return nil, err
-	}
-
-	ns := provisioning.NetworkStackType(0)
-	for _, ip := range ips {
-		if len(ip) == net.IPv4len {
-			ns |= provisioning.NetworkStackV4
-		} else if len(ip) == net.IPv6len {
-			ns |= provisioning.NetworkStackV6
-		}
-	}
-
 	return &provisioning.ProvisioningInfo{
 		Client:        r.KubeClient,
 		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
@@ -327,7 +313,7 @@ func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.P
 		Namespace:     ComponentNamespace,
 		Images:        images,
 		Proxy:         clusterWideProxy,
-		NetworkStack:  ns,
+		NetworkStack:  r.NetworkStack,
 	}, nil
 }
 
@@ -385,34 +371,64 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	return nil
 }
 
-func apiServerHost() (string, error) {
-	config, err := ctrl.GetConfig()
+func networkStack(ips []net.IP) provisioning.NetworkStackType {
+	ns := provisioning.NetworkStackType(0)
+	for _, ip := range ips {
+		if ip.IsLoopback() {
+			continue
+		}
+		if ip.To4() != nil {
+			ns |= provisioning.NetworkStackV4
+		} else {
+			ns |= provisioning.NetworkStackV6
+		}
+	}
+	return ns
+}
+
+func (r *ProvisioningReconciler) apiServerInternalHost(ctx context.Context) (string, error) {
+	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return "", errors.Wrap(err, "unable to read Infrastructure CR")
+	}
+
+	if infra.Status.APIServerInternalURL == "" {
+		return "", errors.Wrap(err, "invalid APIServerInternalURL in Infrastructure CR")
+	}
+
+	apiServerInternalURL, err := url.Parse(infra.Status.APIServerInternalURL)
+	if err != nil {
+		return "", errors.Wrap(err, "unable to parse API Server Internal URL")
+	}
+
+	host, _, err := net.SplitHostPort(apiServerInternalURL.Host)
 	if err != nil {
 		return "", err
 	}
 
-	apiServerURL, err := url.Parse(config.Host)
-	if err != nil {
-		return "", err
-	}
-	host, _, err := net.SplitHostPort(apiServerURL.Host)
-	if err != nil {
-		return "", err
-	}
 	return host, nil
 }
 
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	ctx := context.Background()
 	err := r.ensureClusterOperator(nil)
 	if err != nil {
 		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
 	}
 
-	r.APIServerHost, err = apiServerHost()
+	apiInt, err := r.apiServerInternalHost(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get APIServer")
+		return errors.Wrap(err, "could not get internal APIServer")
 	}
+
+	ips, err := net.LookupIP(apiInt)
+	if err != nil {
+		return errors.Wrap(err, "could not lookupIP for internal APIServer: "+apiInt)
+	}
+
+	r.NetworkStack = networkStack(ips)
+	klog.InfoS("Network stack calculation", "APIServerInternalHost", apiInt, "NetworkStack", r.NetworkStack)
 
 	// Check the Platform Type to determine the state of the CO
 	enabled, err := r.isEnabled()

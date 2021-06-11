@@ -236,3 +236,30 @@ func TestProxyAndCAInjection(t *testing.T) {
 		})
 	}
 }
+
+func TestIPOptionForMachineOsDownloader(t *testing.T) {
+	tests := []struct {
+		ns   NetworkStackType
+		want string
+	}{
+		{
+			ns:   NetworkStackV4,
+			want: "ip=dhcp",
+		},
+		{
+			ns:   NetworkStackV6,
+			want: "ip=dhcp6",
+		},
+		{
+			ns:   NetworkStackDual,
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := ipOptionForMachineOsDownloader(&ProvisioningInfo{NetworkStack: tt.ns}); got != tt.want {
+				t.Errorf("ipOptionForMachineOsDownloader() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
