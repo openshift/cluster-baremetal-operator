@@ -75,7 +75,7 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig() error {
 		dhcpRange = ""
 	}
 
-	if err := validateProvisioningNetworkSettings(prov.Spec.ProvisioningIP, prov.Spec.ProvisioningNetworkCIDR, dhcpRange); err != nil {
+	if err := validateProvisioningNetworkSettings(prov.Spec.ProvisioningIP, prov.Spec.ProvisioningNetworkCIDR, dhcpRange, prov.getProvisioningNetworkMode()); err != nil {
 		errs = append(errs, err...)
 	}
 
@@ -140,7 +140,7 @@ func validateProvisioningOSDownloadURL(uri string) []error {
 	return errs
 }
 
-func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange string) []error {
+func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange string, provisioningNetworkMode ProvisioningNetwork) []error {
 	// provisioningIP and networkCIDR are always set.  DHCP range is optional
 	// depending on mode.
 	var errs []error
@@ -157,6 +157,13 @@ func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange strin
 	if err != nil {
 		errs = append(errs, fmt.Errorf("could not parse provisioningNetworkCIDR %q", cidr))
 		return errs
+	}
+
+	// We cannot have managed ipv6 provisioning networks larger than a /64 due
+	// to a limitation in dnsmasq
+	cidrSize, _ := provisioningCIDR.Mask.Size()
+	if cidrSize < 64 && provisioningCIDR.IP.To4() == nil && provisioningCIDR.IP.To16() != nil && provisioningNetworkMode == ProvisioningNetworkManaged {
+		errs = append(errs, fmt.Errorf("provisioningNetworkCIDR mask must be greater than or equal to 64 for managed IPv6 networks"))
 	}
 
 	// Ensure provisioning IP is in the network CIDR

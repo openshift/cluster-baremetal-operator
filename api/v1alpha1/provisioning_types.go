@@ -63,8 +63,9 @@ type ProvisioningSpec struct {
 
 	// ProvisioningNetworkCIDR is the network on which the
 	// baremetal nodes are provisioned. The provisioningIP and the
-	// IPs in the dhcpRange all come from within this network.
-	// IPv6 networks cannot be larger than a /64.
+	// IPs in the dhcpRange all come from within this network. When using IPv6
+	// and in a network managed by the Baremetal IPI solution this cannot be a
+	// network larger than a /64.
 	ProvisioningNetworkCIDR string `json:"provisioningNetworkCIDR,omitempty"`
 
 	// ProvisioningDHCPExternal indicates whether the DHCP server
