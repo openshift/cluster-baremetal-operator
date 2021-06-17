@@ -127,6 +127,20 @@ func TestNewMetal3InitContainers(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "disabled with provisioning ip",
+			config: disabledProvisioning().ProvisioningIP("1.2.3.4").ProvisioningNetworkCIDR("").build(),
+			expectedContainers: []corev1.Container{
+				{
+					Name:  "metal3-ipa-downloader",
+					Image: images.IpaDownloader,
+				},
+				{
+					Name:  "metal3-machine-os-downloader",
+					Image: images.MachineOsDownloader,
+				},
+			},
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
