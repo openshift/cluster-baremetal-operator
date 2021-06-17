@@ -197,7 +197,7 @@ func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSp
 				},
 			},
 			InitContainers: injectProxyAndCA([]corev1.Container{
-				createInitContainerMachineOsDownloader(info),
+				createInitContainerMachineOsDownloader(info, false),
 				createInitContainerIpaDownloader(info.Images),
 			}, info.Proxy),
 			Containers:        containers,

@@ -229,7 +229,7 @@ func setIronicHtpasswdHash(name string, secretName string) corev1.EnvVar {
 func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	initContainers := []corev1.Container{
 		createInitContainerIpaDownloader(info.Images),
-		createInitContainerMachineOsDownloader(info),
+		createInitContainerMachineOsDownloader(info, true),
 	}
 
 	// If the provisioning network is disabled, and the user hasn't requested a
@@ -276,7 +276,17 @@ func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
 	return optionValue
 }
 
-func createInitContainerMachineOsDownloader(info *ProvisioningInfo) corev1.Container {
+func createInitContainerMachineOsDownloader(info *ProvisioningInfo, setIpOptions bool) corev1.Container {
+	env := []corev1.EnvVar{
+		buildEnvVar(machineImageUrl, &info.ProvConfig.Spec),
+	}
+	if setIpOptions {
+		env = append(env,
+			corev1.EnvVar{
+				Name:  ipOptions,
+				Value: ipOptionForMachineOsDownloader(info),
+			})
+	}
 	initContainer := corev1.Container{
 		Name:            "metal3-machine-os-downloader",
 		Image:           info.Images.MachineOsDownloader,
@@ -286,13 +296,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo) corev1.Conta
 			Privileged: pointer.BoolPtr(true),
 		},
 		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
-		Env: []corev1.EnvVar{
-			buildEnvVar(machineImageUrl, &info.ProvConfig.Spec),
-			{
-				Name:  ipOptions,
-				Value: ipOptionForMachineOsDownloader(info),
-			},
-		},
+		Env:          env,
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("10m"),
