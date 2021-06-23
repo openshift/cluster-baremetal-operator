@@ -38,6 +38,16 @@ const (
 	ProvisioningSingletonName = "provisioning-configuration"
 )
 
+// BootIsoSource is the origin of the boot iso image
+// +kubebuilder:validation:Enum=local;http
+type BootIsoSource string
+
+// BootIsoSource values
+const (
+	BootIsoSourceLocal BootIsoSource = "local"
+	BootIsoSourceHttp  BootIsoSource = "http"
+)
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface
@@ -110,6 +120,14 @@ type ProvisioningSpec struct {
 	// openshift-machine-api namespace. When set to true, this provisioning
 	// configuration would be used for baremetal hosts across all namespaces.
 	WatchAllNamespaces bool `json:"watchAllNamespaces,omitempty"`
+
+	// BootIsoSource provides a way to set the location where the iso image
+	// to boot the nodes will be served from.
+	// By default the boot iso image is cached locally and served from
+	// the Provisioning service (Ironic) nodes using an auxiliary httpd server.
+	// If the boot iso image is already served by an httpd server, setting
+	// this option to http allows to directly provide the image from there.
+	BootIsoSource BootIsoSource `json:"bootIsoSource,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning

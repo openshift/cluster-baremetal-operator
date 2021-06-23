@@ -41,6 +41,7 @@ var (
 	dhcpRange                      = "DHCP_RANGE"
 	machineImageUrl                = "RHCOS_IMAGE_URL"
 	ipOptions                      = "IP_OPTIONS"
+	bootIsoSource                  = "IRONIC_BOOT_ISO_SOURCE"
 )
 
 func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
@@ -94,6 +95,13 @@ func getProvisioningOSDownloadURL(config *metal3iov1alpha1.ProvisioningSpec) *st
 	return nil
 }
 
+func getBootIsoSource(config *metal3iov1alpha1.ProvisioningSpec) *string {
+	if config.BootIsoSource != "" {
+		return (*string)(&config.BootIsoSource)
+	}
+	return nil
+}
+
 func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.ProvisioningSpec) *string {
 	switch name {
 	case provisioningIP:
@@ -114,6 +122,8 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 		return getDHCPRange(baremetalConfig)
 	case machineImageUrl:
 		return getProvisioningOSDownloadURL(baremetalConfig)
+	case bootIsoSource:
+		return getBootIsoSource(baremetalConfig)
 	}
 	return nil
 }

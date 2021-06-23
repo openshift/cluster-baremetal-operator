@@ -31,6 +31,12 @@ spec:
           spec:
             description: ProvisioningSpec defines the desired state of Provisioning
             properties:
+              bootIsoSource:
+                description: BootIsoSource provides a way to set the location where the iso image to boot the nodes will be served from. By default the boot iso image is cached locally and served from the Provisioning service (Ironic) nodes using an auxiliary httpd server. If the boot iso image is already served by an httpd server, setting this option to http allows to directly provide the image from there.
+                enum:
+                - local
+                - http
+                type: string
               provisioningDHCPExternal:
                 description: ProvisioningDHCPExternal indicates whether the DHCP server for IP addresses in the provisioning DHCP range is present within the metal3 cluster or external to it. This field is being deprecated in favor of provisioningNetwork.
                 type: boolean
