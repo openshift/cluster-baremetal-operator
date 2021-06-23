@@ -37,14 +37,12 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig() error {
 
 	/*
 	   Managed:
-	   "ProvisioningInterface"
 	   "ProvisioningIP"
 	   "ProvisioningNetworkCIDR"
 	   "ProvisioningDHCPRange"
 	   "ProvisioningOSDownloadURL"
 
 	   Unmanaged:
-	   "ProvisioningInterface"
 	   "ProvisioningIP"
 	   "ProvisioningNetworkCIDR"
 	   "ProvisioningOSDownloadURL"
@@ -81,11 +79,6 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig() error {
 		errs = append(errs, err...)
 	}
 
-	if provisioningNetworkMode != ProvisioningNetworkDisabled {
-		if err := validateProvisioningInterface(prov.Spec.ProvisioningInterface); err != nil {
-			errs = append(errs, err...)
-		}
-	}
 	// We need to check this here because we've designed validateProvisioningNetworkSettings() to allow an empty DHCP Range.
 	if provisioningNetworkMode == ProvisioningNetworkManaged {
 		if prov.Spec.ProvisioningDHCPRange == "" {
@@ -144,18 +137,6 @@ func validateProvisioningOSDownloadURL(uri string) []error {
 		errs = append(errs, fmt.Errorf("the provisioningOSDownloadURL provided: %q is an OS image and must end in .qcow2.gz or .qcow2.xz", uri))
 	}
 
-	return errs
-}
-
-func validateProvisioningInterface(iface string) []error {
-	// Unfortunately there seems to be nothing you can really do to verify
-	// the ProvisioningInterface as it's not necessarily on this machine
-	// and could be almost anything.
-	var errs []error
-
-	if iface == "" {
-		errs = append(errs, fmt.Errorf("provisioningInterface is required but is not set"))
-	}
 	return errs
 }
 

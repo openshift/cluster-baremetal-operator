@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -327,6 +328,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 			},
 		},
 	}
+
 	return initContainer
 }
 
@@ -334,23 +336,23 @@ func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 	containers := []corev1.Container{
 		createContainerMetal3BaremetalOperator(info.Images, &info.ProvConfig.Spec),
 		createContainerMetal3Mariadb(info.Images),
-		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec),
-		createContainerMetal3IronicConductor(info.Images, &info.ProvConfig.Spec),
+		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses),
+		createContainerMetal3IronicConductor(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses),
 		createContainerIronicInspectorRamdiskLogs(info.Images),
-		createContainerMetal3IronicApi(info.Images, &info.ProvConfig.Spec),
+		createContainerMetal3IronicApi(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses),
 		createContainerIronicDeployRamdiskLogs(info.Images),
-		createContainerMetal3IronicInspector(info.Images, &info.ProvConfig.Spec),
+		createContainerMetal3IronicInspector(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses),
 	}
 
 	// If the provisioning network is disabled, and the user hasn't requested a
 	// particular provisioning IP on the machine CIDR, we have nothing for this container
 	// to manage.
 	if info.ProvConfig.Spec.ProvisioningIP != "" && info.ProvConfig.Spec.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
-		containers = append(containers, createContainerMetal3StaticIpManager(info.Images, &info.ProvConfig.Spec))
+		containers = append(containers, createContainerMetal3StaticIpManager(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses))
 	}
 
 	if info.ProvConfig.Spec.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
-		containers = append(containers, createContainerMetal3Dnsmasq(info.Images, &info.ProvConfig.Spec))
+		containers = append(containers, createContainerMetal3Dnsmasq(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses))
 	}
 
 	return injectProxyAndCA(containers, info.Proxy)
@@ -441,7 +443,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 	return container
 }
 
-func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-dnsmasq",
 		Image:           images.Ironic,
@@ -466,7 +468,17 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 			},
 		},
 	}
+
+	container.Env = envWithMasterMacAddresses(container.Env, macs)
+
 	return container
+}
+
+func envWithMasterMacAddresses(envVars []corev1.EnvVar, macs []string) []corev1.EnvVar {
+	return append(envVars, corev1.EnvVar{
+		Name:  "PROVISIONING_MACS",
+		Value: strings.Join(macs, ","),
+	})
 }
 
 func createContainerMetal3Mariadb(images *Images) corev1.Container {
@@ -499,7 +511,7 @@ func createContainerMetal3Mariadb(images *Images) corev1.Container {
 	return container
 }
 
-func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
 	port, _ := strconv.Atoi(baremetalHttpPort) // #nosec
 	container := corev1.Container{
 		Name:            "metal3-httpd",
@@ -534,10 +546,13 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 			},
 		},
 	}
+
+	container.Env = envWithMasterMacAddresses(container.Env, macs)
+
 	return container
 }
 
-func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-ironic-conductor",
 		Image:           images.Ironic,
@@ -582,10 +597,13 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			},
 		},
 	}
+
+	container.Env = envWithMasterMacAddresses(container.Env, macs)
+
 	return container
 }
 
-func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-ironic-api",
 		Image:           images.Ironic,
@@ -624,6 +642,9 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 			},
 		},
 	}
+
+	container.Env = envWithMasterMacAddresses(container.Env, macs)
+
 	return container
 }
 
@@ -647,7 +668,7 @@ func createContainerIronicDeployRamdiskLogs(images *Images) corev1.Container {
 	return container
 }
 
-func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-ironic-inspector",
 		Image:           images.IronicInspector,
@@ -684,6 +705,9 @@ func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alph
 			},
 		},
 	}
+
+	container.Env = envWithMasterMacAddresses(container.Env, macs)
+
 	return container
 }
 
@@ -707,7 +731,7 @@ func createContainerIronicInspectorRamdiskLogs(images *Images) corev1.Container 
 	return container
 }
 
-func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-static-ip-manager",
 		Image:           images.StaticIpManager,
@@ -727,13 +751,15 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 			},
 		},
 	}
+
+	container.Env = envWithMasterMacAddresses(container.Env, macs)
+
 	return container
 }
 
 func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) *corev1.PodTemplateSpec {
 	initContainers := newMetal3InitContainers(info)
 	containers := newMetal3Containers(info)
-
 	tolerations := []corev1.Toleration{
 		{
 			Key:      "node-role.kubernetes.io/master",
@@ -877,7 +903,6 @@ func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 	// It will be created with the cboOwnedAnnotation
 
 	metal3Deployment := newMetal3Deployment(info)
-
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
 
 	err = controllerutil.SetControllerReference(info.ProvConfig, metal3Deployment, info.Scheme)

@@ -18,12 +18,13 @@ const (
 )
 
 type ProvisioningInfo struct {
-	Client        kubernetes.Interface
-	EventRecorder events.Recorder
-	ProvConfig    *metal3iov1alpha1.Provisioning
-	Scheme        *runtime.Scheme
-	Namespace     string
-	Images        *Images
-	Proxy         *configv1.Proxy
-	NetworkStack  NetworkStackType
+	Client             kubernetes.Interface
+	EventRecorder      events.Recorder
+	ProvConfig         *metal3iov1alpha1.Provisioning
+	Scheme             *runtime.Scheme
+	Namespace          string
+	Images             *Images
+	Proxy              *configv1.Proxy
+	NetworkStack       NetworkStackType
+	MasterMacAddresses []string
 }

@@ -58,14 +58,6 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 			expectedMode:  ProvisioningNetworkManaged,
 		},
 		{
-			// ProvisioningInterface is not specified.
-			name:          "InvalidManaged",
-			spec:          managedProvisioning().ProvisioningInterface("").build(),
-			expectedError: true,
-			expectedMode:  ProvisioningNetworkManaged,
-			expectedMsg:   "provisioningInterface",
-		},
-		{
 			// Provisioning IP is in the DHCP Range
 			name:          "InvalidManagedProvisioningIPInDHCPRange",
 			spec:          managedProvisioning().ProvisioningIP("172.30.20.20").build(),
@@ -197,14 +189,6 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 			spec:          unmanagedProvisioning().ProvisioningDHCPRange("172.30.10.11,172.30.10.30").ProvisioningDHCPExternal(true).build(),
 			expectedError: false,
 			expectedMode:  ProvisioningNetworkUnmanaged,
-		},
-		{
-			// ProvisioningInterface is missing
-			name:          "InvalidUnmanaged",
-			spec:          unmanagedProvisioning().ProvisioningInterface("").build(),
-			expectedError: true,
-			expectedMode:  ProvisioningNetworkUnmanaged,
-			expectedMsg:   "provisioningInterface",
 		},
 		{
 			// Invalid provisioning IP.
