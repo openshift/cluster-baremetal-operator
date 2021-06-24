@@ -241,6 +241,7 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	}
 
 	initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, true))
+	initContainers = append(initContainers, createInitContainerCoreOSIPA(info))
 
 	return injectProxyAndCA(initContainers, info.Proxy)
 }
@@ -263,6 +264,33 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 			},
 		},
 	}
+	return initContainer
+}
+
+func createInitContainerCoreOSIPA(info *ProvisioningInfo) corev1.Container {
+	config := &info.ProvConfig.Spec
+	initContainer := corev1.Container{
+		Name:            "configure-coreos-ipa",
+		Image:           info.Images.Ironic,
+		Command:         []string{"/bin/configure-coreos-ipa"},
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
+		Env: []corev1.EnvVar{
+			buildEnvVar(provisioningIP, config),
+			buildEnvVar(provisioningInterface, config),
+			buildSSHKeyEnvVar(info.SSHKey),
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
+	}
+	initContainer.Env = envWithMasterMacAddresses(initContainer.Env, info.MasterMacAddresses)
 	return initContainer
 }
 
@@ -293,7 +321,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, setIpOptions
 	initContainer := corev1.Container{
 		Name:            "metal3-machine-os-downloader",
 		Image:           info.Images.MachineOsDownloader,
-		Command:         []string{"/usr/local/bin/get-resource.sh"},
+		Command:         []string{"/usr/local/bin/get-live-images.sh"},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
@@ -330,7 +358,6 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 			},
 		},
 	}
-
 	return initContainer
 }
 
