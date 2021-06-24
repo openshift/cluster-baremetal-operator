@@ -127,7 +127,10 @@ type ProvisioningSpec struct {
 	// By default the boot iso image is cached locally and served from
 	// the Provisioning service (Ironic) nodes using an auxiliary httpd server.
 	// If the boot iso image is already served by an httpd server, setting
-	// this option to http allows to directly provide the image from there.
+	// this option to http allows to directly provide the image from there;
+	// in this case, the network (either internal or external) where the
+	// httpd server that hosts the boot iso is needs to be accessible
+	// by the metal3 pod.
 	BootIsoSource BootIsoSource `json:"bootIsoSource,omitempty"`
 
 	// VirtualMediaViaExternalNetwork flag when set to "true" allows for workers
