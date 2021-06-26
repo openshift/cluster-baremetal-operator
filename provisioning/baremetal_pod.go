@@ -54,6 +54,7 @@ const (
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
 	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
+	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -336,8 +337,8 @@ func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 	containers := []corev1.Container{
 		createContainerMetal3BaremetalOperator(info.Images, &info.ProvConfig.Spec),
 		createContainerMetal3Mariadb(info.Images),
-		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses),
-		createContainerMetal3IronicConductor(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses),
+		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses, info.SSHKey),
+		createContainerMetal3IronicConductor(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses, info.SSHKey),
 		createContainerIronicInspectorRamdiskLogs(info.Images),
 		createContainerMetal3IronicApi(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses),
 		createContainerIronicDeployRamdiskLogs(info.Images),
@@ -374,6 +375,10 @@ func getWatchNamespace(config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar 
 			},
 		}
 	}
+}
+
+func buildSSHKeyEnvVar(sshKey string) corev1.EnvVar {
+	return corev1.EnvVar{Name: sshKeyEnvVar, Value: sshKey}
 }
 
 func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
@@ -511,7 +516,7 @@ func createContainerMetal3Mariadb(images *Images) corev1.Container {
 	return container
 }
 
-func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
+func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string, sshKey string) corev1.Container {
 	port, _ := strconv.Atoi(baremetalHttpPort) // #nosec
 	container := corev1.Container{
 		Name:            "metal3-httpd",
@@ -531,6 +536,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
+			buildSSHKeyEnvVar(sshKey),
 		},
 		Ports: []corev1.ContainerPort{
 			{
@@ -552,7 +558,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	return container
 }
 
-func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
+func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string, sshKey string) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-ironic-conductor",
 		Image:           images.Ironic,
@@ -581,6 +587,7 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
+			buildSSHKeyEnvVar(sshKey),
 			setIronicHtpasswdHash(htpasswdEnvVar, ironicrpcSecretName),
 		},
 		Ports: []corev1.ContainerPort{

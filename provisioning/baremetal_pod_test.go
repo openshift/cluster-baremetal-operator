@@ -167,28 +167,34 @@ func TestNewMetal3Containers(t *testing.T) {
 		name               string
 		config             *metal3iov1alpha1.ProvisioningSpec
 		expectedContainers int
+		sshkey             string
 	}{
 		{
 			name:               "ManagedSpec",
 			config:             managedProvisioning().build(),
 			expectedContainers: 10,
+			sshkey:             "sshkey",
 		},
 		{
 			name:               "UnmanagedSpec",
 			config:             unmanagedProvisioning().build(),
 			expectedContainers: 10,
+			sshkey:             "",
 		},
 		{
 			name:               "DisabledSpec",
 			config:             disabledProvisioning().build(),
 			expectedContainers: 8,
+			sshkey:             "",
 		},
 		{
 			name:               "DisabledSpecWithoutProvisioningIP",
 			config:             disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: 8,
+			sshkey:             "",
 		},
 	}
+	getSSHKey := map[string]bool{"metal3-ironic-conductor": true, "metal3-httpd": true}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
@@ -196,9 +202,21 @@ func TestNewMetal3Containers(t *testing.T) {
 				Images:             &images,
 				ProvConfig:         &metal3iov1alpha1.Provisioning{Spec: *tc.config},
 				MasterMacAddresses: nodeMacAddresses,
+				SSHKey:             tc.sshkey,
 			}
 			actualContainers := newMetal3Containers(info)
 			assert.Equal(t, tc.expectedContainers, len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, tc.expectedContainers, len(actualContainers)))
+			for _, container := range actualContainers {
+				if getSSHKey[container.Name] {
+					assert.Contains(t, container.Env, corev1.EnvVar{Name: "IRONIC_RAMDISK_SSH_KEY", Value: tc.sshkey}, fmt.Sprintf("Expected %s container to contain a sshkey %s", container.Name, tc.sshkey))
+				} else {
+					var envvars []string
+					for _, envvar := range container.Env {
+						envvars = append(envvars, envvar.Name)
+					}
+					assert.NotContains(t, envvars, "IRONIC_RAMDISK_SSH_KEY", fmt.Sprintf("Expected %s container to not contain a sshkey", container.Name))
+				}
+			}
 		})
 	}
 }

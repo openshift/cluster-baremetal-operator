@@ -9,15 +9,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
-  verbs:
-  - create
-  - list
-  - patch
-  - watch
-- apiGroups:
-  - ""
-  resources:
+  - configmaps
   - secrets
   - services
   verbs:
@@ -27,6 +19,15 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - list
+  - patch
   - watch
 - apiGroups:
   - admissionregistration.k8s.io

@@ -27,4 +27,5 @@ type ProvisioningInfo struct {
 	Proxy              *configv1.Proxy
 	NetworkStack       NetworkStackType
 	MasterMacAddresses []string
+	SSHKey             string
 }
