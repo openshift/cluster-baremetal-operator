@@ -3,6 +3,7 @@ module github.com/openshift/cluster-baremetal-operator
 go 1.15
 
 require (
+	github.com/ghodss/yaml v1.0.0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/golangci/golangci-lint v1.32.0
 	github.com/google/go-cmp v0.5.2
@@ -21,7 +22,7 @@ require (
 	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 	sigs.k8s.io/controller-runtime v0.8.3
 	sigs.k8s.io/controller-tools v0.4.1
-	sigs.k8s.io/kustomize/kustomize/v3 v3.8.5
+	sigs.k8s.io/kustomize/kustomize/v3 v3.9.4
 )
 
 replace github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20210527161605-4e331bfd4b1d
