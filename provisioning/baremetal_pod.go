@@ -55,6 +55,7 @@ const (
 	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
 	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
+	externalIpEnvVar                 = "IRONIC_EXTERNAL_IP"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -225,6 +226,22 @@ func setIronicHtpasswdHash(name string, secretName string) corev1.EnvVar {
 				Key: ironicHtpasswdKey,
 			},
 		},
+	}
+}
+
+func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
+		return corev1.EnvVar{
+			Name: name,
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "status.hostIP",
+				},
+			},
+		}
+	}
+	return corev1.EnvVar{
+		Name: name,
 	}
 }
 
@@ -635,6 +652,7 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(htpasswdEnvVar, ironicSecretName),
+			setIronicExternalIp(externalIpEnvVar, config),
 		},
 		Ports: []corev1.ContainerPort{
 			{
