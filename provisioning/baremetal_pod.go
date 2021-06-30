@@ -231,7 +231,6 @@ func setIronicHtpasswdHash(name string, secretName string) corev1.EnvVar {
 func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	initContainers := []corev1.Container{
 		createInitContainerIpaDownloader(info.Images),
-		createInitContainerMachineOsDownloader(info, true),
 	}
 
 	// If the provisioning network is disabled, and the user hasn't requested a
@@ -240,6 +239,8 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	if info.ProvConfig.Spec.ProvisioningIP != "" && info.ProvConfig.Spec.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
 		initContainers = append(initContainers, createInitContainerStaticIpSet(info.Images, &info.ProvConfig.Spec))
 	}
+
+	initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, true))
 
 	return injectProxyAndCA(initContainers, info.Proxy)
 }
