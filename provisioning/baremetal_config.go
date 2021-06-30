@@ -42,6 +42,7 @@ var (
 	httpPort                       = "HTTP_PORT"
 	dhcpRange                      = "DHCP_RANGE"
 	machineImageUrl                = "RHCOS_IMAGE_URL"
+	ipOptions                      = "IP_OPTIONS"
 )
 
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
