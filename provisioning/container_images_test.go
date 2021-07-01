@@ -8,7 +8,6 @@ var (
 	TestImagesFile                = "sample_images.json"
 	expectedBaremetalOperator     = "registry.ci.openshift.org/openshift:baremetal-operator"
 	expectedIronic                = "registry.ci.openshift.org/openshift:ironic"
-	expectedIronicInspector       = "registry.ci.openshift.org/openshift:ironic-inspector"
 	expectedIronicIpaDownloader   = "registry.ci.openshift.org/openshift:ironic-ipa-downloader"
 	expectedMachineOsDownloader   = "registry.ci.openshift.org/openshift:ironic-machine-os-downloader"
 	expectedIronicStaticIpManager = "registry.ci.openshift.org/openshift:ironic-static-ip-manager"
@@ -45,7 +44,6 @@ func TestGetContainerImages(t *testing.T) {
 			if tc.expectedImages {
 				if containerImages.BaremetalOperator != expectedBaremetalOperator ||
 					containerImages.Ironic != expectedIronic ||
-					containerImages.IronicInspector != expectedIronicInspector ||
 					containerImages.IpaDownloader != expectedIronicIpaDownloader ||
 					containerImages.MachineOsDownloader != expectedMachineOsDownloader ||
 					containerImages.StaticIpManager != expectedIronicStaticIpManager {
