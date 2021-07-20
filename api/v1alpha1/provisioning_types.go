@@ -48,6 +48,22 @@ const (
 	BootIsoSourceHttp  BootIsoSource = "http"
 )
 
+// PreprovisioningOSDownloadURLs allows specification of a set of
+// OS URLs that can be used by metal3 to pre-provision workers
+type PreprovisioningOSDownloadURLs struct {
+	// Image URL to be used for live ISO deployments
+	Iso string `json:"iso,omitempty"`
+
+	// Kernel Image URL to be used for PXE deployments
+	Kernel string `json:"kernel,omitempty"`
+
+	// InitRD Image URL to be used for PXE deployments
+	InitramFS string `json:"initramFS,omitempty"`
+
+	// RootFS Image URL to be used for PXE deployments
+	RootFS string `json:"rootFS,omitempty"`
+}
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface
@@ -143,6 +159,12 @@ type ProvisioningSpec struct {
 	// PXE deployments will always use the Provisioning Network and will not be
 	// affected by this flag.
 	VirtualMediaViaExternalNetwork bool `json:"virtualMediaViaExternalNetwork,omitempty"`
+
+	// PreprovisioningURLs is of the type PreprovisioningOSDownloadURLs which provides
+	// a metal3 deployment with a complete set of boot Image URLs that would be necessary
+	// to pre-provision a worker either using virtual media or PXE. The kernel, initramfs
+	// and rootfs URLs should be accessible from the provisioning network.
+	PreprovisioningURLs PreprovisioningOSDownloadURLs `json:"preprovisioningURLs,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning

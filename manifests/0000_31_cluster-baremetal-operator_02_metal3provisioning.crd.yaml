@@ -37,6 +37,22 @@ spec:
                 - local
                 - http
                 type: string
+              preprovisioningURLs:
+                description: PreprovisioningURLs is of the type PreprovisioningOSDownloadURLs which provides a metal3 deployment with a complete set of boot Image URLs that would be necessary to pre-provision a worker either using virtual media or PXE. The kernel, initramfs and rootfs URLs should be accessible from the provisioning network.
+                properties:
+                  initramFS:
+                    description: InitRD Image URL to be used for PXE deployments
+                    type: string
+                  iso:
+                    description: Image URL to be used for live ISO deployments
+                    type: string
+                  kernel:
+                    description: Kernel Image URL to be used for PXE deployments
+                    type: string
+                  rootFS:
+                    description: RootFS Image URL to be used for PXE deployments
+                    type: string
+                type: object
               provisioningDHCPExternal:
                 description: ProvisioningDHCPExternal indicates whether the DHCP server for IP addresses in the provisioning DHCP range is present within the metal3 cluster or external to it. This field is being deprecated in favor of provisioningNetwork.
                 type: boolean
