@@ -607,6 +607,7 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			buildEnvVar(provisioningInterface, config),
 			buildSSHKeyEnvVar(sshKey),
 			setIronicHtpasswdHash(htpasswdEnvVar, ironicrpcSecretName),
+			setIronicExternalIp(externalIpEnvVar, config),
 		},
 		Ports: []corev1.ContainerPort{
 			{
