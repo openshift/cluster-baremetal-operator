@@ -37,6 +37,22 @@ spec:
                 - local
                 - http
                 type: string
+              preProvisioningOSDownloadURLs:
+                description: PreprovisioningOSDownloadURLs is set of CoreOS Live URLs that would be necessary to provision a worker either using virtual media or PXE.
+                properties:
+                  initramfsURL:
+                    description: InitramfsURL Image URL to be used for PXE deployments
+                    type: string
+                  isoURL:
+                    description: IsoURL Image URL to be used for Live ISO deployments
+                    type: string
+                  kernelURL:
+                    description: KernelURL is an Image URL to be used for PXE deployments
+                    type: string
+                  rootfsURL:
+                    description: RootfsURL Image URL to be used for PXE deployments
+                    type: string
+                type: object
               provisioningDHCPExternal:
                 description: ProvisioningDHCPExternal indicates whether the DHCP server for IP addresses in the provisioning DHCP range is present within the metal3 cluster or external to it. This field is being deprecated in favor of provisioningNetwork.
                 type: boolean

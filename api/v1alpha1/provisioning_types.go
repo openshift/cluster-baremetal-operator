@@ -48,6 +48,22 @@ const (
 	BootIsoSourceHttp  BootIsoSource = "http"
 )
 
+// PreProvisioningOSDownloadURLs defines a set of URLs that the cluster
+// can use to provision RHCOS Live images
+type PreProvisioningOSDownloadURLs struct {
+	// IsoURL Image URL to be used for Live ISO deployments
+	IsoURL string `json:"isoURL,omitempty"`
+
+	// KernelURL is an Image URL to be used for PXE deployments
+	KernelURL string `json:"kernelURL,omitempty"`
+
+	// InitramfsURL Image URL to be used for PXE deployments
+	InitramfsURL string `json:"initramfsURL,omitempty"`
+
+	// RootfsURL Image URL to be used for PXE deployments
+	RootfsURL string `json:"rootfsURL,omitempty"`
+}
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface
@@ -143,6 +159,10 @@ type ProvisioningSpec struct {
 	// PXE deployments will always use the Provisioning Network and will not be
 	// affected by this flag.
 	VirtualMediaViaExternalNetwork bool `json:"virtualMediaViaExternalNetwork,omitempty"`
+
+	// PreprovisioningOSDownloadURLs is set of CoreOS Live URLs that would be necessary to provision a worker
+	// either using virtual media or PXE.
+	PreProvisioningOSDownloadURLs PreProvisioningOSDownloadURLs `json:"preProvisioningOSDownloadURLs,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning

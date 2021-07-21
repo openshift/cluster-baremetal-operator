@@ -59,6 +59,7 @@ const (
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
+	pullSecretEnvVar                 = "IRONIC_AGENT_PULL_SECRET" // #nosec
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -111,6 +112,18 @@ var mariadbPassword = corev1.EnvVar{
 				Name: baremetalSecretName,
 			},
 			Key: baremetalSecretKey,
+		},
+	},
+}
+
+var pullSecret = corev1.EnvVar{
+	Name: pullSecretEnvVar,
+	ValueFrom: &corev1.EnvVarSource{
+		SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: pullSecretName,
+			},
+			Key: openshiftConfigSecretKey,
 		},
 	},
 }
@@ -246,9 +259,7 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 }
 
 func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
-	initContainers := []corev1.Container{
-		createInitContainerIpaDownloader(info.Images),
-	}
+	initContainers := []corev1.Container{}
 
 	// If the provisioning network is disabled, and the user hasn't requested a
 	// particular provisioning IP on the machine CIDR, we have nothing for this container
@@ -257,7 +268,27 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 		initContainers = append(initContainers, createInitContainerStaticIpSet(info.Images, &info.ProvConfig.Spec))
 	}
 
-	initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, true))
+	// If the PreProvisioningOSDownloadURLs are set, we fetch the URLs of either CoreOS ISO and IPA assets or in some
+	// cases only the IPA assets
+	liveURLs := getPreProvisioningOSDownloadURLs(&info.ProvConfig.Spec)
+	if len(liveURLs) > 0 {
+		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, strings.Join(liveURLs, ","), true, true))
+
+		// If the ISO URL is also specified, start the createInitContainerConfigureCoreOSIPA init container
+		if info.ProvConfig.Spec.PreProvisioningOSDownloadURLs.IsoURL != "" {
+			// Configure the LiveISO by embedding ignition and other startup files
+			initContainers = append(initContainers, createInitContainerConfigureCoreOSIPA(info))
+		}
+	}
+	// If the ProvisioningOSDownloadURL is set, we download the URL specified in it
+	if info.ProvConfig.Spec.ProvisioningOSDownloadURL != "" {
+		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, info.ProvConfig.Spec.ProvisioningOSDownloadURL, false, true))
+	}
+
+	// If the CoreOS IPA assets are not available we will use the IPA downloader
+	if !isCoreOSIPAAvailable(&info.ProvConfig.Spec) {
+		initContainers = append(initContainers, createInitContainerIpaDownloader(info.Images))
+	}
 
 	return injectProxyAndCA(initContainers, info.Proxy)
 }
@@ -283,6 +314,42 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 	return initContainer
 }
 
+// This initContainer configures RHCOS Live ISO images by embedding the IPA
+// agent ignition. See:
+// https://github.com/openshift/ironic-image/blob/master/scripts/configure-coreos-ipa
+func createInitContainerConfigureCoreOSIPA(info *ProvisioningInfo) corev1.Container {
+	config := &info.ProvConfig.Spec
+	initContainer := corev1.Container{
+		Name:            "metal3-configure-coreos-ipa",
+		Image:           info.Images.Ironic,
+		Command:         []string{"/bin/configure-coreos-ipa"},
+		ImagePullPolicy: "IfNotPresent",
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			sharedVolumeMount,
+			imageVolumeMount,
+			ironicCredentialsMount,
+			ironicTlsMount,
+		},
+		Env: []corev1.EnvVar{
+			buildEnvVar(provisioningIP, config),
+			buildEnvVar(provisioningInterface, config),
+			buildSSHKeyEnvVar(info.SSHKey),
+			pullSecret,
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
+	}
+	initContainer.Env = envWithMasterMacAddresses(initContainer.Env, info.MasterMacAddresses)
+	return initContainer
+}
+
 func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
 	var optionValue string
 	switch info.NetworkStack {
@@ -296,9 +363,19 @@ func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
 	return optionValue
 }
 
-func createInitContainerMachineOsDownloader(info *ProvisioningInfo, setIpOptions bool) corev1.Container {
+func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs string, useLiveImages, setIpOptions bool) corev1.Container {
+	var command string
+	if useLiveImages {
+		command = "/usr/local/bin/get-live-images.sh"
+	} else {
+		command = "/usr/local/bin/get-resource.sh"
+	}
+
 	env := []corev1.EnvVar{
-		buildEnvVar(machineImageUrl, &info.ProvConfig.Spec),
+		{
+			Name:  machineImageUrl,
+			Value: imageURLs,
+		},
 	}
 	if setIpOptions {
 		env = append(env,
@@ -310,7 +387,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, setIpOptions
 	initContainer := corev1.Container{
 		Name:            "metal3-machine-os-downloader",
 		Image:           info.Images.MachineOsDownloader,
-		Command:         []string{"/usr/local/bin/get-resource.sh"},
+		Command:         []string{command},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
@@ -347,7 +424,6 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 			},
 		},
 	}
-
 	return initContainer
 }
 
@@ -587,6 +663,7 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 		Command: []string{"/bin/runironic-conductor"},
 		VolumeMounts: []corev1.VolumeMount{
 			sharedVolumeMount,
+			imageVolumeMount,
 			inspectorCredentialsMount,
 			rpcCredentialsMount,
 			ironicTlsMount,
