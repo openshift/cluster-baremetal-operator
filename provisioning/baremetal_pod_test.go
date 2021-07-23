@@ -154,6 +154,119 @@ func TestNewMetal3InitContainers(t *testing.T) {
 }
 
 func TestNewMetal3Containers(t *testing.T) {
+	sshkey := corev1.EnvVar{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"}
+	eth0 := corev1.EnvVar{Name: "PROVISIONING_INTERFACE", Value: "eth0"}
+	ensp0 := corev1.EnvVar{Name: "PROVISIONING_INTERFACE", Value: "ensp0"}
+	empty := corev1.EnvVar{Name: "PROVISIONING_INTERFACE", Value: ""}
+	hostIP := corev1.EnvVar{Name: "PROVISIONING_IP", Value: "", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.hostIP"}}}
+	containers := map[string]corev1.Container{
+		"metal3-baremetal-operator": {
+			Name: "metal3-baremetal-operator",
+			Env: []corev1.EnvVar{
+				{Name: "WATCH_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
+				{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
+				{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+				{Name: "OPERATOR_NAME", Value: "baremetal-operator"},
+				{Name: "IRONIC_CACERT_FILE", Value: "/certs/ironic/tls.crt"},
+				{Name: "IRONIC_INSECURE", Value: "true"},
+				{Name: "DEPLOY_KERNEL_URL", Value: "http://localhost:6181/images/ironic-python-agent.kernel"},
+				{Name: "DEPLOY_RAMDISK_URL", Value: "http://localhost:6181/images/ironic-python-agent.initramfs"},
+				{Name: "IRONIC_ENDPOINT", Value: "https://localhost:6385/v1/"},
+				{Name: "IRONIC_INSPECTOR_ENDPOINT", Value: "https://localhost:5050/v1/"},
+				{Name: "METAL3_AUTH_ROOT_DIR", Value: "/auth"},
+			},
+		},
+		"metal3-mariadb": {
+			Name: "metal3-mariadb",
+			Env: []corev1.EnvVar{
+				{Name: "MARIADB_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "metal3-mariadb-password"}, Key: "password"}}},
+			},
+		},
+		"metal3-httpd": {
+			Name: "metal3-httpd",
+			Env: []corev1.EnvVar{
+				{Name: "HTTP_PORT", Value: "6180"},
+				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
+				eth0,
+				{Name: "IRONIC_RAMDISK_SSH_KEY"},
+				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+			},
+		},
+		"metal3-ironic-conductor": {
+			Name: "metal3-ironic-conductor",
+			Env: []corev1.EnvVar{
+				{Name: "MARIADB_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "metal3-mariadb-password"}, Key: "password"}}},
+				{Name: "IRONIC_INSECURE", Value: "true"},
+				{Name: "IRONIC_INSPECTOR_INSECURE", Value: "true"},
+				{Name: "HTTP_PORT", Value: "6180"},
+				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
+				eth0,
+				{Name: "IRONIC_RAMDISK_SSH_KEY"},
+				{Name: "HTTP_BASIC_HTPASSWD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "metal3-ironic-rpc-password"}, Key: "htpasswd"}}},
+				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+			},
+		},
+		"ironic-inspector-ramdisk-logs": {
+			Name: "ironic-inspector-ramdisk-logs",
+			Env:  []corev1.EnvVar{},
+		},
+		"metal3-ironic-api": {
+			Name: "metal3-ironic-api",
+			Env: []corev1.EnvVar{
+				{Name: "MARIADB_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "metal3-mariadb-password"}, Key: "password"}}},
+				{Name: "IRONIC_INSECURE", Value: "true"},
+				{Name: "HTTP_PORT", Value: "6180"},
+				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
+				eth0,
+				{Name: "HTTP_BASIC_HTPASSWD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "metal3-ironic-password"}, Key: "htpasswd"}}},
+				{Name: "IRONIC_EXTERNAL_IP"},
+				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+			},
+		},
+		"ironic-deploy-ramdisk-logs": {
+			Name: "ironic-deploy-ramdisk-logs",
+			Env:  []corev1.EnvVar{},
+		},
+		"metal3-ironic-inspector": {
+			Name: "metal3-ironic-inspector",
+			Env: []corev1.EnvVar{
+				{Name: "IRONIC_INSECURE", Value: "true"},
+				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
+				eth0,
+				{Name: "HTTP_BASIC_HTPASSWD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "metal3-ironic-inspector-password"}, Key: "htpasswd"}}},
+				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+			},
+		},
+		"metal3-static-ip-manager": {
+			Name: "metal3-static-ip-manager",
+			Env: []corev1.EnvVar{
+				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
+				eth0,
+				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+			},
+		},
+		"metal3-dnsmasq": {
+			Name: "metal3-dnsmasq",
+			Env: []corev1.EnvVar{
+				{Name: "HTTP_PORT", Value: "6180"},
+				eth0,
+				{Name: "DHCP_RANGE", Value: "172.30.20.11,172.30.20.101,24"},
+				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+			},
+		},
+	}
+	withEnv := func(c corev1.Container, ne corev1.EnvVar) corev1.Container {
+		new := []corev1.EnvVar{}
+		for e := range c.Env {
+			if c.Env[e].Name == ne.Name {
+				new = append(new, ne)
+			} else {
+				new = append(new, c.Env[e])
+			}
+		}
+		c.Env = new
+		return c
+	}
 	images := Images{
 		BaremetalOperator:   expectedBaremetalOperator,
 		Ironic:              expectedIronic,
@@ -164,35 +277,74 @@ func TestNewMetal3Containers(t *testing.T) {
 	tCases := []struct {
 		name               string
 		config             *metal3iov1alpha1.ProvisioningSpec
-		expectedContainers int
 		sshkey             string
+		expectedContainers []corev1.Container
 	}{
 		{
-			name:               "ManagedSpec",
-			config:             managedProvisioning().build(),
-			expectedContainers: 10,
-			sshkey:             "sshkey",
+			name:   "ManagedSpec",
+			config: managedProvisioning().build(),
+			expectedContainers: []corev1.Container{
+				containers["metal3-baremetal-operator"],
+				containers["metal3-mariadb"],
+				withEnv(containers["metal3-httpd"], sshkey),
+				withEnv(containers["metal3-ironic-conductor"], sshkey),
+				containers["ironic-inspector-ramdisk-logs"],
+				containers["metal3-ironic-api"],
+				containers["ironic-deploy-ramdisk-logs"],
+				containers["metal3-ironic-inspector"],
+				containers["metal3-static-ip-manager"],
+				containers["metal3-dnsmasq"],
+			},
+			sshkey: "sshkey",
 		},
 		{
-			name:               "UnmanagedSpec",
-			config:             unmanagedProvisioning().build(),
-			expectedContainers: 10,
-			sshkey:             "",
+			name:   "UnmanagedSpec",
+			config: unmanagedProvisioning().build(),
+			expectedContainers: []corev1.Container{
+				containers["metal3-baremetal-operator"],
+				containers["metal3-mariadb"],
+				withEnv(containers["metal3-httpd"], ensp0),
+				withEnv(containers["metal3-ironic-conductor"], ensp0),
+				containers["ironic-inspector-ramdisk-logs"],
+				withEnv(containers["metal3-ironic-api"], ensp0),
+				containers["ironic-deploy-ramdisk-logs"],
+				withEnv(containers["metal3-ironic-inspector"], ensp0),
+				withEnv(containers["metal3-static-ip-manager"], ensp0),
+				withEnv(withEnv(containers["metal3-dnsmasq"], ensp0), corev1.EnvVar{Name: "DHCP_RANGE", Value: ""}),
+			},
+			sshkey: "",
 		},
 		{
-			name:               "DisabledSpec",
-			config:             disabledProvisioning().build(),
-			expectedContainers: 8,
-			sshkey:             "",
+			name:   "DisabledSpec",
+			config: disabledProvisioning().build(),
+			expectedContainers: []corev1.Container{
+				containers["metal3-baremetal-operator"],
+				containers["metal3-mariadb"],
+				withEnv(containers["metal3-httpd"], empty),
+				withEnv(containers["metal3-ironic-conductor"], empty),
+				containers["ironic-inspector-ramdisk-logs"],
+				withEnv(containers["metal3-ironic-api"], empty),
+				containers["ironic-deploy-ramdisk-logs"],
+				withEnv(containers["metal3-ironic-inspector"], empty),
+			},
+			sshkey: "",
 		},
 		{
-			name:               "DisabledSpecWithoutProvisioningIP",
-			config:             disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
-			expectedContainers: 8,
-			sshkey:             "",
+			name:   "DisabledSpecWithoutProvisioningIP",
+			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
+			expectedContainers: []corev1.Container{
+				containers["metal3-baremetal-operator"],
+				containers["metal3-mariadb"],
+				withEnv(withEnv(containers["metal3-httpd"], empty), hostIP),
+				withEnv(withEnv(containers["metal3-ironic-conductor"], empty), hostIP),
+				containers["ironic-inspector-ramdisk-logs"],
+				withEnv(withEnv(containers["metal3-ironic-api"], empty), hostIP),
+				containers["ironic-deploy-ramdisk-logs"],
+				withEnv(withEnv(containers["metal3-ironic-inspector"], empty), hostIP),
+			},
+			sshkey: "",
 		},
 	}
-	getSSHKey := map[string]bool{"metal3-ironic-conductor": true, "metal3-httpd": true}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
@@ -201,18 +353,15 @@ func TestNewMetal3Containers(t *testing.T) {
 				ProvConfig:         &metal3iov1alpha1.Provisioning{Spec: *tc.config},
 				MasterMacAddresses: nodeMacAddresses,
 				SSHKey:             tc.sshkey,
+				NetworkStack:       NetworkStackV6,
 			}
 			actualContainers := newMetal3Containers(info)
-			assert.Equal(t, tc.expectedContainers, len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, tc.expectedContainers, len(actualContainers)))
-			for _, container := range actualContainers {
-				if getSSHKey[container.Name] {
-					assert.Contains(t, container.Env, corev1.EnvVar{Name: "IRONIC_RAMDISK_SSH_KEY", Value: tc.sshkey}, fmt.Sprintf("Expected %s container to contain a sshkey %s", container.Name, tc.sshkey))
-				} else {
-					var envvars []string
-					for _, envvar := range container.Env {
-						envvars = append(envvars, envvar.Name)
-					}
-					assert.NotContains(t, envvars, "IRONIC_RAMDISK_SSH_KEY", fmt.Sprintf("Expected %s container to not contain a sshkey", container.Name))
+			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
+			for i, container := range actualContainers {
+				assert.Equal(t, tc.expectedContainers[i].Name, actualContainers[i].Name)
+				assert.Equal(t, len(tc.expectedContainers[i].Env), len(actualContainers[i].Env))
+				for e := range container.Env {
+					assert.EqualValues(t, tc.expectedContainers[i].Env[e], actualContainers[i].Env[e], "container name: ", tc.expectedContainers[i].Name)
 				}
 			}
 		})
