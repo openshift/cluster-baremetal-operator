@@ -205,6 +205,11 @@ func (pb *provisioningBuilder) ProvisioningDHCPRange(value string) *provisioning
 	return pb
 }
 
+func (pb *provisioningBuilder) VirtualMediaViaExternalNetwork(value bool) *provisioningBuilder {
+	pb.ProvisioningSpec.VirtualMediaViaExternalNetwork = value
+	return pb
+}
+
 func (pb *provisioningBuilder) ProvisioningNetwork(value string) *provisioningBuilder {
 	pb.ProvisioningSpec.ProvisioningNetwork = metal3iov1alpha1.ProvisioningNetwork(value)
 	return pb
