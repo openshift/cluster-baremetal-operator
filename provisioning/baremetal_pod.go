@@ -411,6 +411,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			},
 		},
 		Command:         []string{"/baremetal-operator"},
+		Args:            []string{"--health-addr", ":9446"},
 		ImagePullPolicy: "IfNotPresent",
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
