@@ -257,7 +257,7 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 		initContainers = append(initContainers, createInitContainerStaticIpSet(info.Images, &info.ProvConfig.Spec))
 	}
 
-	initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, true))
+	initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, true, info.ProvConfig.Spec.ProvisioningOSDownloadURL))
 
 	return injectProxyAndCA(initContainers, info.Proxy)
 }
@@ -296,10 +296,13 @@ func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
 	return optionValue
 }
 
-func createInitContainerMachineOsDownloader(info *ProvisioningInfo, setIpOptions bool) corev1.Container {
-	env := []corev1.EnvVar{
-		buildEnvVar(machineImageUrl, &info.ProvConfig.Spec),
+func createInitContainerMachineOsDownloader(info *ProvisioningInfo, setIpOptions bool, provisioningOSDownloadURLOverride string) corev1.Container {
+	miURL := buildEnvVar(machineImageUrl, &info.ProvConfig.Spec)
+	if provisioningOSDownloadURLOverride != "" {
+		miURL.Value = provisioningOSDownloadURLOverride
 	}
+	env := []corev1.EnvVar{miURL}
+
 	if setIpOptions {
 		env = append(env,
 			corev1.EnvVar{

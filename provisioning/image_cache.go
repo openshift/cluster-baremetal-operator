@@ -60,12 +60,12 @@ func imageVolume() corev1.Volume {
 	}
 }
 
-func imageCacheConfig(targetNamespace string, config metal3iov1alpha1.ProvisioningSpec) (*metal3iov1alpha1.ProvisioningSpec, error) {
+func imageCacheProvisioningOSDownloadURL(targetNamespace string, config metal3iov1alpha1.ProvisioningSpec) (string, error) {
 	// The download URL looks something like:
 	// https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.2/42.80.20190725.1/rhcos-42.80.20190725.1-openstack.qcow2?sha256sum=123
 	downloadURL, err := url.Parse(config.ProvisioningOSDownloadURL)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	imageName := path.Base(fileCompressionSuffix.ReplaceAllString(downloadURL.Path, ""))
 
@@ -79,8 +79,7 @@ func imageCacheConfig(targetNamespace string, config metal3iov1alpha1.Provisioni
 			baremetalHttpPort),
 		Path: fmt.Sprintf("/images/%s/%s", imageName, imageName),
 	}
-	config.ProvisioningOSDownloadURL = cacheURL.String()
-	return &config, nil
+	return cacheURL.String(), nil
 }
 
 func createContainerImageCache(images *Images) corev1.Container {
@@ -138,11 +137,10 @@ func newImageCacheContainers(images *Images, proxy *osconfigv1.Proxy) []corev1.C
 }
 
 func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSpec, error) {
-	cacheConfig, err := imageCacheConfig(info.Namespace, info.ProvConfig.Spec)
+	provisioningOSDownloadURL, err := imageCacheProvisioningOSDownloadURL(info.Namespace, info.ProvConfig.Spec)
 	if err != nil {
 		return nil, err
 	}
-	info.ProvConfig.Spec = *cacheConfig
 
 	containers := newImageCacheContainers(info.Images, info.Proxy)
 
@@ -197,7 +195,7 @@ func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSp
 				},
 			},
 			InitContainers: injectProxyAndCA([]corev1.Container{
-				createInitContainerMachineOsDownloader(info, false),
+				createInitContainerMachineOsDownloader(info, false, provisioningOSDownloadURL),
 				createInitContainerIpaDownloader(info.Images),
 			}, info.Proxy),
 			Containers:        containers,
