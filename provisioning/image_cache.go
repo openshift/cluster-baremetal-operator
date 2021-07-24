@@ -8,6 +8,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -60,18 +61,22 @@ func imageVolume() corev1.Volume {
 	}
 }
 
-func imageCacheConfig(targetNamespace string, config metal3iov1alpha1.ProvisioningSpec) (*metal3iov1alpha1.ProvisioningSpec, error) {
-	// The download URL looks something like:
-	// https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.2/42.80.20190725.1/rhcos-42.80.20190725.1-openstack.qcow2?sha256sum=123
-	downloadURL, err := url.Parse(config.ProvisioningOSDownloadURL)
+// Helper to transform the first level (metal3 pod) cache URLs to second level
+// (control-plane daemonset) cache
+func transformURL(targetNamespace, URL string) (string, error) {
+	downloadURL, err := url.Parse(URL)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	imageName := path.Base(fileCompressionSuffix.ReplaceAllString(downloadURL.Path, ""))
 
-	// The first level of cache downloads the file and makes an uncompressed
-	// version of it available to this second-level cache somewhere like:
-	// http://metal3-state.openshift-machine-api:6180/images/rhcos-42.80.20190725.1-openstack.qcow2/rhcos-42.80.20190725.1-openstack.qcow2
+	// The first-level cache downloads and caches the file from the URL specified in ProvisioningOSDownloadURL
+	// and makes it available to this second-level cache.
+	// e.g. ProvisioningOSDownloadURL: https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.2/42.80.20190725.1/rhcos-42.80.20190725.1-openstack.qcow2.gz?sha256sum=123
+	// The first level cache transforms the URL and makes it available for the second level cache at:
+	// http://metal3-state.openshift-machine-api:6180/images/rhcos-42.80.20190725.1-openstack.qcow2/cached-rhcos-42.80.20190725.1-openstack.qcow2
+	// Finally, the second-level cache will make it available at:
+	// http://cluster.local:6181/images/rhcos-42.80.20190725.1-openstack.qcow2/cached-rhcos-42.80.20190725.1-openstack.qcow2
 	// See https://github.com/openshift/ironic-rhcos-downloader for more details
 	cacheURL := url.URL{
 		Scheme: "http",
@@ -79,8 +84,7 @@ func imageCacheConfig(targetNamespace string, config metal3iov1alpha1.Provisioni
 			baremetalHttpPort),
 		Path: fmt.Sprintf("/images/%s/%s", imageName, imageName),
 	}
-	config.ProvisioningOSDownloadURL = cacheURL.String()
-	return &config, nil
+	return cacheURL.String(), nil
 }
 
 func createContainerImageCache(images *Images) corev1.Container {
@@ -129,6 +133,40 @@ func createContainerImageCache(images *Images) corev1.Container {
 	return container
 }
 
+func newImageCacheInitContainers(info *ProvisioningInfo) ([]corev1.Container, error) {
+	initContainers := []corev1.Container{}
+	// If the PreProvisioningOSDownloadURLs are set, we fetch the URLs of either CoreOS ISO and IPA URLs or in some
+	// cases only the IPA URLs
+	liveURLs := getPreProvisioningOSDownloadURLs(&info.ProvConfig.Spec)
+	var newURLs []string
+	if len(liveURLs) > 0 {
+		for _, URL := range liveURLs {
+			if URL != "" {
+				newURL, err := transformURL(info.Namespace, URL)
+				if err != nil {
+					return nil, err
+				}
+				newURLs = append(newURLs, newURL)
+			}
+		}
+		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, strings.Join(newURLs, ","), true, false))
+	}
+	// Download the transformed URL containing qcow2
+	if info.ProvConfig.Spec.ProvisioningOSDownloadURL != "" {
+		newURL, err := transformURL(info.Namespace, info.ProvConfig.Spec.ProvisioningOSDownloadURL)
+		if err != nil {
+			return nil, err
+		}
+		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, newURL, false, false))
+	}
+
+	// If the CoreOS IPA URLs are not available we will use the IPA downloader
+	if !isCoreOSIPAAvailable(&info.ProvConfig.Spec) {
+		initContainers = append(initContainers, createInitContainerIpaDownloader(info.Images))
+	}
+	return initContainers, nil
+}
+
 func newImageCacheContainers(images *Images, proxy *osconfigv1.Proxy) []corev1.Container {
 	containers := []corev1.Container{
 		createContainerImageCache(images),
@@ -138,12 +176,10 @@ func newImageCacheContainers(images *Images, proxy *osconfigv1.Proxy) []corev1.C
 }
 
 func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSpec, error) {
-	cacheConfig, err := imageCacheConfig(info.Namespace, info.ProvConfig.Spec)
+	initContainers, err := newImageCacheInitContainers(info)
 	if err != nil {
 		return nil, err
 	}
-	info.ProvConfig.Spec = *cacheConfig
-
 	containers := newImageCacheContainers(info.Images, info.Proxy)
 
 	tolerations := []corev1.Toleration{
@@ -196,10 +232,7 @@ func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSp
 					},
 				},
 			},
-			InitContainers: injectProxyAndCA([]corev1.Container{
-				createInitContainerMachineOsDownloader(info, false),
-				createInitContainerIpaDownloader(info.Images),
-			}, info.Proxy),
+			InitContainers:    injectProxyAndCA(initContainers, info.Proxy),
 			Containers:        containers,
 			HostNetwork:       true,
 			DNSPolicy:         corev1.DNSClusterFirstWithHostNet,

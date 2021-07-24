@@ -19,19 +19,22 @@ import (
 )
 
 const (
-	baremetalSecretName = "metal3-mariadb-password" // #nosec
-	baremetalSecretKey  = "password"
-	ironicUsernameKey   = "username"
-	ironicPasswordKey   = "password"
-	ironicHtpasswdKey   = "htpasswd"
-	ironicConfigKey     = "auth-config"
-	ironicSecretName    = "metal3-ironic-password"
-	ironicrpcSecretName = "metal3-ironic-rpc-password" // #nosec
-	ironicrpcUsername   = "rpc-user"
-	ironicUsername      = "ironic-user"
-	inspectorSecretName = "metal3-ironic-inspector-password"
-	inspectorUsername   = "inspector-user"
-	tlsSecretName       = "metal3-ironic-tls" // #nosec
+	baremetalSecretName      = "metal3-mariadb-password" // #nosec
+	baremetalSecretKey       = "password"
+	ironicUsernameKey        = "username"
+	ironicPasswordKey        = "password"
+	ironicHtpasswdKey        = "htpasswd"
+	ironicConfigKey          = "auth-config"
+	ironicSecretName         = "metal3-ironic-password"
+	ironicrpcSecretName      = "metal3-ironic-rpc-password" // #nosec
+	ironicrpcUsername        = "rpc-user"
+	ironicUsername           = "ironic-user"
+	inspectorSecretName      = "metal3-ironic-inspector-password"
+	inspectorUsername        = "inspector-user"
+	tlsSecretName            = "metal3-ironic-tls" // #nosec
+	openshiftConfigNamespace = "openshift-config"
+	openshiftConfigSecretKey = ".dockerconfigjson" // #nosec
+	pullSecretName           = "pull-secret"
 )
 
 type shouldUpdateDataFn func(existing *corev1.Secret) (bool, error)
@@ -135,6 +138,32 @@ password = %s
 	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData)
 }
 
+// createRegistryPullSecret creates a copy of the pull-secret in the
+// openshift-config namespace for use with LocalObjectReference
+func createRegistryPullSecret(info *ProvisioningInfo) error {
+	secretClient := info.Client.CoreV1().Secrets(openshiftConfigNamespace)
+	openshiftConfigSecret, err := secretClient.Get(context.TODO(), pullSecretName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pullSecretName,
+			Namespace: info.Namespace,
+		},
+		StringData: map[string]string{
+			openshiftConfigSecretKey: string(openshiftConfigSecret.Data[openshiftConfigSecretKey]),
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
+		return err
+	}
+
+	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData)
+}
+
 func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	// Create a Secret for the Mariadb Password
 	if err := createMariadbPasswordSecret(info); err != nil {
@@ -156,12 +185,16 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	if err := createOrUpdateTlsSecret(info); err != nil {
 		return false, errors.Wrap(err, "failed to create TLS certificate")
 	}
+	// Create a Secret for the Registry Pull Secret
+	if err := createRegistryPullSecret(info); err != nil {
+		return false, errors.Wrap(err, "failed to create Registry pull secret")
+	}
 	return false, nil // ApplySecret does not use Generation, so just return false for updated
 }
 
 func DeleteAllSecrets(info *ProvisioningInfo) error {
 	var secretErrors []error
-	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName} {
+	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName, tlsSecretName, pullSecretName} {
 		if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{})); err != nil {
 			secretErrors = append(secretErrors, err)
 		}
