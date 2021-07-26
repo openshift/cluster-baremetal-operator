@@ -14,6 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
@@ -205,7 +207,14 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 // createOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
 // It updates the secret if the existing certificate is close to expiration.
 func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
-	cert, err := generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
+	var cert TlsCertificate
+	var err error
+	if info.ProvConfig.Spec.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && info.ProvConfig.Spec.VirtualMediaViaExternalNetwork {
+		cert, err = generateTlsCertificate("")
+	} else {
+		cert, err = generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
+	}
+
 	if err != nil {
 		return err
 	}
