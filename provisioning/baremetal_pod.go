@@ -265,7 +265,7 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	// particular provisioning IP on the machine CIDR, we have nothing for this container
 	// to manage.
 	if info.ProvConfig.Spec.ProvisioningIP != "" && info.ProvConfig.Spec.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
-		initContainers = append(initContainers, createInitContainerStaticIpSet(info.Images, &info.ProvConfig.Spec))
+		initContainers = append(initContainers, createInitContainerStaticIpSet(info.Images, &info.ProvConfig.Spec, info.MasterMacAddresses))
 	}
 
 	// If the PreProvisioningOSDownloadURLs are set, we fetch the URLs of either CoreOS ISO and IPA assets or in some
@@ -404,7 +404,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 	return initContainer
 }
 
-func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.ProvisioningSpec, macs []string) corev1.Container {
 	initContainer := corev1.Container{
 		Name:            "metal3-static-ip-set",
 		Image:           images.StaticIpManager,
@@ -424,6 +424,9 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 			},
 		},
 	}
+
+	initContainer.Env = envWithMasterMacAddresses(initContainer.Env, macs)
+
 	return initContainer
 }
 
