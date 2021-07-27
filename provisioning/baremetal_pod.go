@@ -365,8 +365,10 @@ func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
 
 func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs string, useLiveImages, setIpOptions bool) corev1.Container {
 	var command string
+	name := "metal3-machine-os-downloader"
 	if useLiveImages {
 		command = "/usr/local/bin/get-live-images.sh"
+		name = name + "-live-images"
 	} else {
 		command = "/usr/local/bin/get-resource.sh"
 	}
@@ -385,7 +387,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 			})
 	}
 	initContainer := corev1.Container{
-		Name:            "metal3-machine-os-downloader",
+		Name:            name,
 		Image:           info.Images.MachineOsDownloader,
 		Command:         []string{command},
 		ImagePullPolicy: "IfNotPresent",
