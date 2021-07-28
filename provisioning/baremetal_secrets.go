@@ -2,6 +2,7 @@ package provisioning
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -153,7 +154,7 @@ func createRegistryPullSecret(info *ProvisioningInfo) error {
 			Namespace: info.Namespace,
 		},
 		StringData: map[string]string{
-			openshiftConfigSecretKey: string(openshiftConfigSecret.Data[openshiftConfigSecretKey]),
+			openshiftConfigSecretKey: base64.StdEncoding.EncodeToString(openshiftConfigSecret.Data[openshiftConfigSecretKey]),
 		},
 	}
 
