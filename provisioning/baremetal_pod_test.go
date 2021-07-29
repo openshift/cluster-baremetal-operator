@@ -142,6 +142,28 @@ func TestNewMetal3InitContainers(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "valid config with pre provisioning os download urls set",
+			config: configWithPreProvisioningOSDownloadURLs().build(),
+			expectedContainers: []corev1.Container{
+				{
+					Name:  "metal3-configure-coreos-ipa",
+					Image: images.Ironic,
+				},
+				{
+					Name:  "metal3-machine-os-downloader-live-images",
+					Image: images.MachineOsDownloader,
+				},
+				{
+					Name:  "metal3-machine-os-downloader",
+					Image: images.MachineOsDownloader,
+				},
+				{
+					Name:  "metal3-static-ip-set",
+					Image: images.StaticIpManager,
+				},
+			},
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
