@@ -132,7 +132,8 @@ func TestNewMetal3InitContainers(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualContainers := newMetal3InitContainers(&images, tc.config, nil)
+			info := &ProvisioningInfo{Images: &images, ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *tc.config}}
+			actualContainers := newMetal3InitContainers(info)
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Init Containers : %d Actual number of Init Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 		})
 	}
@@ -177,30 +178,36 @@ func TestNewMetal3Containers(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-			actualContainers := newMetal3Containers(&images, tc.config, nil)
+			info := &ProvisioningInfo{
+				Images:     &images,
+				ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *tc.config},
+			}
+			actualContainers := newMetal3Containers(info)
 			assert.Equal(t, tc.expectedContainers, len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, tc.expectedContainers, len(actualContainers)))
 		})
 	}
 }
 
 func TestProxyAndCAInjection(t *testing.T) {
-	images := Images{
-		BaremetalOperator:   expectedBaremetalOperator,
-		Ironic:              expectedIronic,
-		IronicInspector:     expectedIronicInspector,
-		IpaDownloader:       expectedIronicIpaDownloader,
-		MachineOsDownloader: expectedMachineOsDownloader,
-		StaticIpManager:     expectedIronicStaticIpManager,
-	}
-
-	proxy := v1.Proxy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cluster",
+	info := &ProvisioningInfo{
+		Images: &Images{
+			BaremetalOperator:   expectedBaremetalOperator,
+			Ironic:              expectedIronic,
+			IronicInspector:     expectedIronicInspector,
+			IpaDownloader:       expectedIronicIpaDownloader,
+			MachineOsDownloader: expectedMachineOsDownloader,
+			StaticIpManager:     expectedIronicStaticIpManager,
 		},
-		Status: v1.ProxyStatus{
-			HTTPProxy:  "https://172.2.0.1:3128",
-			HTTPSProxy: "https://172.2.0.1:3128",
-			NoProxy:    ".example.com",
+		ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
+		Proxy: &v1.Proxy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "cluster",
+			},
+			Status: v1.ProxyStatus{
+				HTTPProxy:  "https://172.2.0.1:3128",
+				HTTPSProxy: "https://172.2.0.1:3128",
+				NoProxy:    ".example.com",
+			},
 		},
 	}
 
@@ -210,11 +217,11 @@ func TestProxyAndCAInjection(t *testing.T) {
 	}{
 		{
 			name:       "init containers have proxy and CA information",
-			containers: newMetal3InitContainers(&images, managedProvisioning().build(), &proxy),
+			containers: newMetal3InitContainers(info),
 		},
 		{
 			name:       "metal3 containers have proxy and CA information",
-			containers: newMetal3Containers(&images, managedProvisioning().build(), &proxy),
+			containers: newMetal3Containers(info),
 		},
 	}
 	for _, tc := range tCases {
@@ -230,6 +237,33 @@ func TestProxyAndCAInjection(t *testing.T) {
 					Name:      "trusted-ca",
 					ReadOnly:  true},
 				)
+			}
+		})
+	}
+}
+
+func TestIPOptionForMachineOsDownloader(t *testing.T) {
+	tests := []struct {
+		ns   NetworkStackType
+		want string
+	}{
+		{
+			ns:   NetworkStackV4,
+			want: "ip=dhcp",
+		},
+		{
+			ns:   NetworkStackV6,
+			want: "ip=dhcp6",
+		},
+		{
+			ns:   NetworkStackDual,
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := ipOptionForMachineOsDownloader(&ProvisioningInfo{NetworkStack: tt.ns}); got != tt.want {
+				t.Errorf("ipOptionForMachineOsDownloader() = %v, want %v", got, tt.want)
 			}
 		})
 	}
