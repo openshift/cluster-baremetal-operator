@@ -119,7 +119,7 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
-	klog.Info("starting manager")
+	klog.Info("starting CBO manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		klog.ErrorS(err, "problem running manager")
 		os.Exit(1)
