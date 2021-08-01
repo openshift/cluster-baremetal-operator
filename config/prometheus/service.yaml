@@ -13,7 +13,7 @@ spec:
   type: ClusterIP
   ports:
   - name: https
-    port: 9444
+    port: 8443
     targetPort: https
   selector:
     k8s-app: cluster-baremetal-operator
