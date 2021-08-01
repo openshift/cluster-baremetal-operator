@@ -3,8 +3,6 @@ kind: RoleBinding
 metadata:
   name: prometheus-k8s-cluster-baremetal-operator
   namespace: openshift-machine-api
-  annotations:
-    include.release.openshift.io/self-managed-high-availability: "true"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

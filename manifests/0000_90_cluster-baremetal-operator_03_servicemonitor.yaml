@@ -3,6 +3,7 @@ kind: ServiceMonitor
 metadata:
   annotations:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
   labels:
     k8s-app: cluster-baremetal-operator
   name: cluster-baremetal-operator-servicemonitor

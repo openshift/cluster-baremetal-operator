@@ -3,8 +3,6 @@ kind: ConfigMap
 metadata:
   name: kube-rbac-proxy
   namespace: openshift-machine-api
-  annotations:
-    include.release.openshift.io/self-managed-high-availability: "true"
 data:
   config-file.yaml: |+
     authorization:

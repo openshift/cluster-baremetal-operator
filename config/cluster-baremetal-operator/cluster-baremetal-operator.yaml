@@ -35,7 +35,7 @@ spec:
               apiVersion: v1
               fieldPath: metadata.namespace
         - name: METRICS_PORT
-          value: "8080"
+          value: "9444"
         resources:
           requests:
             cpu: 10m
