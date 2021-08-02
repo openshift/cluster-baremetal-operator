@@ -1,3 +1,6 @@
+commonAnnotations:
+  include.release.openshift.io/self-managed-high-availability: "true"
+
 resources:
 - monitor.yaml
 - service.yaml
