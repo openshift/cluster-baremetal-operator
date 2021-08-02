@@ -15,7 +15,7 @@ spec:
     scheme: https
     tlsConfig:
       caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
-      serverName: cluster-baremetal-operator.openshift-machine-api.svc
+      serverName: cluster-baremetal-operator-service.openshift-machine-api.svc
   namespaceSelector:
     matchNames:
     - openshift-machine-api
