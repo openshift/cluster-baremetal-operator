@@ -78,6 +78,9 @@ spec:
           name: config
         - mountPath: /etc/tls/private
           name: cluster-baremetal-operator-tls
+        - mountPath: /var/run/configmaps/service-ca-bundle
+          name: service-ca-bundle
+          readOnly: true
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: system-node-critical
@@ -112,9 +115,9 @@ spec:
           defaultMode: 420
           secretName: cluster-baremetal-operator-tls
       - configMap:
-          name: cluster-baremetal-operator-images
-        name: images
-      - configMap:
           name: service-ca-bundle
           optional: true
         name: service-ca-bundle
+      - configMap:
+          name: cluster-baremetal-operator-images
+        name: images
