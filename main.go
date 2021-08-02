@@ -78,7 +78,7 @@ func main() {
 	config := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:             scheme,
-		MetricsBindAddress: ":8443",
+		MetricsBindAddress: metricsAddr,
 		Namespace:          controllers.ComponentNamespace,
 		LeaderElection:     enableLeaderElection,
 		Port:               9443,

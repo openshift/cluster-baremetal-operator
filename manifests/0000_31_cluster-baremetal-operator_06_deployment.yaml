@@ -54,7 +54,7 @@ spec:
           name: images
           readOnly: true
       - args:
-        - --secure-listen-address=0.0.0.0:8443
+        - --secure-listen-address=0.0.0.0:9444
         - --upstream=http://localhost:8080/
         - --tls-cert-file=/etc/tls/private/tls.crt
         - --tls-private-key-file=/etc/tls/private/tls.key
@@ -64,9 +64,8 @@ spec:
         image: registry.ci.openshift.org/openshift:kube-rbac-proxy
         name: kube-rbac-proxy
         ports:
-        - containerPort: 8443
-          name: https
-          protocol: TCP
+        - containerPort: 9444
+          name: metrics
         resources:
           requests:
             cpu: 10m
