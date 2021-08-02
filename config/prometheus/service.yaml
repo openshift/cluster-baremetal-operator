@@ -6,7 +6,7 @@ metadata:
   namespace: openshift-machine-api
   annotations:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
-    service.alpha.openshift.io/serving-cert-secret-name: cluster-baremetal-operator-tls
+    service.beta.openshift.io/serving-cert-secret-name: cluster-baremetal-operator-tls
   labels:
     k8s-app: cluster-baremetal-operator
 spec:
