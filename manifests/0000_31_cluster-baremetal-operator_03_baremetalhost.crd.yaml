@@ -22,10 +22,11 @@ spec:
     - description: Operational status
       jsonPath: .status.operationalStatus
       name: Status
+      priority: 1
       type: string
     - description: Provisioning status
       jsonPath: .status.provisioning.state
-      name: Provisioning Status
+      name: Provisioning_Status
       type: string
     - description: Consumer using this host
       jsonPath: .spec.consumerRef.name
@@ -34,10 +35,12 @@ spec:
     - description: Address of management controller
       jsonPath: .spec.bmc.address
       name: BMC
+      priority: 1
       type: string
     - description: The type of hardware detected
       jsonPath: .status.hardwareProfile
-      name: Hardware Profile
+      name: Hardware_Profile
+      priority: 1
       type: string
     - description: Whether the host is online or not
       jsonPath: .spec.online
@@ -281,8 +284,7 @@ spec:
                       format: date-time
                       type: string
                     value:
-                      description: Required. The taint value corresponding to the
-                        taint key.
+                      description: The taint value corresponding to the taint key.
                       type: string
                   required:
                   - effect
@@ -309,10 +311,10 @@ spec:
             description: BareMetalHostStatus defines the observed state of BareMetalHost
             properties:
               errorCount:
+                default: 0
                 description: ErrorCount records how many times the host has encoutered
                   an error since the last successful operation
                 type: integer
-                default: 0
               errorMessage:
                 description: the last error message reported by the provisioning subsystem
                 type: string
@@ -320,6 +322,7 @@ spec:
                 description: ErrorType indicates the type of failure encountered when
                   the OperationalStatus is OperationalStatusError
                 enum:
+                - provisioned registration error
                 - registration error
                 - inspection error
                 - provisioning error
@@ -400,23 +403,27 @@ spec:
                       description: NIC describes one network interface on the host.
                       properties:
                         ip:
-                          description: The IP address of the device
+                          description: The IP address of the interface. This will
+                            be an IPv4 or IPv6 address if one is present.  If both
+                            IPv4 and IPv6 addresses are present in a dual-stack environment,
+                            two nics will be output, one with each IP.
                           type: string
                         mac:
-                          description: The device MAC addr
+                          description: The device MAC address
                           pattern: '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}'
                           type: string
                         model:
-                          description: The name of the model, e.g. "virt-io"
+                          description: The vendor and product IDs of the NIC, e.g.
+                            "0x8086 0x1572"
                           type: string
                         name:
-                          description: The name of the NIC, e.g. "nic-1"
+                          description: The name of the network interface, e.g. "en0"
                           type: string
                         pxe:
                           description: Whether the NIC is PXE Bootable
                           type: boolean
                         speedGbps:
-                          description: The speed of the device
+                          description: The speed of the device in Gigabits per second
                           type: integer
                         vlanId:
                           description: The untagged VLAN ID
@@ -465,7 +472,8 @@ spec:
                           description: Hardware model
                           type: string
                         name:
-                          description: A name for the disk, e.g. "disk 1 (boot)"
+                          description: The Linux device name of the disk, e.g. "/dev/sda".
+                            Note that this may not be stable across reboots.
                           type: string
                         rotational:
                           description: Whether this disk represents rotational storage
