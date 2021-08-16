@@ -10,8 +10,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 
 	configv1 "github.com/openshift/api/config/v1"
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -157,15 +155,6 @@ func TestEnsureClusterOperator(t *testing.T) {
 						"include.release.openshift.io/self-managed-high-availability": "true",
 						"include.release.openshift.io/single-node-developer":          "true",
 					},
-					OwnerReferences: []v1.OwnerReference{
-						{
-							APIVersion:         "metal3.io/v1alpha1",
-							Kind:               "Provisioning",
-							Name:               "provisioning-configuration",
-							Controller:         pointer.BoolPtr(true),
-							BlockOwnerDeletion: pointer.BoolPtr(true),
-						},
-					},
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
 					Conditions:     defaultConditions,
@@ -195,15 +184,6 @@ func TestEnsureClusterOperator(t *testing.T) {
 						"include.release.openshift.io/self-managed-high-availability": "true",
 						"include.release.openshift.io/single-node-developer":          "true",
 					},
-					OwnerReferences: []v1.OwnerReference{
-						{
-							APIVersion:         "metal3.io/v1alpha1",
-							Kind:               "Provisioning",
-							Name:               "provisioning-configuration",
-							Controller:         pointer.BoolPtr(true),
-							BlockOwnerDeletion: pointer.BoolPtr(true),
-						},
-					},
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
 					Conditions:     conditions,
@@ -225,15 +205,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 			reconciler.OSClient = osClient
 			reconciler.ReleaseVersion = "test-version"
 
-			err := reconciler.ensureClusterOperator(&metal3iov1alpha1.Provisioning{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Provisioning",
-					APIVersion: "v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: metal3iov1alpha1.ProvisioningSingletonName,
-				},
-			})
+			err := reconciler.ensureClusterOperator()
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
