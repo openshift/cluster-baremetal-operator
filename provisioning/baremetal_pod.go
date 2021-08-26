@@ -426,6 +426,10 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 				Name:  "METAL3_AUTH_ROOT_DIR",
 				Value: metal3AuthRootDir,
 			},
+			{
+				Name:  "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE",
+				Value: "Never",
+			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
