@@ -534,6 +534,10 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			buildEnvVar(ironicEndpoint, config),
 			buildEnvVar(ironicInspectorEndpoint, config),
 			{
+				Name:  "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE",
+				Value: "Never",
+			},
+			{
 				Name:  "METAL3_AUTH_ROOT_DIR",
 				Value: metal3AuthRootDir,
 			},
