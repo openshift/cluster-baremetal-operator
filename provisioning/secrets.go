@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	"github.com/openshift/cluster-baremetal-operator/pkg/crypto"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
@@ -70,7 +71,7 @@ func applySecret(client coreclientv1.SecretsGetter, recorder events.Recorder, re
 
 // createMariadbPasswordSecret creates a Secret for Mariadb password
 func createMariadbPasswordSecret(info *ProvisioningInfo) error {
-	password, err := generateRandomPassword()
+	password, err := crypto.GenerateRandomPassword()
 	if err != nil {
 		return err
 	}
@@ -93,7 +94,7 @@ func createMariadbPasswordSecret(info *ProvisioningInfo) error {
 }
 
 func createIronicSecret(info *ProvisioningInfo, name string, username string, configSection string) error {
-	password, err := generateRandomPassword()
+	password, err := crypto.GenerateRandomPassword()
 	if err != nil {
 		return err
 	}
@@ -206,7 +207,7 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 // createOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
 // It updates the secret if the existing certificate is close to expiration.
 func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
-	cert, err := generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
+	cert, err := crypto.GenerateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
 	if err != nil {
 		return err
 	}
@@ -217,8 +218,8 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 			Namespace: info.Namespace,
 		},
 		Data: map[string][]byte{
-			corev1.TLSCertKey:       cert.certificate,
-			corev1.TLSPrivateKeyKey: cert.privateKey,
+			corev1.TLSCertKey:       cert.Certificate,
+			corev1.TLSPrivateKeyKey: cert.PrivateKey,
 		},
 	}
 
@@ -227,7 +228,7 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 	}
 
 	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, func(existing *corev1.Secret) (bool, error) {
-		expired, err := isTlsCertificateExpired(existing.Data[corev1.TLSCertKey])
+		expired, err := crypto.IsTlsCertificateExpired(existing.Data[corev1.TLSCertKey])
 		if err != nil {
 			return false, err
 		}

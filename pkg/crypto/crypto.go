@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package provisioning
+package crypto
 
 import (
 	"crypto/rand"
@@ -23,12 +23,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/cert"
 
-	"github.com/openshift/library-go/pkg/crypto"
+	gocrypto "github.com/openshift/library-go/pkg/crypto"
 )
 
 type TlsCertificate struct {
-	privateKey  []byte
-	certificate []byte
+	PrivateKey  []byte
+	Certificate []byte
 }
 
 const (
@@ -36,7 +36,7 @@ const (
 	tlsRefreshDays    = 180
 )
 
-func generateRandomPassword() (string, error) {
+func GenerateRandomPassword() (string, error) {
 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
 		"abcdefghijklmnopqrstuvwxyz" +
 		"0123456789")
@@ -53,15 +53,15 @@ func generateRandomPassword() (string, error) {
 	return string(buf), nil
 }
 
-func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
-	caConfig, err := crypto.MakeSelfSignedCAConfig("metal3-ironic", tlsExpirationDays)
+func GenerateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
+	caConfig, err := gocrypto.MakeSelfSignedCAConfig("metal3-ironic", tlsExpirationDays)
 	if err != nil {
 		return TlsCertificate{}, err
 	}
 
-	ca := crypto.CA{
+	ca := gocrypto.CA{
 		Config:          caConfig,
-		SerialGenerator: &crypto.RandomSerialGenerator{},
+		SerialGenerator: &gocrypto.RandomSerialGenerator{},
 	}
 
 	var host string
@@ -82,12 +82,12 @@ func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
 	}
 
 	return TlsCertificate{
-		privateKey:  keyBytes,
-		certificate: certBytes,
+		PrivateKey:  keyBytes,
+		Certificate: certBytes,
 	}, nil
 }
 
-func isTlsCertificateExpired(certificate []byte) (bool, error) {
+func IsTlsCertificateExpired(certificate []byte) (bool, error) {
 	certs, err := cert.ParseCertsPEM(certificate)
 	if err != nil {
 		return false, err
