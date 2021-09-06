@@ -25,6 +25,7 @@ import (
 
 	v1 "github.com/openshift/api/config/v1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/cluster-baremetal-operator/pkg/network"
 )
 
 func TestBuildEnvVar(t *testing.T) {
@@ -420,7 +421,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				Images:       &images,
 				ProvConfig:   &metal3iov1alpha1.Provisioning{Spec: *tc.config},
 				SSHKey:       tc.sshkey,
-				NetworkStack: NetworkStackV6,
+				NetworkStack: network.NetworkStackV6,
 			}
 			actualContainers := newMetal3Containers(info)
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
@@ -483,33 +484,6 @@ func TestProxyAndCAInjection(t *testing.T) {
 					Name:      "trusted-ca",
 					ReadOnly:  true},
 				)
-			}
-		})
-	}
-}
-
-func TestIPOptionForMachineOsDownloader(t *testing.T) {
-	tests := []struct {
-		ns   NetworkStackType
-		want string
-	}{
-		{
-			ns:   NetworkStackV4,
-			want: "ip=dhcp",
-		},
-		{
-			ns:   NetworkStackV6,
-			want: "ip=dhcp6",
-		},
-		{
-			ns:   NetworkStackDual,
-			want: "",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			if got := ipOptionForMachineOsDownloader(&ProvisioningInfo{NetworkStack: tt.ns}); got != tt.want {
-				t.Errorf("ipOptionForMachineOsDownloader() = %v, want %v", got, tt.want)
 			}
 		})
 	}
