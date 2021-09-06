@@ -18,8 +18,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -43,6 +41,7 @@ import (
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/cluster-baremetal-operator/pkg/network"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
 )
@@ -69,7 +68,7 @@ type ProvisioningReconciler struct {
 	ReleaseVersion string
 	ImagesFilename string
 	WebHookEnabled bool
-	NetworkStack   provisioning.NetworkStackType
+	NetworkStack   network.NetworkStackType
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -398,44 +397,6 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	return nil
 }
 
-func networkStack(ips []net.IP) provisioning.NetworkStackType {
-	ns := provisioning.NetworkStackType(0)
-	for _, ip := range ips {
-		if ip.IsLoopback() {
-			continue
-		}
-		if ip.To4() != nil {
-			ns |= provisioning.NetworkStackV4
-		} else {
-			ns |= provisioning.NetworkStackV6
-		}
-	}
-	return ns
-}
-
-func (r *ProvisioningReconciler) apiServerInternalHost(ctx context.Context) (string, error) {
-	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
-	if err != nil {
-		return "", errors.Wrap(err, "unable to read Infrastructure CR")
-	}
-
-	if infra.Status.APIServerInternalURL == "" {
-		return "", errors.Wrap(err, "invalid APIServerInternalURL in Infrastructure CR")
-	}
-
-	apiServerInternalURL, err := url.Parse(infra.Status.APIServerInternalURL)
-	if err != nil {
-		return "", errors.Wrap(err, "unable to parse API Server Internal URL")
-	}
-
-	host, _, err := net.SplitHostPort(apiServerInternalURL.Host)
-	if err != nil {
-		return "", err
-	}
-
-	return host, nil
-}
-
 func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) error {
 	if len(provConfig.Spec.ProvisioningMacAddresses) != 0 {
 		return nil
@@ -463,18 +424,16 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
 	}
 
-	apiInt, err := r.apiServerInternalHost(ctx)
+	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
-		return errors.Wrap(err, "could not get internal APIServer")
+		return errors.Wrap(err, "unable to read Infrastructure CR")
 	}
 
-	ips, err := net.LookupIP(apiInt)
+	r.NetworkStack, err = network.NetworkStackFromURL(infra.Status.APIServerInternalURL)
 	if err != nil {
-		return errors.Wrap(err, "could not lookupIP for internal APIServer: "+apiInt)
+		return errors.Wrap(err, "unable to calculate the NetworkStack")
 	}
-
-	r.NetworkStack = networkStack(ips)
-	klog.InfoS("Network stack calculation", "APIServerInternalHost", apiInt, "NetworkStack", r.NetworkStack)
+	klog.InfoS("Network stack calculation", "APIServerInternalHost", infra.Status.APIServerInternalURL, "NetworkStack", r.NetworkStack)
 
 	// Check the Platform Type to determine the state of the CO
 	enabled, err := r.isEnabled()
