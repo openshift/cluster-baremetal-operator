@@ -968,6 +968,7 @@ func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
 		cboLabelName: stateService,
 	}
 	template := newMetal3PodTemplateSpec(info, &podSpecLabels)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      baremetalDeploymentName,

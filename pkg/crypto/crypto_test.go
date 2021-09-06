@@ -1,4 +1,4 @@
-package provisioning
+package crypto
 
 import (
 	"testing"
@@ -7,14 +7,14 @@ import (
 )
 
 func TestGenerateRandomPassword(t *testing.T) {
-	pwd1, err := generateRandomPassword()
+	pwd1, err := GenerateRandomPassword()
 	if err != nil {
 		t.Errorf("Unexpected error while generating random password: %s", err)
 	}
 	if pwd1 == "" {
 		t.Errorf("Expected a valid string but got null")
 	}
-	pwd2, err := generateRandomPassword()
+	pwd2, err := GenerateRandomPassword()
 	if err != nil {
 		t.Errorf("Unexpected error while re-generating random password: %s", err)
 	} else {
@@ -23,15 +23,15 @@ func TestGenerateRandomPassword(t *testing.T) {
 }
 
 func TestGenerateTlsCertificate(t *testing.T) {
-	cert, err := generateTlsCertificate("")
+	cert, err := GenerateTlsCertificate("")
 	if err != nil {
 		t.Errorf("Unexpected error while generating a certificate: %s", err)
 	} else {
-		assert.NotEqual(t, cert.certificate, "", "empty certificate")
-		assert.NotEqual(t, cert.privateKey, "", "empty private key")
+		assert.NotEqual(t, cert.Certificate, "", "empty certificate")
+		assert.NotEqual(t, cert.PrivateKey, "", "empty private key")
 	}
 
-	expired, err := isTlsCertificateExpired(cert.certificate)
+	expired, err := IsTlsCertificateExpired(cert.Certificate)
 	if err != nil {
 		t.Errorf("Unexpected error while checking a certificate: %s", err)
 	} else {
@@ -40,15 +40,15 @@ func TestGenerateTlsCertificate(t *testing.T) {
 }
 
 func TestGenerateTlsCertificateWithHost(t *testing.T) {
-	cert, err := generateTlsCertificate("127.0.0.1")
+	cert, err := GenerateTlsCertificate("127.0.0.1")
 	if err != nil {
 		t.Errorf("Unexpected error while generating a certificate: %s", err)
 	} else {
-		assert.NotEqual(t, cert.certificate, "", "empty certificate")
-		assert.NotEqual(t, cert.privateKey, "", "empty private key")
+		assert.NotEqual(t, cert.Certificate, "", "empty certificate")
+		assert.NotEqual(t, cert.PrivateKey, "", "empty private key")
 	}
 
-	expired, err := isTlsCertificateExpired(cert.certificate)
+	expired, err := IsTlsCertificateExpired(cert.Certificate)
 	if err != nil {
 		t.Errorf("Unexpected error while checking a certificate: %s", err)
 	} else {
