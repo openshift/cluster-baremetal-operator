@@ -62,15 +62,14 @@ const (
 type ProvisioningReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	Client             client.Client
-	Scheme             *runtime.Scheme
-	OSClient           osclientset.Interface
-	KubeClient         kubernetes.Interface
-	ReleaseVersion     string
-	ImagesFilename     string
-	WebHookEnabled     bool
-	NetworkStack       provisioning.NetworkStackType
-	MasterMacAddresses []string
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	OSClient       osclientset.Interface
+	KubeClient     kubernetes.Interface
+	ReleaseVersion string
+	ImagesFilename string
+	WebHookEnabled bool
+	NetworkStack   provisioning.NetworkStackType
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -214,14 +213,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	if len(r.MasterMacAddresses) == 0 {
-		r.MasterMacAddresses, err = r.masterMacAddresses(ctx)
-		if err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "could not get master mac addresses")
-		}
-	}
-
-	info, err := r.provisioningInfo(baremetalConfig, &containerImages, r.readSSHKey())
+	info, err := r.provisioningInfo(ctx, baremetalConfig, &containerImages, r.readSSHKey())
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -333,8 +325,13 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return result, nil
 }
 
-func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, sshkey string) (*provisioning.ProvisioningInfo, error) {
-	proxy, err := r.OSClient.ConfigV1().Proxies().Get(context.Background(), "cluster", metav1.GetOptions{})
+func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, sshkey string) (*provisioning.ProvisioningInfo, error) {
+	proxy, err := r.OSClient.ConfigV1().Proxies().Get(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	macAddresses, err := r.masterMacAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +345,7 @@ func (r *ProvisioningReconciler) provisioningInfo(provConfig *metal3iov1alpha1.P
 		Images:             images,
 		Proxy:              proxy,
 		NetworkStack:       r.NetworkStack,
-		MasterMacAddresses: r.MasterMacAddresses,
+		MasterMacAddresses: macAddresses,
 		SSHKey:             sshkey,
 	}, nil
 }
