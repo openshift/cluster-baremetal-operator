@@ -331,22 +331,20 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		return nil, err
 	}
 
-	macAddresses, err := r.masterMacAddresses(ctx)
-	if err != nil {
+	if err := r.updateProvisioningMacAddresses(ctx, provConfig); err != nil {
 		return nil, err
 	}
 
 	return &provisioning.ProvisioningInfo{
-		Client:             r.KubeClient,
-		EventRecorder:      events.NewLoggingEventRecorder(ComponentName),
-		ProvConfig:         provConfig,
-		Scheme:             r.Scheme,
-		Namespace:          ComponentNamespace,
-		Images:             images,
-		Proxy:              proxy,
-		NetworkStack:       r.NetworkStack,
-		MasterMacAddresses: macAddresses,
-		SSHKey:             sshkey,
+		Client:        r.KubeClient,
+		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
+		ProvConfig:    provConfig,
+		Scheme:        r.Scheme,
+		Namespace:     ComponentNamespace,
+		Images:        images,
+		Proxy:         proxy,
+		NetworkStack:  r.NetworkStack,
+		SSHKey:        sshkey,
 	}, nil
 }
 
@@ -442,18 +440,23 @@ func (r *ProvisioningReconciler) apiServerInternalHost(ctx context.Context) (str
 	return host, nil
 }
 
-func (r *ProvisioningReconciler) masterMacAddresses(ctx context.Context) ([]string, error) {
+func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) error {
+	if len(provConfig.Spec.ProvisioningMacAddresses) != 0 {
+		return nil
+	}
+
 	macs := []string{}
 	bmhl := baremetalv1alpha1.BareMetalHostList{}
 	if err := r.Client.List(ctx, &bmhl, &client.ListOptions{Namespace: ComponentNamespace}); err != nil {
-		return nil, err
+		return err
 	}
 	for _, bmh := range bmhl.Items {
 		if strings.Contains(bmh.Name, "master") && len(bmh.Spec.BootMACAddress) > 0 {
 			macs = append(macs, bmh.Spec.BootMACAddress)
 		}
 	}
-	return macs, nil
+	provConfig.Spec.ProvisioningMacAddresses = macs
+	return r.Client.Update(ctx, provConfig)
 }
 
 // SetupWithManager configures the manager to run the controller
