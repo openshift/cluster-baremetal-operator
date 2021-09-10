@@ -222,9 +222,9 @@ func TestAPIServerInternalHost(t *testing.T) {
 	}
 }
 
-func TestProvisioningReconciler_masterMacAddresses(t *testing.T) {
+func TestUpdateProvisioningMacAddresses(t *testing.T) {
 	sc := setUpSchemeForReconciler()
-	bmhl := []runtime.Object{
+	objects := []runtime.Object{
 		&baremetalv1alpha1.BareMetalHost{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-master-0", Namespace: ComponentNamespace},
 			Spec: baremetalv1alpha1.BareMetalHostSpec{
@@ -256,18 +256,29 @@ func TestProvisioningReconciler_masterMacAddresses(t *testing.T) {
 			},
 		},
 	}
+	baremetalCR := metal3iov1alpha1.Provisioning{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Provisioning",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: metal3iov1alpha1.ProvisioningSingletonName,
+		},
+		Spec: metal3iov1alpha1.ProvisioningSpec{},
+	}
+	objects = append(objects, &baremetalCR)
 	r := &ProvisioningReconciler{
 		Scheme: sc,
-		Client: fakeclient.NewFakeClientWithScheme(sc, bmhl...),
+		Client: fakeclient.NewFakeClientWithScheme(sc, objects...),
 	}
 
 	want := []string{"00:3d:25:45:bf:e5", "00:3d:25:45:bf:e6", "00:3d:25:45:bf:e7"}
-	got, err := r.masterMacAddresses(context.TODO())
+	err := r.updateProvisioningMacAddresses(context.TODO(), &baremetalCR)
 	if err != nil {
-		t.Errorf("ProvisioningReconciler.masterMacAddresses() error = %v", err)
+		t.Errorf("ProvisioningReconciler.updateProvisioningMacAddresses() error = %v", err)
 		return
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ProvisioningReconciler.masterMacAddresses() = %v, want %v", got, want)
+	if !reflect.DeepEqual(baremetalCR.Spec.ProvisioningMacAddresses, want) {
+		t.Errorf("ProvisioningReconciler.updateProvisioningMacAddresses() = %v, want %v", baremetalCR.Spec.ProvisioningMacAddresses, want)
 	}
 }
