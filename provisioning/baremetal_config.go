@@ -18,6 +18,7 @@ package provisioning
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"k8s.io/utils/pointer"
 
@@ -33,6 +34,7 @@ var (
 	baremetalIronicEndpointSubpath = "v1/"
 	provisioningIP                 = "PROVISIONING_IP"
 	provisioningInterface          = "PROVISIONING_INTERFACE"
+	provisioningMacAddresses       = "PROVISIONING_MACS"
 	deployKernelUrl                = "DEPLOY_KERNEL_URL"
 	deployRamdiskUrl               = "DEPLOY_RAMDISK_URL"
 	ironicEndpoint                 = "IRONIC_ENDPOINT"
@@ -135,6 +137,8 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 		return getProvisioningIPCIDR(baremetalConfig)
 	case provisioningInterface:
 		return &baremetalConfig.ProvisioningInterface
+	case provisioningMacAddresses:
+		return pointer.StringPtr(strings.Join(baremetalConfig.ProvisioningMacAddresses, ","))
 	case deployKernelUrl:
 		return getDeployKernelUrl()
 	case deployRamdiskUrl:

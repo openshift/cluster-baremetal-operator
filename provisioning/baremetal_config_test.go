@@ -131,6 +131,7 @@ func managedProvisioning() *provisioningBuilder {
 		metal3iov1alpha1.ProvisioningSpec{
 			ProvisioningInterface:     "eth0",
 			ProvisioningIP:            "172.30.20.3",
+			ProvisioningMacAddresses:  []string{"34:b3:2d:81:f8:fb", "34:b3:2d:81:f8:fc", "34:b3:2d:81:f8:fd"},
 			ProvisioningNetworkCIDR:   "172.30.20.0/24",
 			ProvisioningDHCPRange:     "172.30.20.11,172.30.20.101",
 			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
@@ -145,6 +146,7 @@ func managedIPv6Provisioning() *provisioningBuilder {
 			ProvisioningInterface:     "eth0",
 			ProvisioningIP:            "fd2e:6f44:5dd8:b856::2",
 			ProvisioningNetworkCIDR:   "fd2e:6f44:5dd8:b856::0/80",
+			ProvisioningMacAddresses:  []string{"34:b3:2d:81:f8:fb", "34:b3:2d:81:f8:fc", "34:b3:2d:81:f8:fd"},
 			ProvisioningDHCPRange:     "fd2e:6f44:5dd8:b856::10,fd2e:6f44:5dd8:b856::ff",
 			ProvisioningOSDownloadURL: "http://[fd2e:6f44:5dd8:b856::2]/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
 			ProvisioningNetwork:       "Managed",
@@ -157,6 +159,7 @@ func unmanagedProvisioning() *provisioningBuilder {
 		metal3iov1alpha1.ProvisioningSpec{
 			ProvisioningInterface:     "ensp0",
 			ProvisioningIP:            "172.30.20.3",
+			ProvisioningMacAddresses:  []string{"34:b3:2d:81:f8:fb", "34:b3:2d:81:f8:fc", "34:b3:2d:81:f8:fd"},
 			ProvisioningNetworkCIDR:   "172.30.20.0/24",
 			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
 			ProvisioningNetwork:       "Unmanaged",
@@ -168,6 +171,7 @@ func disabledProvisioning() *provisioningBuilder {
 	return &provisioningBuilder{
 		metal3iov1alpha1.ProvisioningSpec{
 			ProvisioningInterface:     "",
+			ProvisioningMacAddresses:  []string{"34:b3:2d:81:f8:fb", "34:b3:2d:81:f8:fc", "34:b3:2d:81:f8:fd"},
 			ProvisioningIP:            "172.30.20.3",
 			ProvisioningNetworkCIDR:   "172.30.20.0/24",
 			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
@@ -181,6 +185,7 @@ func configWithPreProvisioningOSDownloadURLs() *provisioningBuilder {
 		metal3iov1alpha1.ProvisioningSpec{
 			ProvisioningInterface:     "eth0",
 			ProvisioningIP:            "172.30.20.3",
+			ProvisioningMacAddresses:  []string{"34:b3:2d:81:f8:fb", "34:b3:2d:81:f8:fc", "34:b3:2d:81:f8:fd"},
 			ProvisioningNetworkCIDR:   "172.30.20.0/24",
 			ProvisioningDHCPRange:     "172.30.20.11,172.30.20.101",
 			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
