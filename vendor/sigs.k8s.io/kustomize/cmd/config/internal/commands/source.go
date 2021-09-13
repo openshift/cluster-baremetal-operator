@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kustomize/cmd/config/internal/generateddocs/commands"
-	"sigs.k8s.io/kustomize/cmd/config/runner"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -23,7 +22,7 @@ func GetSourceRunner(name string) *SourceRunner {
 		Example: commands.SourceExamples,
 		RunE:    r.runE,
 	}
-	runner.FixDocs(name, c)
+	fixDocs(name, c)
 	c.Flags().StringVar(&r.WrapKind, "wrap-kind", kio.ResourceListKind,
 		"output using this format.")
 	c.Flags().StringVar(&r.WrapApiVersion, "wrap-version", kio.ResourceListAPIVersion,
@@ -79,5 +78,5 @@ func (r *SourceRunner) runE(c *cobra.Command, args []string) error {
 	}
 
 	err := kio.Pipeline{Inputs: inputs, Outputs: outputs}.Execute()
-	return runner.HandleError(c, err)
+	return handleError(c, err)
 }

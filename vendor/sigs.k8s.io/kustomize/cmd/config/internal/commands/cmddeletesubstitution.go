@@ -10,9 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kustomize/cmd/config/ext"
-	"sigs.k8s.io/kustomize/cmd/config/runner"
 	"sigs.k8s.io/kustomize/kyaml/fieldmeta"
-	"sigs.k8s.io/kustomize/kyaml/openapi"
 	"sigs.k8s.io/kustomize/kyaml/setters2/settersutil"
 )
 
@@ -27,7 +25,7 @@ func NewDeleteSubstitutionRunner(parent string) *DeleteSubstitutionRunner {
 	}
 	c.Flags().BoolVarP(&r.RecurseSubPackages, "recurse-subpackages", "R", false,
 		"deletes substitution recursively in all the nested subpackages")
-	runner.FixDocs(parent, c)
+	fixDocs(parent, c)
 	r.Command = c
 
 	return r
@@ -54,25 +52,21 @@ func (r *DeleteSubstitutionRunner) preRunE(c *cobra.Command, args []string) erro
 }
 
 func (r *DeleteSubstitutionRunner) runE(c *cobra.Command, args []string) error {
-	e := runner.ExecuteCmdOnPkgs{
-		NeedOpenAPI:        true,
-		Writer:             c.OutOrStdout(),
-		RootPkgPath:        args[0],
-		RecurseSubPackages: r.RecurseSubPackages,
-		CmdRunner:          r,
+	e := executeCmdOnPkgs{
+		needOpenAPI:        true,
+		writer:             c.OutOrStdout(),
+		rootPkgPath:        args[0],
+		recurseSubPackages: r.RecurseSubPackages,
+		cmdRunner:          r,
 	}
-	err := e.Execute()
+	err := e.execute()
 	if err != nil {
-		return runner.HandleError(c, err)
+		return handleError(c, err)
 	}
 	return nil
 }
 
-func (r *DeleteSubstitutionRunner) ExecuteCmd(w io.Writer, pkgPath string) error {
-	sc, err := openapi.SchemaFromFile(filepath.Join(pkgPath, ext.KRMFileName()))
-	if err != nil {
-		return err
-	}
+func (r *DeleteSubstitutionRunner) executeCmd(w io.Writer, pkgPath string) error {
 	r.DeleteSubstitution = settersutil.DeleterCreator{
 		Name:               r.DeleteSubstitution.Name,
 		DefinitionPrefix:   fieldmeta.SubstitutionDefinitionPrefix,
@@ -80,10 +74,9 @@ func (r *DeleteSubstitutionRunner) ExecuteCmd(w io.Writer, pkgPath string) error
 		OpenAPIFileName:    ext.KRMFileName(),
 		OpenAPIPath:        filepath.Join(pkgPath, ext.KRMFileName()),
 		ResourcesPath:      pkgPath,
-		SettersSchema:      sc,
 	}
 
-	err = r.DeleteSubstitution.Delete()
+	err := r.DeleteSubstitution.Delete()
 	if err != nil {
 		// return err if RecurseSubPackages is false
 		if !r.DeleteSubstitution.RecurseSubPackages {

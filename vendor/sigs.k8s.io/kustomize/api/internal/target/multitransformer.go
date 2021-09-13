@@ -26,15 +26,13 @@ func newMultiTransformer(t []resmap.Transformer) resmap.Transformer {
 	return r
 }
 
-// Transform applies the member transformers in order to the resources,
-// optionally detecting and erroring on commutation conflict.
+// Transform prepends the name prefix.
 func (o *multiTransformer) Transform(m resmap.ResMap) error {
 	if o.checkConflictEnabled {
 		return o.transformWithCheckConflict(m)
 	}
 	return o.transform(m)
 }
-
 func (o *multiTransformer) transform(m resmap.ResMap) error {
 	for _, t := range o.transformers {
 		err := t.Transform(m)

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"sigs.k8s.io/kustomize/cmd/config/runner"
 
 	"sigs.k8s.io/kustomize/kyaml/errors"
 	"sigs.k8s.io/kustomize/kyaml/fn/runtime/runtimeutil"
@@ -30,7 +29,7 @@ func GetRunFnRunner(name string) *RunFnRunner {
 		RunE:    r.runE,
 		PreRunE: r.preRunE,
 	}
-	runner.FixDocs(name, c)
+	fixDocs(name, c)
 	c.Flags().BoolVar(&r.IncludeSubpackages, "include-subpackages", true,
 		"also print resources from subpackages.")
 	r.Command = c
@@ -71,8 +70,6 @@ func GetRunFnRunner(name string) *RunFnRunner {
 	r.Command.Flags().StringArrayVarP(
 		&r.Env, "env", "e", []string{},
 		"a list of environment variables to be used by functions")
-	r.Command.Flags().BoolVar(
-		&r.AsCurrentUser, "as-current-user", false, "use the uid and gid that kpt is running with to run the function in the container")
 	return r
 }
 
@@ -100,11 +97,10 @@ type RunFnRunner struct {
 	Mounts             []string
 	LogSteps           bool
 	Env                []string
-	AsCurrentUser      bool
 }
 
 func (r *RunFnRunner) runE(c *cobra.Command, args []string) error {
-	return runner.HandleError(c, r.RunFns.Execute())
+	return handleError(c, r.RunFns.Execute())
 }
 
 // getContainerFunctions parses the commandline flags and arguments into explicit
@@ -316,7 +312,6 @@ func (r *RunFnRunner) preRunE(c *cobra.Command, args []string) error {
 		ResultsDir:     r.ResultsDir,
 		LogSteps:       r.LogSteps,
 		Env:            r.Env,
-		AsCurrentUser:  r.AsCurrentUser,
 	}
 
 	// don't consider args for the function

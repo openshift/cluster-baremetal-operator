@@ -7,6 +7,8 @@ import (
 	"fmt"
 
 	"sigs.k8s.io/kustomize/api/filters/replicacount"
+	"sigs.k8s.io/kustomize/kyaml/filtersutil"
+
 	"sigs.k8s.io/kustomize/api/resid"
 	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/api/types"
@@ -31,17 +33,19 @@ func (p *ReplicaCountTransformerPlugin) Transform(m resmap.ResMap) error {
 	found := false
 	for _, fs := range p.FieldSpecs {
 		matcher := p.createMatcher(fs)
-		resList := m.GetMatchingResourcesByAnyId(matcher)
+		matchOriginal := m.GetMatchingResourcesByOriginalId(matcher)
+		resList := append(
+			matchOriginal, m.GetMatchingResourcesByCurrentId(matcher)...)
 		if len(resList) > 0 {
 			found = true
 			for _, r := range resList {
 				// There are redundant checks in the filter
 				// that we'll live with until resolution of
 				// https://github.com/kubernetes-sigs/kustomize/issues/2506
-				err := r.ApplyFilter(replicacount.Filter{
+				err := filtersutil.ApplyToJSON(replicacount.Filter{
 					Replica:   p.Replica,
 					FieldSpec: fs,
-				})
+				}, r)
 				if err != nil {
 					return err
 				}

@@ -21,8 +21,6 @@ type FieldMeta struct {
 	Schema spec.Schema
 
 	Extensions XKustomize
-
-	SettersSchema *spec.Schema
 }
 
 type XKustomize struct {
@@ -110,7 +108,7 @@ func (fm *FieldMeta) processShortHand(comment string) bool {
 		return false
 	}
 
-	if _, err := openapi.Resolve(&setterRef, fm.SettersSchema); err == nil {
+	if _, err := openapi.Resolve(&setterRef); err == nil {
 		setterErr := fm.Schema.UnmarshalJSON(setterRefBytes)
 		return setterErr == nil
 	}
@@ -125,7 +123,7 @@ func (fm *FieldMeta) processShortHand(comment string) bool {
 		return false
 	}
 
-	if _, err := openapi.Resolve(&substRef, fm.SettersSchema); err == nil {
+	if _, err := openapi.Resolve(&substRef); err == nil {
 		substErr := fm.Schema.UnmarshalJSON(substRefBytes)
 		return substErr == nil
 	}

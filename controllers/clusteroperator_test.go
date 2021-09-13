@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -69,26 +68,16 @@ func TestUpdateCOStatus(t *testing.T) {
 		},
 	}
 
-	ctx := context.TODO()
-
 	for _, tc := range tCases {
 		ec := externalclients.NewExternalResourceClient(fakekube.NewSimpleClientset(), fakeconfigclientset.NewSimpleClientset(&osconfigv1.Infrastructure{}))
 		reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), ec)
-		_, err := reconciler.createClusterOperator()
+		co, err := reconciler.createClusterOperator()
 		if err != nil {
 			t.Error(err)
 		}
 
-		err = reconciler.updateCOStatus(tc.reason, tc.msg, tc.progressMsg)
-		if err != nil {
-			t.Error(err)
-		}
-		gotCO, err := reconciler.ExternalClients.ClusterOperatorGet(ctx, clusterOperatorName)
-		if err != nil {
-			t.Error(err)
-		}
-
-		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
+		reconciler.updateCOStatus(co, tc.reason, tc.msg, tc.progressMsg)
+		diff := getStatusConditionsDiff(tc.expectedConditions, co.Status.Conditions)
 		if diff != "" {
 			t.Fatal(diff)
 		}
@@ -224,17 +213,17 @@ func TestEnsureClusterOperator(t *testing.T) {
 				reconciler = newFakeProvisioningReconciler(setUpSchemeForReconciler(), ec)
 			}
 			reconciler.ReleaseVersion = "test-version"
-			ctx := context.TODO()
 
-			err := reconciler.ensureClusterOperator()
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			var co = tc.existingCO
+			if co == nil {
+				var err error
+				co, err = reconciler.createClusterOperator()
+				if err != nil {
+					t.Error(err)
+				}
 			}
 
-			co, err := reconciler.ExternalClients.ClusterOperatorGet(ctx, clusterOperatorName)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			reconciler.ensureDefaultsClusterOperator(co)
 
 			normalizeTransitionTimes(co.Status, tc.expectedCO.Status)
 
@@ -323,30 +312,22 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 			},
 		},
 	}
-	ctx := context.TODO()
-	ec := externalclients.NewExternalResourceClient(
-		fakekube.NewSimpleClientset(),
-		fakeconfigclientset.NewSimpleClientset(&osconfigv1.Infrastructure{}))
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), ec)
-	co, err := reconciler.createClusterOperator()
-	if err != nil {
-		t.Error(err)
-	}
 
 	for _, tc := range tCases {
-		baremetalCR.Spec = tc.spec
-		if err := baremetalCR.ValidateBaremetalProvisioningConfig(); err != nil {
-			err = reconciler.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
-			if err != nil {
-				t.Error(err)
-			}
-		}
-		gotCO, err := reconciler.ExternalClients.ClusterOperatorGet(ctx, co.Name)
+		ec := externalclients.NewExternalResourceClient(
+			fakekube.NewSimpleClientset(),
+			fakeconfigclientset.NewSimpleClientset(&osconfigv1.Infrastructure{}))
+		reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), ec)
+		co, err := reconciler.createClusterOperator()
 		if err != nil {
 			t.Error(err)
 		}
+		baremetalCR.Spec = tc.spec
+		if err := baremetalCR.ValidateBaremetalProvisioningConfig(); err != nil {
+			reconciler.updateCOStatus(co, ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
+		}
 
-		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
+		diff := getStatusConditionsDiff(tc.expectedConditions, co.Status.Conditions)
 		if diff != "" {
 			t.Fatal(diff)
 		}
@@ -382,25 +363,17 @@ func TestUpdateCOStatusAvailable(t *testing.T) {
 			},
 		},
 	}
-	ec := externalclients.NewExternalResourceClient(fakekube.NewSimpleClientset(), fakeconfigclientset.NewSimpleClientset(&osconfigv1.Infrastructure{}))
-	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), ec)
-	ctx := context.TODO()
-	co, err := reconciler.createClusterOperator()
-	if err != nil {
-		t.Error(err)
-	}
 
 	for _, tc := range tCases {
-		err := reconciler.updateCOStatus(ReasonComplete, tc.msg, "")
+		ec := externalclients.NewExternalResourceClient(fakekube.NewSimpleClientset(), fakeconfigclientset.NewSimpleClientset(&osconfigv1.Infrastructure{}))
+		reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), ec)
+		co, err := reconciler.createClusterOperator()
 		if err != nil {
 			t.Error(err)
 		}
-		gotCO, err := reconciler.ExternalClients.ClusterOperatorGet(ctx, co.Name)
-		if err != nil {
-			t.Error(err)
-		}
+		reconciler.updateCOStatus(co, ReasonComplete, tc.msg, "")
 
-		diff := getStatusConditionsDiff(tc.expectedConditions, gotCO.Status.Conditions)
+		diff := getStatusConditionsDiff(tc.expectedConditions, co.Status.Conditions)
 		if diff != "" {
 			t.Fatal(diff)
 		}

@@ -6,13 +6,12 @@ package resmap
 import (
 	"bytes"
 	"fmt"
-	"strings"
+	"regexp"
 
 	"github.com/pkg/errors"
 	"sigs.k8s.io/kustomize/api/resid"
 	"sigs.k8s.io/kustomize/api/resource"
 	"sigs.k8s.io/kustomize/api/types"
-	kyaml_yaml "sigs.k8s.io/kustomize/kyaml/yaml"
 	"sigs.k8s.io/yaml"
 )
 
@@ -155,7 +154,8 @@ func (m *resWrangler) GetIndexOfCurrentId(id resid.ResId) (int, error) {
 
 type IdFromResource func(r *resource.Resource) resid.ResId
 
-func GetCurrentId(r *resource.Resource) resid.ResId { return r.CurId() }
+func GetOriginalId(r *resource.Resource) resid.ResId { return r.OrgId() }
+func GetCurrentId(r *resource.Resource) resid.ResId  { return r.CurId() }
 
 // GetMatchingResourcesByCurrentId implements ResMap.
 func (m *resWrangler) GetMatchingResourcesByCurrentId(
@@ -163,19 +163,10 @@ func (m *resWrangler) GetMatchingResourcesByCurrentId(
 	return m.filteredById(matches, GetCurrentId)
 }
 
-// GetMatchingResourcesByAnyId implements ResMap.
-func (m *resWrangler) GetMatchingResourcesByAnyId(
+// GetMatchingResourcesByOriginalId implements ResMap.
+func (m *resWrangler) GetMatchingResourcesByOriginalId(
 	matches IdMatcher) []*resource.Resource {
-	var result []*resource.Resource
-	for _, r := range m.rList {
-		for _, id := range append(r.PrevIds(), r.CurId()) {
-			if matches(id) {
-				result = append(result, r)
-				break
-			}
-		}
-	}
-	return result
+	return m.filteredById(matches, GetOriginalId)
 }
 
 func (m *resWrangler) filteredById(
@@ -195,16 +186,26 @@ func (m *resWrangler) GetByCurrentId(
 	return demandOneMatch(m.GetMatchingResourcesByCurrentId, id, "Current")
 }
 
+// GetByOriginalId implements ResMap.
+func (m *resWrangler) GetByOriginalId(
+	id resid.ResId) (*resource.Resource, error) {
+	return demandOneMatch(m.GetMatchingResourcesByOriginalId, id, "Original")
+}
+
 // GetById implements ResMap.
 func (m *resWrangler) GetById(
 	id resid.ResId) (*resource.Resource, error) {
-	r, err := demandOneMatch(m.GetMatchingResourcesByAnyId, id, "Id")
-	if err != nil {
-		return nil, fmt.Errorf(
-			"%s; failed to find unique target for patch %s",
-			err.Error(), id.GvknString())
+	match, err1 := m.GetByOriginalId(id)
+	if err1 == nil {
+		return match, nil
 	}
-	return r, nil
+	match, err2 := m.GetByCurrentId(id)
+	if err2 == nil {
+		return match, nil
+	}
+	return nil, fmt.Errorf(
+		"%s; %s; failed to find unique target for patch %s",
+		err1.Error(), err2.Error(), id.GvknString())
 }
 
 type resFinder func(IdMatcher) []*resource.Resource
@@ -216,7 +217,7 @@ func demandOneMatch(
 		return r[0], nil
 	}
 	if len(r) > 1 {
-		return nil, fmt.Errorf("multiple matches for %s %s", s, id)
+		return nil, fmt.Errorf("multiple matches for %sId %s", s, id)
 	}
 	return nil, fmt.Errorf("no matches for %sId %s", s, id)
 }
@@ -270,9 +271,9 @@ func (m *resWrangler) AsYaml() ([]byte, error) {
 	var b []byte
 	buf := bytes.NewBuffer(b)
 	for _, res := range m.Resources() {
-		out, err := res.AsYAML()
+		out, err := yaml.Marshal(res.Map())
 		if err != nil {
-			return nil, errors.Wrapf(err, "%#v", res.Map())
+			return nil, err
 		}
 		if firstObj {
 			firstObj = false
@@ -338,8 +339,10 @@ func (m *resWrangler) ErrorIfNotEqualLists(other ResMap) error {
 	}
 	for i, r1 := range m.rList {
 		r2 := m2.rList[i]
-		if err := r1.ErrIfNotEquals(r2); err != nil {
-			return err
+		if !r1.Equals(r2) {
+			return fmt.Errorf(
+				"Item i=%d differs:\n  n1 = %s\n  n2 = %s\n  o1 = %s\n  o2 = %s\n",
+				i, r1.OrgId(), r2.OrgId(), r1, r2)
 		}
 	}
 	return nil
@@ -375,59 +378,52 @@ func (m *resWrangler) makeCopy(copier resCopier) ResMap {
 
 // SubsetThatCouldBeReferencedByResource implements ResMap.
 func (m *resWrangler) SubsetThatCouldBeReferencedByResource(
-	referrer *resource.Resource) ResMap {
-	referrerId := referrer.CurId()
-	if !referrerId.IsNamespaceableKind() {
-		// A cluster scoped resource can refer to anything.
-		return m
-	}
+	inputRes *resource.Resource) ResMap {
 	result := newOne()
-	roleBindingNamespaces := getNamespacesForRoleBinding(referrer)
-	for _, possibleTarget := range m.Resources() {
-		id := possibleTarget.CurId()
-		if !id.IsNamespaceableKind() {
-			// A cluster-scoped resource can be referred to by anything.
-			result.append(possibleTarget)
-			continue
-		}
-		if id.IsNsEquals(referrerId) {
-			// The two objects are in the same namespace.
-			result.append(possibleTarget)
-			continue
-		}
-		// The two objects are namespaced (not cluster-scoped), AND
-		// are in different namespaces.
-		// There's still a chance they can refer to each other.
-		ns := possibleTarget.GetNamespace()
-		if roleBindingNamespaces[ns] {
-			result.append(possibleTarget)
+	inputId := inputRes.CurId()
+	isInputIdNamespaceable := inputId.IsNamespaceableKind()
+	subjectNamespaces := getNamespacesForRoleBinding(inputRes)
+	for _, r := range m.Resources() {
+		// Need to match more accuratly both at the time of selection and transformation.
+		// OutmostPrefixSuffixEquals is not accurate enough since it is only using
+		// the outer most suffix and the last prefix. Use PrefixedSuffixesEquals instead.
+		resId := r.CurId()
+		if !isInputIdNamespaceable || !resId.IsNamespaceableKind() || resId.IsNsEquals(inputId) ||
+			isRoleBindingNamespace(&subjectNamespaces, r.GetNamespace()) {
+			result.append(r)
 		}
 	}
 	return result
 }
 
-// getNamespacesForRoleBinding returns referenced ServiceAccount namespaces
-// if the resource is a RoleBinding
-func getNamespacesForRoleBinding(r *resource.Resource) map[string]bool {
-	result := make(map[string]bool)
-	if r.GetKind() != "RoleBinding" {
-		return result
+// isRoleBindingNamespace returns true is the namespace `ns` is in role binding
+// namespaces `m`
+func isRoleBindingNamespace(m *map[string]bool, ns string) bool {
+	return (*m)[ns]
+}
+
+// getNamespacesForRoleBinding returns referenced ServiceAccount namespaces if the inputRes is
+// a RoleBinding
+func getNamespacesForRoleBinding(inputRes *resource.Resource) map[string]bool {
+	res := make(map[string]bool)
+	if inputRes.GetKind() != "RoleBinding" {
+		return res
 	}
-	subjects, err := r.GetSlice("subjects")
+	subjects, err := inputRes.GetSlice("subjects")
 	if err != nil || subjects == nil {
-		return result
+		return res
 	}
+
 	for _, s := range subjects {
 		subject := s.(map[string]interface{})
-		if ns, ok1 := subject["namespace"]; ok1 {
-			if kind, ok2 := subject["kind"]; ok2 {
-				if kind.(string) == "ServiceAccount" {
-					result[ns.(string)] = true
-				}
-			}
+		if subject["namespace"] == nil || subject["kind"] == nil ||
+			subject["kind"].(string) != "ServiceAccount" {
+			continue
 		}
+		res[subject["namespace"].(string)] = true
 	}
-	return result
+
+	return res
 }
 
 func (m *resWrangler) append(res *resource.Resource) {
@@ -461,9 +457,13 @@ func (m *resWrangler) AbsorbAll(other ResMap) error {
 	return nil
 }
 
-func (m *resWrangler) appendReplaceOrMerge(res *resource.Resource) error {
+func (m *resWrangler) appendReplaceOrMerge(
+	res *resource.Resource) error {
 	id := res.CurId()
-	matches := m.GetMatchingResourcesByAnyId(id.Equals)
+	matches := m.GetMatchingResourcesByOriginalId(id.Equals)
+	if len(matches) == 0 {
+		matches = m.GetMatchingResourcesByCurrentId(id.Equals)
+	}
 	switch len(matches) {
 	case 0:
 		switch res.Behavior() {
@@ -472,7 +472,10 @@ func (m *resWrangler) appendReplaceOrMerge(res *resource.Resource) error {
 				"id %#v does not exist; cannot merge or replace", id)
 		default:
 			// presumably types.BehaviorCreate
-			return m.Append(res)
+			err := m.Append(res)
+			if err != nil {
+				return err
+			}
 		}
 	case 1:
 		old := matches[0]
@@ -485,10 +488,9 @@ func (m *resWrangler) appendReplaceOrMerge(res *resource.Resource) error {
 		}
 		switch res.Behavior() {
 		case types.BehaviorReplace:
-			res.CopyMergeMetaDataFieldsFrom(old)
+			res.Replace(old)
 		case types.BehaviorMerge:
-			res.CopyMergeMetaDataFieldsFrom(old)
-			res.MergeDataMapFrom(old)
+			res.Merge(old)
 		default:
 			return fmt.Errorf(
 				"id %#v exists; behavior must be merge or replace", id)
@@ -498,44 +500,61 @@ func (m *resWrangler) appendReplaceOrMerge(res *resource.Resource) error {
 			return err
 		}
 		if i != index {
-			return fmt.Errorf("unexpected target index in replacement")
+			return fmt.Errorf("unexpected index in replacement")
 		}
-		return nil
 	default:
 		return fmt.Errorf(
 			"found multiple objects %v that could accept merge of %v",
 			matches, id)
 	}
+	return nil
+}
+
+func anchorRegex(pattern string) string {
+	if pattern == "" {
+		return pattern
+	}
+	return "^" + pattern + "$"
 }
 
 // Select returns a list of resources that
 // are selected by a Selector
 func (m *resWrangler) Select(s types.Selector) ([]*resource.Resource, error) {
+	ns := regexp.MustCompile(anchorRegex(s.Namespace))
+	nm := regexp.MustCompile(anchorRegex(s.Name))
 	var result []*resource.Resource
-	sr, err := types.NewSelectorRegex(&s)
-	if err != nil {
-		return nil, err
-	}
 	for _, r := range m.Resources() {
 		curId := r.CurId()
 		orgId := r.OrgId()
 
+		// matches the namespace when namespace is not empty in the selector
 		// It first tries to match with the original namespace
 		// then matches with the current namespace
-		if !sr.MatchNamespace(orgId.EffectiveNamespace()) &&
-			!sr.MatchNamespace(curId.EffectiveNamespace()) {
-			continue
+		if s.Namespace != "" {
+			matched := ns.MatchString(orgId.EffectiveNamespace())
+			if !matched {
+				matched = ns.MatchString(curId.EffectiveNamespace())
+				if !matched {
+					continue
+				}
+			}
 		}
 
+		// matches the name when name is not empty in the selector
 		// It first tries to match with the original name
 		// then matches with the current name
-		if !sr.MatchName(orgId.Name) &&
-			!sr.MatchName(curId.Name) {
-			continue
+		if s.Name != "" {
+			matched := nm.MatchString(orgId.Name)
+			if !matched {
+				matched = nm.MatchString(curId.Name)
+				if !matched {
+					continue
+				}
+			}
 		}
 
 		// matches the GVK
-		if !sr.MatchGvk(r.GetGvk()) {
+		if !r.GetGvk().IsSelected(&s.Gvk) {
 			continue
 		}
 
@@ -559,70 +578,4 @@ func (m *resWrangler) Select(s types.Selector) ([]*resource.Resource, error) {
 		result = append(result, r)
 	}
 	return result, nil
-}
-
-// ToRNodeSlice converts the resources in the resmp
-// to a list of RNodes
-func (m *resWrangler) ToRNodeSlice() ([]*kyaml_yaml.RNode, error) {
-	var rnodes []*kyaml_yaml.RNode
-	for _, r := range m.Resources() {
-		s, err := r.AsYAML()
-		if err != nil {
-			return nil, err
-		}
-		rnode, err := kyaml_yaml.Parse(string(s))
-		if err != nil {
-			return nil, err
-		}
-		rnodes = append(rnodes, rnode)
-	}
-	return rnodes, nil
-}
-
-func (m *resWrangler) ApplySmPatch(
-	selectedSet *resource.IdSet, patch *resource.Resource) error {
-	newRm := New()
-	for _, res := range m.Resources() {
-		if !selectedSet.Contains(res.CurId()) {
-			newRm.Append(res)
-			continue
-		}
-		patchCopy := patch.DeepCopy()
-		patchCopy.CopyMergeMetaDataFieldsFrom(patch)
-		patchCopy.SetGvk(res.GetGvk())
-		err := res.ApplySmPatch(patchCopy)
-		if err != nil {
-			// Check for an error string from UnmarshalJSON that's indicative
-			// of an object that's missing basic KRM fields, and thus may have been
-			// entirely deleted (an acceptable outcome).  This error handling should
-			// be deleted along with use of ResMap and apimachinery functions like
-			// UnmarshalJSON.
-			if !strings.Contains(err.Error(), "Object 'Kind' is missing") {
-				// Some unknown error, let it through.
-				return err
-			}
-			if !res.IsEmpty() {
-				return errors.Wrapf(
-					err, "with unexpectedly non-empty object map of size %d",
-					len(res.Map()))
-			}
-			// Fall through to handle deleted object.
-		}
-		if !res.IsEmpty() {
-			// IsEmpty means all fields have been removed from the object.
-			// This can happen if a patch required deletion of the
-			// entire resource (not just a part of it).  This means
-			// the overall resmap must shrink by one.
-			newRm.Append(res)
-		}
-	}
-	m.Clear()
-	m.AppendAll(newRm)
-	return nil
-}
-
-func (m *resWrangler) RemoveBuildAnnotations() {
-	for _, r := range m.Resources() {
-		r.RemoveBuildAnnotations()
-	}
 }

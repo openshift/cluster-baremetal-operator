@@ -6,7 +6,6 @@ package commands
 import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kustomize/cmd/config/internal/generateddocs/commands"
-	"sigs.k8s.io/kustomize/cmd/config/runner"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/kio/filters"
 )
@@ -20,7 +19,7 @@ func GetMergeRunner(name string) *MergeRunner {
 		Example: commands.MergeExamples,
 		RunE:    r.runE,
 	}
-	runner.FixDocs(name, c)
+	fixDocs(name, c)
 	r.Command = c
 	r.Command.Flags().BoolVar(&r.InvertOrder, "invert-order", false,
 		"if true, merge Resources in the reverse order")
@@ -65,5 +64,5 @@ func (r *MergeRunner) runE(c *cobra.Command, args []string) error {
 	}
 
 	filters := []kio.Filter{filters.MergeFilter{}, filters.FormatFilter{}}
-	return runner.HandleError(c, kio.Pipeline{Inputs: inputs, Filters: filters, Outputs: outputs}.Execute())
+	return handleError(c, kio.Pipeline{Inputs: inputs, Filters: filters, Outputs: outputs}.Execute())
 }

@@ -17,19 +17,17 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/stretchr/stew/slice"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -106,21 +104,10 @@ func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	return true, nil
 }
 
-func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal3iov1alpha1.Provisioning, error) {
-	// Fetch the Provisioning instance
-	instance := &metal3iov1alpha1.Provisioning{}
-	namespacedName := types.NamespacedName{Name: metal3iov1alpha1.ProvisioningSingletonName, Namespace: ""}
-	if err := r.Client.Get(ctx, namespacedName, instance); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, errors.Wrap(err, "unable to read Provisioning CR")
-	}
-	return instance, nil
-}
-
 // Reconcile updates the cluster settings when the Provisioning resource changes
-func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	log := ctrl.LoggerFrom(ctx)
+
 	if r.NetworkStack == 0 {
 		infra, err := r.ExternalClients.ClusterInfrastructure(ctx)
 		if err != nil {
@@ -134,15 +121,25 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		klog.InfoS("Network stack calculation", "APIServerInternalHost", infra.Status.APIServerInternalURL, "NetworkStack", r.NetworkStack)
 	}
 
-	err := r.ensureClusterOperator()
-	if err != nil {
-		return ctrl.Result{}, err
+	// Make sure ClusterOperator exists
+	co, err := r.ExternalClients.ClusterOperatorGet(ctx, clusterOperatorName)
+	if apierrors.IsNotFound(err) {
+		co, err = r.createClusterOperator()
 	}
+
+	defer func() {
+		err = r.ExternalClients.ClusterOperatorStatusUpdate(ctx, co)
+		if err != nil {
+			reterr = kerrors.NewAggregate([]error{reterr, errors.Wrap(err, "failed to update ClusterOperator status")})
+		}
+	}()
+
+	r.ensureDefaultsClusterOperator(co)
 
 	result := ctrl.Result{}
 	if !r.WebHookEnabled {
 		if r.ExternalClients.WebhookDependenciesReady(ctx) {
-			klog.Info("restarting to enable the webhook")
+			log.Info("restarting to enable the webhook")
 			os.Exit(1)
 		}
 		// Keep checking for our webhook dependencies to be ready, so we can
@@ -165,70 +162,75 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if !enabled {
 		// set ClusterOperator status to disabled=true, available=true
 		// We're disabled; don't requeue
-		return result, errors.Wrapf(
-			r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", ""),
-			"unable to put %q ClusterOperator in Disabled state", clusterOperatorName)
+		r.updateCOStatus(co, ReasonUnsupported, "Nothing to do on this Platform", "")
+		return result, nil
 	}
 
-	baremetalConfig, err := r.readProvisioningCR(ctx)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if baremetalConfig == nil {
-		return result, errors.Wrapf(
-			r.updateCOStatus(ReasonProvisioningCRNotFound, "Provisioning CR not found", ""),
-			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
-	}
-
-	info, err := r.provisioningInfo(ctx, baremetalConfig)
-	if err != nil {
-		klog.ErrorS(err, "invalid contents in images Config Map")
-		co_err := r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "invalid contents in images Config Map")
-		if co_err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, co_err)
+	b := &metal3iov1alpha1.Provisioning{}
+	if err := r.Client.Get(ctx, req.NamespacedName, b); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.updateCOStatus(co, ReasonProvisioningCRNotFound, "Provisioning CR not found", "")
+			return result, nil
 		}
-		return ctrl.Result{}, err
+		return result, err
 	}
 
-	// Check if Provisioning Configuartion is being deleted
-	deleted, err := r.checkForCRDeletion(ctx, info)
-	if err != nil {
-		var coErr error
-		if deleted {
-			coErr = r.updateCOStatus(ReasonDeployTimedOut, err.Error(), "Unable to delete a metal3 resource on Provisioning CR deletion")
-		} else {
-			coErr = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to add Finalizer on Provisioning CR")
+	defer func() {
+		existingProv := &metal3iov1alpha1.Provisioning{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      req.Name,
+				Namespace: req.Namespace,
+			},
 		}
-		if coErr != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, coErr)
-		}
-		return ctrl.Result{}, err
-	}
-	if deleted {
-		return result, errors.Wrapf(
-			r.updateCOStatus(ReasonResourceNotFound, "all Metal3 resources deleted", ""),
-			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
-	}
+		_, err := controllerutil.CreateOrPatch(ctx, r.Client, existingProv, func() error {
+			existingProv = b.DeepCopy()
+			return nil
+		})
 
-	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
-	if specChanged {
-		err = r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources")
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, err)
+			reterr = kerrors.NewAggregate([]error{reterr, errors.Wrap(err, "failed to update Provisioning CR")})
 		}
+	}()
+
+	// Add finalizer first if not exist to avoid the race condition between init and delete
+	if !controllerutil.ContainsFinalizer(b, metal3iov1alpha1.ProvisioningFinalizer) {
+		controllerutil.AddFinalizer(b, metal3iov1alpha1.ProvisioningFinalizer)
+		return result, nil
 	}
 
-	// Check if provisioning configuration is valid
-	if err := baremetalConfig.ValidateBaremetalProvisioningConfig(); err != nil {
-		// Provisioning configuration is not valid.
-		// Requeue request.
+	// Handle deletion reconciliation loop.
+	if !b.ObjectMeta.DeletionTimestamp.IsZero() {
+		result, err = r.reconcileDelete(ctx, b)
+		if err != nil {
+			r.updateCOStatus(co, ReasonDeployTimedOut, err.Error(), "Unable to delete a metal3 resource on Provisioning CR deletion")
+			return result, err
+		}
+		r.updateCOStatus(co, ReasonComplete, "all Metal3 resources deleted", "")
+		return result, nil
+	}
+
+	// Handle normal reconciliation loop.
+	reconcileRes, err := r.reconcile(ctx, b, co)
+	return lowestNonZeroResult(result, reconcileRes), err
+}
+
+func (r *ProvisioningReconciler) reconcile(ctx context.Context, b *metal3iov1alpha1.Provisioning, co *osconfigv1.ClusterOperator) (ctrl.Result, error) {
+	if err := b.ValidateBaremetalProvisioningConfig(); err != nil {
 		klog.Error(err, "invalid config in Provisioning CR")
-		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
-		}
+		r.updateCOStatus(co, ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
 		// Temporarily not requeuing request
 		return ctrl.Result{}, nil
+	}
+
+	info, err := r.provisioningInfo(ctx, b)
+	if err != nil {
+		r.updateCOStatus(co, ReasonInvalidConfiguration, err.Error(), "invalid contents in images Config Map")
+		return ctrl.Result{}, err
+	}
+
+	specChanged := b.Generation != b.Status.ObservedGeneration
+	if specChanged {
+		r.updateCOStatus(co, ReasonSyncing, "", "Applying metal3 resources")
 	}
 
 	for _, ensureResource := range []ensureFunc{
@@ -238,81 +240,58 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureImageCache,
 	} {
 		updated, err := ensureResource(info)
-		if err != nil {
+		if err != nil || updated {
 			return ctrl.Result{}, err
 		}
-		if updated {
-			return result, r.Client.Status().Update(ctx, baremetalConfig)
-		}
 	}
-
-	if specChanged {
-		baremetalConfig.Status.ObservedGeneration = baremetalConfig.Generation
-		err = r.Client.Status().Update(ctx, baremetalConfig)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to update observed generation: %w", err)
-		}
-	}
+	b.Status.ObservedGeneration = b.Generation
 
 	// Determine the status of the deployment
-	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, b)
 	if err != nil {
-		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 deployment inaccessible", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
-		}
+		r.updateCOStatus(co, ReasonResourceNotFound, "metal3 deployment inaccessible", "")
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
 	}
 	if deploymentState == appsv1.DeploymentReplicaFailure {
-		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
-		}
+		r.updateCOStatus(co, ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
 	}
 
 	// Determine the status of the DaemonSet
-	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, b)
 	if err != nil {
-		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 image cache daemonset inaccessible", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
-		}
+		r.updateCOStatus(co, ReasonResourceNotFound, "metal3 image cache daemonset inaccessible", "")
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 image cache daemonset")
 	}
 	if daemonSetState == provisioning.DaemonSetReplicaFailure {
-		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 image cache rollout taking too long", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
-		}
+		r.updateCOStatus(co, ReasonDeployTimedOut, "metal3 image cache rollout taking too long", "")
 	}
 	if deploymentState == appsv1.DeploymentAvailable && daemonSetState == provisioning.DaemonSetAvailable {
-		err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
-		}
+		r.updateCOStatus(co, ReasonComplete, "metal3 pod and image cache are running", "")
 	}
 
-	return result, nil
+	return ctrl.Result{}, nil
 }
 
 func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) (*provisioning.ProvisioningInfo, error) {
-	var containerImages provisioning.Images
-	if err := provisioning.GetContainerImages(&containerImages, r.ImagesFilename); err != nil {
-		return nil, errors.Wrap(err, "invalid contents in images Config Map")
-	}
-
 	proxy, err := r.ExternalClients.ClusterProxy(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unable to get cluster proxy")
+	}
+
+	openshiftConfigSecret, err := r.ExternalClients.OpenshiftConfigSecret(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to get OpenShift config secret")
 	}
 
 	sshkey, err := r.ExternalClients.ReadSSHKey(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not read sshkey")
 	}
-	openshiftConfigSecret, err := r.ExternalClients.OpenshiftConfigSecret(ctx)
+
+	images := &provisioning.Images{}
+	err = provisioning.GetContainerImages(images, r.ImagesFilename)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to get OpenShift config secret")
+		return nil, errors.Wrap(err, "invalid contents in images Config Map")
 	}
 
 	if err := r.updateProvisioningMacAddresses(ctx, provConfig); err != nil {
@@ -325,7 +304,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		ProvConfig:            provConfig,
 		Scheme:                r.Scheme,
 		Namespace:             ComponentNamespace,
-		Images:                &containerImages,
+		Images:                images,
 		Proxy:                 proxy,
 		NetworkStack:          r.NetworkStack,
 		SSHKey:                sshkey,
@@ -333,58 +312,54 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 	}, nil
 }
 
-//Ensure Finalizer is present on the Provisioning CR when not deleted and
-//delete resources and remove Finalizer when it is
-func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *provisioning.ProvisioningInfo) (bool, error) {
-	// examine DeletionTimestamp to determine if object is under deletion
-	if info.ProvConfig.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// to registering our finalizer.
-		if slice.Contains(info.ProvConfig.ObjectMeta.Finalizers,
-			metal3iov1alpha1.ProvisioningFinalizer) {
-			return false, nil
-		}
-
-		// Add finalizer becasue it doesn't already exist
-		controllerutil.AddFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
-
-		return false, errors.Wrap(
-			r.Client.Update(ctx, info.ProvConfig),
-			"failed to update Provisioning CR with its finalizer")
-	} else {
+// reconcileDelete delete resources and remove Finalizer when it is
+func (r *ProvisioningReconciler) reconcileDelete(ctx context.Context, b *metal3iov1alpha1.Provisioning) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(b, metal3iov1alpha1.ProvisioningFinalizer) {
 		// The Provisioning object is being deleted
-		if !slice.Contains(info.ProvConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
-			return false, nil
-		}
-
-		if err := r.deleteMetal3Resources(info); err != nil {
-			return false, errors.Wrap(err, "failed to delete metal3 resource")
-		}
-		// Remove our finalizer from the list and update it.
-		controllerutil.RemoveFinalizer(info.ProvConfig, metal3iov1alpha1.ProvisioningFinalizer)
-
-		return true, errors.Wrap(
-			r.Client.Update(ctx, info.ProvConfig),
-			"failed to remove finalizer from Provisioning CR")
+		return ctrl.Result{}, nil
 	}
-}
 
-//Delete Secrets and the Metal3 Deployment objects
-func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.ProvisioningInfo) error {
+	info, err := r.provisioningInfo(ctx, b)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "unable to create provionsingInfo")
+	}
+
 	if err := provisioning.DeleteAllSecrets(info); err != nil {
-		return errors.Wrap(err, "failed to delete one or more metal3 secrets")
+		return ctrl.Result{}, errors.Wrap(err, "failed to delete one or more metal3 secrets")
 	}
 	if err := provisioning.DeleteMetal3Deployment(info); err != nil {
-		return errors.Wrap(err, "failed to delete metal3 deployment")
+		return ctrl.Result{}, errors.Wrap(err, "failed to delete metal3 deployment")
 	}
 	if err := provisioning.DeleteMetal3StateService(info); err != nil {
-		return errors.Wrap(err, "failed to delete metal3 service")
+		return ctrl.Result{}, errors.Wrap(err, "failed to delete metal3 service")
 	}
 	if err := provisioning.DeleteImageCache(info); err != nil {
-		return errors.Wrap(err, "failed to delete metal3 image cache")
+		return ctrl.Result{}, errors.Wrap(err, "failed to delete metal3 image cache")
 	}
-	return nil
+
+	// Remove our finalizer from the list.
+	controllerutil.RemoveFinalizer(b, metal3iov1alpha1.ProvisioningFinalizer)
+
+	return ctrl.Result{}, nil
+}
+
+// lowestNonZeroResult compares two reconciliation results
+// and returns the one with lowest requeue time.
+func lowestNonZeroResult(i, j ctrl.Result) ctrl.Result {
+	switch {
+	case i.IsZero():
+		return j
+	case j.IsZero():
+		return i
+	case i.Requeue:
+		return i
+	case j.Requeue:
+		return j
+	case i.RequeueAfter < j.RequeueAfter:
+		return i
+	default:
+		return j
+	}
 }
 
 func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) error {
@@ -403,7 +378,7 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 		}
 	}
 	provConfig.Spec.ProvisioningMacAddresses = macs
-	return r.Client.Update(ctx, provConfig)
+	return nil
 }
 
 // SetupWithManager configures the manager to run the controller

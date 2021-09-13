@@ -41,8 +41,6 @@ func (c MergeFilter) Filter(input []*yaml.RNode) ([]*yaml.RNode, error) {
 
 	// index the Resources by G/V/K/NS/N
 	index := map[mergeKey][]*yaml.RNode{}
-	// retain the original ordering
-	var order []mergeKey
 	for i := range input {
 		meta, err := input[i].GetMeta()
 		if err != nil {
@@ -54,16 +52,13 @@ func (c MergeFilter) Filter(input []*yaml.RNode) ([]*yaml.RNode, error) {
 			namespace:  meta.Namespace,
 			name:       meta.Name,
 		}
-		if _, found := index[key]; !found {
-			order = append(order, key)
-		}
 		index[key] = append(index[key], input[i])
 	}
 
 	// merge each of the G/V/K/NS/N lists
 	var output []*yaml.RNode
 	var err error
-	for _, k := range order {
+	for k := range index {
 		var merged *yaml.RNode
 		resources := index[k]
 		for i := range resources {

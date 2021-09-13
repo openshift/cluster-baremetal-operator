@@ -53,8 +53,6 @@ type SubstitutionCreator struct {
 
 	// Path to resources folder
 	ResourcesPath string
-
-	SettersSchema *spec.Schema
 }
 
 func (c *SubstitutionCreator) Filter(input []*yaml.RNode) ([]*yaml.RNode, error) {
@@ -66,7 +64,7 @@ func (c SubstitutionCreator) Create() error {
 	if err != nil {
 		return err
 	}
-	values, err := c.markersAndRefs(c.Name, c.Pattern)
+	values, err := markersAndRefs(c.Name, c.Pattern)
 	if err != nil {
 		return err
 	}
@@ -95,11 +93,9 @@ func (c SubstitutionCreator) Create() error {
 	}
 
 	// Load the updated definitions
-	sc, err := openapi.SchemaFromFile(c.OpenAPIPath)
-	if err != nil {
+	if err := openapi.AddSchemaFromFile(c.OpenAPIPath); err != nil {
 		return err
 	}
-	c.SettersSchema = sc
 
 	visited := sets.String{}
 	ref, err := spec.NewRef(fieldmeta.DefinitionsPrefix + fieldmeta.SubstitutionDefinitionPrefix + c.Name)
@@ -107,7 +103,7 @@ func (c SubstitutionCreator) Create() error {
 		return err
 	}
 
-	schema, err := openapi.Resolve(&ref, c.SettersSchema)
+	schema, err := openapi.Resolve(&ref)
 	if err != nil {
 		return err
 	}
@@ -123,14 +119,12 @@ func (c SubstitutionCreator) Create() error {
 	}
 
 	// Load the updated definitions after setters are created
-	sc, err = openapi.SchemaFromFile(c.OpenAPIPath)
-	if err != nil {
+	if err := openapi.AddSchemaFromFile(c.OpenAPIPath); err != nil {
 		return err
 	}
-	c.SettersSchema = sc
 
 	// revert openAPI file if there are cycles detected in created input substitution
-	if err := c.checkForCycles(ext, visited); err != nil {
+	if err := checkForCycles(ext, visited); err != nil {
 		if writeErr := ioutil.WriteFile(c.OpenAPIPath, curOpenAPI, stat.Mode().Perm()); writeErr != nil {
 			return writeErr
 		}
@@ -138,10 +132,9 @@ func (c SubstitutionCreator) Create() error {
 	}
 
 	a := &setters2.Add{
-		FieldName:     c.FieldName,
-		FieldValue:    c.FieldValue,
-		Ref:           fieldmeta.DefinitionsPrefix + fieldmeta.SubstitutionDefinitionPrefix + c.Name,
-		SettersSchema: c.SettersSchema,
+		FieldName:  c.FieldName,
+		FieldValue: c.FieldValue,
+		Ref:        fieldmeta.DefinitionsPrefix + fieldmeta.SubstitutionDefinitionPrefix + c.Name,
 	}
 
 	// Update the resources with the substitution reference
@@ -161,7 +154,7 @@ func (c SubstitutionCreator) Create() error {
 
 // createMarkersAndRefs takes the input pattern, creates setter/substitution markers
 // and corresponding openAPI refs
-func (c *SubstitutionCreator) markersAndRefs(substName, pattern string) ([]setters2.Value, error) {
+func markersAndRefs(substName, pattern string) ([]setters2.Value, error) {
 	var values []setters2.Value
 	// extract setter name tokens from pattern enclosed in ${}
 	re := regexp.MustCompile(`\$\{([^}]*)\}`)
@@ -183,7 +176,7 @@ func (c *SubstitutionCreator) markersAndRefs(substName, pattern string) ([]sette
 		}
 
 		var markerRef string
-		subst, _ := openapi.Resolve(&ref, c.SettersSchema)
+		subst, _ := openapi.Resolve(&ref)
 		// check if the substitution exists with the marker name or fall back to creating setter
 		// ref with the name
 		if subst != nil {
@@ -249,7 +242,7 @@ func (c SubstitutionCreator) CreateSettersForSubstitution(openAPIPath string) er
 	return nil
 }
 
-func (c SubstitutionCreator) checkForCycles(ext *setters2.CliExtension, visited sets.String) error {
+func checkForCycles(ext *setters2.CliExtension, visited sets.String) error {
 	// check if the substitution has already been visited and throw error as cycles
 	// are not allowed in nested substitutions
 	if visited.Has(ext.Substitution.Name) {
@@ -271,7 +264,7 @@ func (c SubstitutionCreator) checkForCycles(ext *setters2.CliExtension, visited 
 		if err != nil {
 			return errors.Wrap(err)
 		}
-		def, err := openapi.Resolve(&ref, c.SettersSchema) // resolve the def to its openAPI def
+		def, err := openapi.Resolve(&ref) // resolve the def to its openAPI def
 		if err != nil {
 			return errors.Wrap(err)
 		}
@@ -282,7 +275,7 @@ func (c SubstitutionCreator) checkForCycles(ext *setters2.CliExtension, visited 
 
 		if defExt.Substitution != nil {
 			// parse recursively if it reference is substitution
-			err := c.checkForCycles(defExt, visited)
+			err := checkForCycles(defExt, visited)
 			if err != nil {
 				return err
 			}
@@ -443,7 +436,7 @@ func (c SubstitutionCreator) validateSubstitutionInfo() error {
 		return err
 	}
 
-	subst, _ := openapi.Resolve(&ref, c.SettersSchema)
+	subst, _ := openapi.Resolve(&ref)
 	// if substitution already exists with the input substitution name, throw error
 	if subst != nil {
 		return errors.Errorf("substitution with name %q already exists", c.Name)
@@ -455,7 +448,7 @@ func (c SubstitutionCreator) validateSubstitutionInfo() error {
 		return err
 	}
 
-	setter, _ := openapi.Resolve(&ref, c.SettersSchema)
+	setter, _ := openapi.Resolve(&ref)
 	// if setter already exists with input substitution name, throw error
 	if setter != nil {
 		return errors.Errorf(fmt.Sprintf("setter with name %q already exists, "+

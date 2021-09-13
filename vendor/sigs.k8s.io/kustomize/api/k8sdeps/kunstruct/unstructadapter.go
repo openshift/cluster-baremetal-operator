@@ -7,7 +7,6 @@ package kunstruct
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -248,29 +247,6 @@ func (fs *UnstructAdapter) GetStringMap(path string) (map[string]string, error) 
 		return s, err
 	}
 	return nil, NoFieldError{Field: path}
-}
-
-func (fs *UnstructAdapter) GetDataMap() map[string]string {
-	m, err := fs.GetStringMap("data")
-	if err != nil {
-		return map[string]string{}
-	}
-	return m
-}
-
-func (fs *UnstructAdapter) SetDataMap(m map[string]string) {
-	if m == nil {
-		unstructured.RemoveNestedField(fs.Object, "data")
-		return
-	}
-	s := make(map[string]interface{}, len(m))
-	for i, v := range m {
-		s[i] = v
-	}
-	err := unstructured.SetNestedMap(fs.Object, s, "data")
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 // GetMap returns value at the given fieldpath.

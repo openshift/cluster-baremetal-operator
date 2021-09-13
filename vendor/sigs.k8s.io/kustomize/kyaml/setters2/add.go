@@ -40,8 +40,6 @@ type Add struct {
 
 	// Count is the number of fields the setter applies to
 	Count int
-
-	SettersSchema *spec.Schema
 }
 
 // Filter implements yaml.Filter
@@ -52,7 +50,7 @@ func (a *Add) Filter(object *yaml.RNode) (*yaml.RNode, error) {
 	if a.Ref == "" {
 		return nil, errors.Errorf("must specify ref")
 	}
-	return object, accept(a, object, a.SettersSchema)
+	return object, accept(a, object)
 }
 
 func (a *Add) visitSequence(_ *yaml.RNode, _ string, _ *openapi.ResourceSchema) error {
@@ -117,7 +115,7 @@ func (a *Add) visitScalar(object *yaml.RNode, p string, _, _ *openapi.ResourceSc
 // addRef adds the setter/subst ref to the object node as a line comment
 func (a *Add) addRef(object *yaml.RNode) error {
 	// read the field metadata
-	fm := fieldmeta.FieldMeta{SettersSchema: a.SettersSchema}
+	fm := fieldmeta.FieldMeta{}
 	if err := fm.Read(object); err != nil {
 		return err
 	}
@@ -174,9 +172,6 @@ type SetterDefinition struct {
 	// live apply/preview. This field is added to the setter definition to record
 	// the package publisher's intent to make the setter required to be set.
 	Required bool `yaml:"required,omitempty"`
-
-	// IsSet indicates the specified field has been explicitly assigned.
-	IsSet bool `yaml:"isSet,omitempty"`
 }
 
 func (sd SetterDefinition) AddToFile(path string) error {

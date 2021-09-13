@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/api/resource"
 	"sigs.k8s.io/kustomize/api/types"
+	"sigs.k8s.io/kustomize/kyaml/filtersutil"
 	"sigs.k8s.io/yaml"
 )
 
@@ -118,15 +119,15 @@ func (p *ValueAddTransformerPlugin) Transform(m resmap.ResMap) (err error) {
 		// TODO: consider t.NotSelector if implemented
 		for _, res := range resources {
 			if t.FieldPath == types.MetadataNamespacePath {
-				err = res.ApplyFilter(namespace.Filter{
+				err = filtersutil.ApplyToJSON(namespace.Filter{
 					Namespace: p.Value,
-				})
+				}, res)
 			} else {
-				err = res.ApplyFilter(valueadd.Filter{
+				err = filtersutil.ApplyToJSON(valueadd.Filter{
 					Value:            p.Value,
 					FieldPath:        t.FieldPath,
 					FilePathPosition: t.FilePathPosition,
-				})
+				}, res)
 			}
 			if err != nil {
 				return err

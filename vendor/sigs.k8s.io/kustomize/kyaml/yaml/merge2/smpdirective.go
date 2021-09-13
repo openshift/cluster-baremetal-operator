@@ -95,7 +95,7 @@ func elideMappingPatchDirective(patch *yaml.RNode) error {
 func elideSequencePatchDirective(patch *yaml.RNode, value string) error {
 	return patch.PipeE(yaml.ElementSetter{
 		Element: nil,
-		Keys:    []string{strategicMergePatchDirectiveKey},
-		Values:  []string{value},
+		Key:     strategicMergePatchDirectiveKey,
+		Value:   value,
 	})
 }

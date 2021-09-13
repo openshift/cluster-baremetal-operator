@@ -29,9 +29,9 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 	return scheme
 }
 
-func newFakeProvisioningReconciler(scheme *runtime.Scheme, externalClient externalclients.ExternalResourceClient, object ...runtime.Object) *ProvisioningReconciler {
+func newFakeProvisioningReconciler(scheme *runtime.Scheme, externalClient externalclients.ExternalResourceClient) *ProvisioningReconciler {
 	return &ProvisioningReconciler{
-		Client:          fakeclient.NewFakeClientWithScheme(scheme, object...),
+		Client:          fakeclient.NewFakeClientWithScheme(scheme),
 		ExternalClients: externalClient,
 		Scheme:          scheme,
 	}
@@ -100,50 +100,6 @@ func TestIsEnabled(t *testing.T) {
 				return
 			}
 			assert.Equal(t, tc.isEnabled, enabled, "enabled results did not match")
-		})
-	}
-}
-
-func TestProvisioning(t *testing.T) {
-	testCases := []struct {
-		name           string
-		baremetalCR    *metal3iov1alpha1.Provisioning
-		expectedError  bool
-		expectedConfig bool
-	}{
-		{
-			name: "ValidCR",
-			baremetalCR: &metal3iov1alpha1.Provisioning{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Provisioning",
-					APIVersion: "v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: metal3iov1alpha1.ProvisioningSingletonName,
-				},
-			},
-			expectedError:  false,
-			expectedConfig: true,
-		},
-		{
-			name:           "MissingCR",
-			baremetalCR:    &metal3iov1alpha1.Provisioning{},
-			expectedError:  false,
-			expectedConfig: false,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Logf("Testing tc : %s", tc.name)
-
-			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), nil, tc.baremetalCR)
-			baremetalconfig, err := reconciler.readProvisioningCR(context.TODO())
-			if !tc.expectedError && err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-			assert.Equal(t, tc.expectedConfig, baremetalconfig != nil, "baremetal config results did not match")
-			return
 		})
 	}
 }

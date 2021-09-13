@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
@@ -129,34 +128,16 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 	return r.ExternalClients.ClusterOperatorCreate(context.Background(), defaultCO)
 }
 
-// ensureClusterOperator makes sure that the CO exists
-func (r *ProvisioningReconciler) ensureClusterOperator() error {
-	co, err := r.ExternalClients.ClusterOperatorGet(context.Background(), clusterOperatorName)
-	if k8serrors.IsNotFound(err) {
-		co, err = r.createClusterOperator()
-	}
-	if err != nil {
-		return err
-	}
-
-	needsUpdate := false
+func (r *ProvisioningReconciler) ensureDefaultsClusterOperator(co *osconfigv1.ClusterOperator) {
 	if !equality.Semantic.DeepEqual(co.Status.RelatedObjects, relatedObjects()) {
-		needsUpdate = true
 		co.Status.RelatedObjects = relatedObjects()
 	}
 	if !equality.Semantic.DeepEqual(co.Status.Versions, operandVersions(r.ReleaseVersion)) {
-		needsUpdate = true
 		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 	if len(co.Status.Conditions) == 0 {
-		needsUpdate = true
 		co.Status.Conditions = defaultStatusConditions()
 	}
-
-	if needsUpdate {
-		return r.ExternalClients.ClusterOperatorStatusUpdate(context.Background(), co)
-	}
-	return nil
 }
 
 // setStatusCondition initalizes and returns a ClusterOperatorStatusCondition
@@ -172,26 +153,7 @@ func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 	}
 }
 
-//syncStatus applies the new condition to the CBO ClusterOperator object.
-func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, conds []osconfigv1.ClusterOperatorStatusCondition) error {
-	for _, c := range conds {
-		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
-	}
-
-	if len(co.Status.Versions) < 1 {
-		klog.Info("updating ClusterOperator Status Versions field")
-		co.Status.Versions = operandVersions(r.ReleaseVersion)
-	}
-
-	return r.ExternalClients.ClusterOperatorStatusUpdate(context.Background(), co)
-}
-
-func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
-	co, err := r.ExternalClients.ClusterOperatorGet(context.Background(), clusterOperatorName)
-	if err != nil {
-		klog.ErrorS(err, "failed to get or create ClusterOperator")
-		return fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
-	}
+func (r *ProvisioningReconciler) updateCOStatus(co *osconfigv1.ClusterOperator, newReason StatusReason, msg, progressMsg string) {
 	conds := defaultStatusConditions()
 	switch newReason {
 	case ReasonUnsupported:
@@ -212,6 +174,12 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, string(newReason), msg))
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
 	}
+	for _, c := range conds {
+		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
+	}
 
-	return r.syncStatus(co, conds)
+	if len(co.Status.Versions) < 1 {
+		klog.Info("updating ClusterOperator Status Versions field")
+		co.Status.Versions = operandVersions(r.ReleaseVersion)
+	}
 }

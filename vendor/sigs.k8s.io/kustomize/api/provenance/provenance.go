@@ -6,7 +6,6 @@ package provenance
 import (
 	"fmt"
 	"runtime"
-	"strings"
 )
 
 var (
@@ -57,12 +56,4 @@ func (v Provenance) Short() string {
 			Version:   v.Version,
 			BuildDate: v.BuildDate,
 		})
-}
-
-// Semver returns the semantic version of kustomize.
-// kustomize version is set in format "kustomize/vX.X.X" in every release.
-// X.X.X is a semver. If the version string is not in this format,
-// return the original version string
-func (v Provenance) Semver() string {
-	return strings.TrimPrefix(v.Version, "kustomize/")
 }

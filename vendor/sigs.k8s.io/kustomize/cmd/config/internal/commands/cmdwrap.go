@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"sigs.k8s.io/kustomize/cmd/config/runner"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/kio/filters"
 )
@@ -136,5 +135,5 @@ func (r *WrapRunner) runE(c *cobra.Command, args []string) error {
 			Writer:                c.OutOrStdout(),
 			WrappingKind:          kio.ResourceListKind,
 			WrappingAPIVersion:    kio.ResourceListAPIVersion}}}.Execute()
-	return runner.HandleError(c, err)
+	return handleError(c, err)
 }
