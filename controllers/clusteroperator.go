@@ -126,12 +126,12 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 		return nil, fmt.Errorf("could not convert deserialized asset into ClusterOperoator")
 	}
 
-	return r.OSClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
+	return r.ExternalClients.ClusterOperatorCreate(context.Background(), defaultCO)
 }
 
 // ensureClusterOperator makes sure that the CO exists
 func (r *ProvisioningReconciler) ensureClusterOperator() error {
-	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+	co, err := r.ExternalClients.ClusterOperatorGet(context.Background(), clusterOperatorName)
 	if k8serrors.IsNotFound(err) {
 		co, err = r.createClusterOperator()
 	}
@@ -154,9 +154,9 @@ func (r *ProvisioningReconciler) ensureClusterOperator() error {
 	}
 
 	if needsUpdate {
-		_, err = r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
+		return r.ExternalClients.ClusterOperatorStatusUpdate(context.Background(), co)
 	}
-	return err
+	return nil
 }
 
 // setStatusCondition initalizes and returns a ClusterOperatorStatusCondition
@@ -183,12 +183,11 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 
-	_, err := r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
-	return err
+	return r.ExternalClients.ClusterOperatorStatusUpdate(context.Background(), co)
 }
 
 func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
-	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+	co, err := r.ExternalClients.ClusterOperatorGet(context.Background(), clusterOperatorName)
 	if err != nil {
 		klog.ErrorS(err, "failed to get or create ClusterOperator")
 		return fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)

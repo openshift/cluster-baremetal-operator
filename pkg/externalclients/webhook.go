@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package provisioning
+package externalclients
 
 import (
 	"context"
@@ -26,13 +26,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
-	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
+	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
-func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error {
+func (e *externalResourceClient) WebhookEnable(mgr manager.Manager, namespace string, eventRecorder events.Recorder) error {
 	ignore := admissionregistration.Ignore
 	noSideEffects := admissionregistration.SideEffectClassNone
 	instance := &admissionregistration.ValidatingWebhookConfiguration{
@@ -50,7 +50,7 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error 
 					CABundle: []byte("Cg=="),
 					Service: &admissionregistration.ServiceReference{
 						Name:      "cluster-baremetal-webhook-service",
-						Namespace: info.Namespace,
+						Namespace: namespace,
 						Path:      pointer.StringPtr("/validate-metal3-io-v1alpha1-provisioning"),
 					},
 				},
@@ -77,7 +77,7 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error 
 	// we might not have a baremetalCR (when disabled), so we have no where to store
 	// the expectedGeneration, so just fake it.
 	expectedGeneration := int64(0)
-	_, _, err := resourceapply.ApplyValidatingWebhookConfiguration(info.Client.AdmissionregistrationV1(), info.EventRecorder, instance, expectedGeneration)
+	_, _, err := resourceapply.ApplyValidatingWebhookConfiguration(e.kubeClient.AdmissionregistrationV1(), eventRecorder, instance, expectedGeneration)
 	if err != nil {
 		return err
 	}
@@ -85,8 +85,8 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error 
 	return (&metal3iov1alpha1.Provisioning{}).SetupWebhookWithManager(mgr)
 }
 
-func WebhookDependenciesReady(client osclientset.Interface) bool {
-	co, err := client.ConfigV1().ClusterOperators().Get(context.Background(), "service-ca", metav1.GetOptions{})
+func (e *externalResourceClient) WebhookDependenciesReady(ctx context.Context) bool {
+	co, err := e.osClient.ConfigV1().ClusterOperators().Get(ctx, "service-ca", metav1.GetOptions{})
 	if err != nil {
 		return false
 	}

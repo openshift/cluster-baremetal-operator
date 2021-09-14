@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	"github.com/stretchr/stew/slice"
 	appsv1 "k8s.io/api/apps/v1"
@@ -42,8 +41,8 @@ import (
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
-	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/cluster-baremetal-operator/pkg/externalclients"
 	"github.com/openshift/cluster-baremetal-operator/pkg/network"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -54,24 +53,20 @@ const (
 	ComponentNamespace = "openshift-machine-api"
 	// ComponentName is the full name of CBO
 	ComponentName = "cluster-baremetal-operator"
-	// install-config access details
-	clusterConfigName      = "cluster-config-v1"
-	clusterConfigKey       = "install-config"
-	clusterConfigNamespace = "kube-system"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
 type ProvisioningReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	Client         client.Client
-	Scheme         *runtime.Scheme
-	OSClient       osclientset.Interface
-	KubeClient     kubernetes.Interface
-	ReleaseVersion string
-	ImagesFilename string
-	WebHookEnabled bool
-	NetworkStack   network.NetworkStackType
+	Client          client.Client
+	Scheme          *runtime.Scheme
+	KubeClient      kubernetes.Interface
+	ReleaseVersion  string
+	ImagesFilename  string
+	WebHookEnabled  bool
+	NetworkStack    network.NetworkStackType
+	ExternalClients externalclients.ExternalResourceClient
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -98,7 +93,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 func (r *ProvisioningReconciler) isEnabled() (bool, error) {
 	ctx := context.Background()
 
-	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
+	infra, err := r.ExternalClients.ClusterInfrastructure(ctx)
 	if err != nil {
 		return false, errors.Wrap(err, "unable to determine Platform")
 	}
@@ -124,30 +119,10 @@ func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal
 	return instance, nil
 }
 
-type InstallConfigData struct {
-	SSHKey string
-}
-
-func (r *ProvisioningReconciler) readSSHKey() string {
-	installConfigData := InstallConfigData{}
-	clusterConfig, err := r.KubeClient.CoreV1().ConfigMaps(clusterConfigNamespace).Get(context.Background(), clusterConfigName, metav1.GetOptions{})
-	if err != nil {
-		klog.Warningf("Error: %v", err)
-		return ""
-	}
-	err = yaml.Unmarshal([]byte(clusterConfig.Data[clusterConfigKey]), &installConfigData)
-	if err != nil {
-		klog.Warningf("Error: %v", err)
-		return ""
-	}
-	return strings.TrimSpace(installConfigData.SSHKey)
-}
-
-// Reconcile updates the cluster settings when the Provisioning
-// resource changes
+// Reconcile updates the cluster settings when the Provisioning resource changes
 func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	if r.NetworkStack == 0 {
-		infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
+		infra, err := r.ExternalClients.ClusterInfrastructure(ctx)
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "unable to read Infrastructure CR")
 		}
@@ -166,7 +141,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	result := ctrl.Result{}
 	if !r.WebHookEnabled {
-		if provisioning.WebhookDependenciesReady(r.OSClient) {
+		if r.ExternalClients.WebhookDependenciesReady(ctx) {
 			klog.Info("restarting to enable the webhook")
 			os.Exit(1)
 		}
@@ -205,22 +180,13 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
 	}
 
-	// Read container images from Config Map
-	var containerImages provisioning.Images
-	if err := provisioning.GetContainerImages(&containerImages, r.ImagesFilename); err != nil {
-		// Images config map is not valid
-		// Provisioning configuration is not valid.
-		// Requeue request.
+	info, err := r.provisioningInfo(ctx, baremetalConfig)
+	if err != nil {
 		klog.ErrorS(err, "invalid contents in images Config Map")
 		co_err := r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "invalid contents in images Config Map")
 		if co_err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, co_err)
 		}
-		return ctrl.Result{}, err
-	}
-
-	info, err := r.provisioningInfo(ctx, baremetalConfig, &containerImages, r.readSSHKey())
-	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -331,10 +297,24 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return result, nil
 }
 
-func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, sshkey string) (*provisioning.ProvisioningInfo, error) {
-	proxy, err := r.OSClient.ConfigV1().Proxies().Get(ctx, "cluster", metav1.GetOptions{})
+func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) (*provisioning.ProvisioningInfo, error) {
+	var containerImages provisioning.Images
+	if err := provisioning.GetContainerImages(&containerImages, r.ImagesFilename); err != nil {
+		return nil, errors.Wrap(err, "invalid contents in images Config Map")
+	}
+
+	proxy, err := r.ExternalClients.ClusterProxy(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	sshkey, err := r.ExternalClients.ReadSSHKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	openshiftConfigSecret, err := r.ExternalClients.OpenshiftConfigSecret(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to get OpenShift config secret")
 	}
 
 	if err := r.updateProvisioningMacAddresses(ctx, provConfig); err != nil {
@@ -342,15 +322,16 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 	}
 
 	return &provisioning.ProvisioningInfo{
-		Client:        r.KubeClient,
-		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
-		ProvConfig:    provConfig,
-		Scheme:        r.Scheme,
-		Namespace:     ComponentNamespace,
-		Images:        images,
-		Proxy:         proxy,
-		NetworkStack:  r.NetworkStack,
-		SSHKey:        sshkey,
+		Client:                r.KubeClient,
+		EventRecorder:         events.NewLoggingEventRecorder(ComponentName),
+		ProvConfig:            provConfig,
+		Scheme:                r.Scheme,
+		Namespace:             ComponentNamespace,
+		Images:                &containerImages,
+		Proxy:                 proxy,
+		NetworkStack:          r.NetworkStack,
+		SSHKey:                sshkey,
+		OpenshiftConfigSecret: openshiftConfigSecret,
 	}, nil
 }
 

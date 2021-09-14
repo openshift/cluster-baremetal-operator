@@ -9,12 +9,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	fakekube "k8s.io/client-go/kubernetes/fake"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/cluster-baremetal-operator/pkg/externalclients"
 )
 
 func setUpSchemeForReconciler() *runtime.Scheme {
@@ -27,11 +29,11 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 	return scheme
 }
 
-func newFakeProvisioningReconciler(scheme *runtime.Scheme, object runtime.Object) *ProvisioningReconciler {
+func newFakeProvisioningReconciler(scheme *runtime.Scheme, externalClient externalclients.ExternalResourceClient, object ...runtime.Object) *ProvisioningReconciler {
 	return &ProvisioningReconciler{
-		Client:   fakeclient.NewFakeClientWithScheme(scheme, object),
-		Scheme:   scheme,
-		OSClient: fakeconfigclientset.NewSimpleClientset(),
+		Client:          fakeclient.NewFakeClientWithScheme(scheme, object...),
+		ExternalClients: externalClient,
+		Scheme:          scheme,
 	}
 }
 
@@ -86,10 +88,8 @@ func TestIsEnabled(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
-
-			reconciler := ProvisioningReconciler{
-				OSClient: fakeconfigclientset.NewSimpleClientset(tc.infra),
-			}
+			ec := externalclients.NewExternalResourceClient(fakekube.NewSimpleClientset(), fakeconfigclientset.NewSimpleClientset(tc.infra))
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), ec)
 			enabled, err := reconciler.isEnabled()
 			if tc.expectedError && err == nil {
 				t.Error("should have produced an error")
@@ -136,7 +136,7 @@ func TestProvisioning(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
-			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), tc.baremetalCR)
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), nil, tc.baremetalCR)
 			baremetalconfig, err := reconciler.readProvisioningCR(context.TODO())
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected error: %v", err)

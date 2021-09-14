@@ -21,22 +21,20 @@ import (
 )
 
 const (
-	baremetalSecretName      = "metal3-mariadb-password" // #nosec
-	baremetalSecretKey       = "password"
-	ironicUsernameKey        = "username"
-	ironicPasswordKey        = "password"
-	ironicHtpasswdKey        = "htpasswd"
-	ironicConfigKey          = "auth-config"
-	ironicSecretName         = "metal3-ironic-password"
-	ironicrpcSecretName      = "metal3-ironic-rpc-password" // #nosec
-	ironicrpcUsername        = "rpc-user"
-	ironicUsername           = "ironic-user"
-	inspectorSecretName      = "metal3-ironic-inspector-password"
-	inspectorUsername        = "inspector-user"
-	tlsSecretName            = "metal3-ironic-tls" // #nosec
-	openshiftConfigNamespace = "openshift-config"
-	openshiftConfigSecretKey = ".dockerconfigjson" // #nosec
-	pullSecretName           = "pull-secret"
+	baremetalSecretName = "metal3-mariadb-password" // #nosec
+	baremetalSecretKey  = "password"
+	ironicUsernameKey   = "username"
+	ironicPasswordKey   = "password"
+	ironicHtpasswdKey   = "htpasswd"
+	ironicConfigKey     = "auth-config"
+	ironicSecretName    = "metal3-ironic-password"
+	ironicrpcSecretName = "metal3-ironic-rpc-password" // #nosec
+	ironicrpcUsername   = "rpc-user"
+	ironicUsername      = "ironic-user"
+	inspectorSecretName = "metal3-ironic-inspector-password"
+	inspectorUsername   = "inspector-user"
+	tlsSecretName       = "metal3-ironic-tls" // #nosec
+	pullSecretName      = "pull-secret"
 )
 
 type shouldUpdateDataFn func(existing *corev1.Secret) (bool, error)
@@ -143,20 +141,15 @@ password = %s
 // createRegistryPullSecret creates a copy of the pull-secret in the
 // openshift-config namespace for use with LocalObjectReference
 func createRegistryPullSecret(info *ProvisioningInfo) error {
-	secretClient := info.Client.CoreV1().Secrets(openshiftConfigNamespace)
-	openshiftConfigSecret, err := secretClient.Get(context.TODO(), pullSecretName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pullSecretName,
 			Namespace: info.Namespace,
 		},
 		StringData: map[string]string{
-			openshiftConfigSecretKey: base64.StdEncoding.EncodeToString(openshiftConfigSecret.Data[openshiftConfigSecretKey]),
+			corev1.DockerConfigJsonKey: base64.StdEncoding.EncodeToString(info.OpenshiftConfigSecret),
 		},
+		Type: corev1.SecretTypeDockerConfigJson,
 	}
 
 	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {

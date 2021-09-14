@@ -16,6 +16,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -36,7 +37,7 @@ import (
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/controllers"
-	"github.com/openshift/cluster-baremetal-operator/provisioning"
+	"github.com/openshift/cluster-baremetal-operator/pkg/externalclients"
 	"github.com/openshift/library-go/pkg/operator/events"
 )
 
@@ -92,27 +93,22 @@ func main() {
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
-	enableWebhook := provisioning.WebhookDependenciesReady(osClient)
+	externalClient := externalclients.NewExternalResourceClient(kubeClient, osClient)
+	enableWebhook := externalClient.WebhookDependenciesReady(context.TODO())
 
 	if err = (&controllers.ProvisioningReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		OSClient:       osClient,
-		KubeClient:     kubeClient,
-		ReleaseVersion: releaseVersion,
-		ImagesFilename: imagesJSONFilename,
-		WebHookEnabled: enableWebhook,
+		Client:          mgr.GetClient(),
+		ExternalClients: externalClient,
+		Scheme:          mgr.GetScheme(),
+		ReleaseVersion:  releaseVersion,
+		ImagesFilename:  imagesJSONFilename,
+		WebHookEnabled:  enableWebhook,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
 		os.Exit(1)
 	}
 	if enableWebhook {
-		info := &provisioning.ProvisioningInfo{
-			Client:        kubeClient,
-			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
-			Namespace:     controllers.ComponentNamespace,
-		}
-		if err = provisioning.EnableValidatingWebhook(info, mgr); err != nil {
+		if err = externalClient.WebhookEnable(mgr, controllers.ComponentNamespace, events.NewLoggingEventRecorder(controllers.ComponentName)); err != nil {
 			klog.ErrorS(err, "problem enabling validating webhook")
 			os.Exit(1)
 		}

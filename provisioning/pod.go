@@ -123,7 +123,7 @@ var pullSecret = corev1.EnvVar{
 			LocalObjectReference: corev1.LocalObjectReference{
 				Name: pullSecretName,
 			},
-			Key: openshiftConfigSecretKey,
+			Key: corev1.DockerConfigJsonKey,
 		},
 	},
 }
