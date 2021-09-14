@@ -36,6 +36,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -143,15 +146,19 @@ func (r *ProvisioningReconciler) readSSHKey() string {
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// provisioning.metal3.io is a singleton
-	// Note: this check is here to make sure that the early startup configuration
-	// is correct. For day 2 operatations the webhook will validate this.
-	if req.Name != metal3iov1alpha1.ProvisioningSingletonName {
-		klog.Info("ignoring invalid CR", "name", req.Name)
-		return ctrl.Result{}, nil
+	if r.NetworkStack == 0 {
+		infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "unable to read Infrastructure CR")
+		}
+
+		r.NetworkStack, err = network.NetworkStackFromURL(infra.Status.APIServerInternalURL)
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "unable to calculate the NetworkStack")
+		}
+		klog.InfoS("Network stack calculation", "APIServerInternalHost", infra.Status.APIServerInternalURL, "NetworkStack", r.NetworkStack)
 	}
 
-	// Make sure ClusterOperator exists
 	err := r.ensureClusterOperator()
 	if err != nil {
 		return ctrl.Result{}, err
@@ -168,27 +175,31 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		result.RequeueAfter = 5 * time.Minute
 	}
 
+	// provisioning.metal3.io is a singleton
+	// Note: this check is here to make sure that the early startup configuration
+	// is correct. For day 2 operatations the webhook will validate this.
+	if req.Name != metal3iov1alpha1.ProvisioningSingletonName {
+		klog.InfoS("ignoring invalid Provisioning CR", "name", req.Name)
+		return result, nil
+	}
+
 	enabled, err := r.isEnabled()
 	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
+		return result, errors.Wrap(err, "could not determine whether to run")
 	}
 	if !enabled {
 		// set ClusterOperator status to disabled=true, available=true
 		// We're disabled; don't requeue
-		return ctrl.Result{}, errors.Wrapf(
+		return result, errors.Wrapf(
 			r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", ""),
 			"unable to put %q ClusterOperator in Disabled state", clusterOperatorName)
 	}
 
 	baremetalConfig, err := r.readProvisioningCR(ctx)
 	if err != nil {
-		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
 	}
 	if baremetalConfig == nil {
-		// Provisioning configuration not available at this time.
-		// Cannot proceed wtih metal3 deployment.
-		klog.Info("Provisioning CR not found")
 		return result, errors.Wrapf(
 			r.updateCOStatus(ReasonProvisioningCRNotFound, "Provisioning CR not found", ""),
 			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
@@ -418,47 +429,38 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	ctx := context.Background()
-	err := r.ensureClusterOperator()
-	if err != nil {
-		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
+	// The below code in production should set NetworkStack = 0 and then in the
+	// first reconcile it will lookup the apiInternalHost.
+	// In dev when we are running "go run main.go" the lookup will not work, so
+	// use the Env to figure it out..
+	switch os.Getenv("IP_STACK") {
+	case "v4":
+		// running in IPv4 dev environment
+		r.NetworkStack = network.NetworkStackV4
+	case "v6":
+		// running in IPv6 dev environment
+		r.NetworkStack = network.NetworkStackV6
+	default:
+		r.NetworkStack = 0
 	}
 
-	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
-	if err != nil {
-		return errors.Wrap(err, "unable to read Infrastructure CR")
-	}
-
-	r.NetworkStack, err = network.NetworkStackFromURL(infra.Status.APIServerInternalURL)
-	if err != nil {
-		return errors.Wrap(err, "unable to calculate the NetworkStack")
-	}
-	klog.InfoS("Network stack calculation", "APIServerInternalHost", infra.Status.APIServerInternalURL, "NetworkStack", r.NetworkStack)
-
-	// Check the Platform Type to determine the state of the CO
-	enabled, err := r.isEnabled()
-	if err != nil {
-		return errors.Wrap(err, "could not determine whether to run")
-	}
-	if !enabled {
-		//Set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
-		if err != nil {
-			return fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %w", clusterOperatorName, err)
+	// This is a channel Source so that even if we don't have a Provisioning CR
+	// we will at least get one event to:
+	// - intialize the ClusterOperator and set it's status.
+	// - look up the NetworkStack
+	// We need to do this in the Reconcile proper as outside of it, the client
+	// is not synced and we can't use it.
+	oneInitialEvent := make(chan event.GenericEvent)
+	go func() {
+		time.Sleep(time.Second)
+		oneInitialEvent <- event.GenericEvent{
+			Object: &metal3iov1alpha1.Provisioning{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "fake-object-for-once-off-event",
+				},
+			},
 		}
-	}
-
-	// If Platform is BareMetal, we could still be missing the Provisioning CR
-	if enabled {
-		baremetalConfig, err := r.readProvisioningCR(context.Background())
-		if err != nil || baremetalConfig == nil {
-			err = r.updateCOStatus(ReasonProvisioningCRNotFound, "Provisioning CR not found on BareMetal Platform", "")
-			if err != nil {
-				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
-			}
-		}
-	}
-
+	}()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).
@@ -467,5 +469,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Owns(&osconfigv1.Proxy{}).
+		Watches(&source.Channel{Source: oneInitialEvent}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
