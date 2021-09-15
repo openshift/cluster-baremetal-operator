@@ -16,16 +16,15 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/cluster-baremetal-operator/pkg/resourceapply"
 )
 
 const (
@@ -278,35 +277,35 @@ func newImageCacheDaemonSet(info *ProvisioningInfo) (*appsv1.DaemonSet, error) {
 	}, nil
 }
 
-func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
+func EnsureImageCache(ctx context.Context, info *ProvisioningInfo) (bool, error) {
 	imageCacheDaemonSet, err := newImageCacheDaemonSet(info)
 	if err != nil {
-		return
+		return false, err
 	}
 	expectedGeneration := resourcemerge.ExpectedDaemonSetGeneration(imageCacheDaemonSet, info.ProvConfig.Status.Generations)
 
 	err = controllerutil.SetControllerReference(info.ProvConfig, imageCacheDaemonSet, info.Scheme)
 	if err != nil {
-		err = fmt.Errorf("unable to set controllerReference on daemonset: %w", err)
-		return
+		return false, fmt.Errorf("unable to set controllerReference on daemonset: %w", err)
 	}
+
 	daemonSetRolloutStartTime = time.Now()
-	daemonSet, updated, err := resourceapply.ApplyDaemonSet(
-		info.Client.AppsV1(),
+	daemonSet, updated, err := resourceapply.ApplyDaemonSet(ctx,
+		info.Client,
 		info.EventRecorder,
 		imageCacheDaemonSet, expectedGeneration)
 	if err != nil {
-		err = fmt.Errorf("unable to apply image cache daemonset: %w", err)
-		return
+		return updated, fmt.Errorf("unable to apply image cache daemonset: %w", err)
 	}
 
 	resourcemerge.SetDaemonSetGeneration(&info.ProvConfig.Status.Generations, daemonSet)
-	return
+	return updated, nil
 }
 
 // Provide the current state of metal3 image-cache daemonset
-func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DaemonSetConditionType, error) {
-	existing, err := client.DaemonSets(targetNamespace).Get(context.Background(), imageCacheService, metav1.GetOptions{})
+func GetDaemonSetState(ctx context.Context, c client.Client, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DaemonSetConditionType, error) {
+	existing := &appsv1.DaemonSet{}
+	err := c.Get(ctx, client.ObjectKey{Name: imageCacheService, Namespace: targetNamespace}, existing)
 	if err != nil || existing == nil {
 		// There were errors accessing the deployment.
 		return DaemonSetReplicaFailure, err
@@ -320,6 +319,9 @@ func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace str
 	return DaemonSetProgressing, nil
 }
 
-func DeleteImageCache(info *ProvisioningInfo) error {
-	return client.IgnoreNotFound(info.Client.AppsV1().DaemonSets(info.Namespace).Delete(context.Background(), imageCacheService, metav1.DeleteOptions{}))
+func DeleteImageCache(ctx context.Context, info *ProvisioningInfo) error {
+	obj := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: imageCacheService, Namespace: info.Namespace}}
+	err := client.IgnoreNotFound(info.Client.Delete(ctx, obj, &client.DeleteOptions{}))
+	resourceapply.ReportDeleteEvent(info.EventRecorder, obj, err)
+	return err
 }

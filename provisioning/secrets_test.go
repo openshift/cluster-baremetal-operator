@@ -2,21 +2,20 @@ package provisioning
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	fakekube "k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	faketesting "k8s.io/client-go/testing"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -102,78 +101,78 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			secretsResource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
-
-			kubeClient := fakekube.NewSimpleClientset(nil...)
-
-			if tc.secretError != nil {
-				kubeClient.Fake.PrependReactor("get", "secrets", func(action faketesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, &v1.Secret{}, tc.secretError
-				})
-			}
-
+			ctx := context.TODO()
+			fc := fakeclient.NewFakeClientWithScheme(scheme)
 			info := &ProvisioningInfo{
-				Client:        kubeClient,
+				Client:        fc,
 				Namespace:     testNamespace,
 				ProvConfig:    baremetalCR,
 				Scheme:        scheme,
 				EventRecorder: events.NewLoggingEventRecorder("tests"),
 			}
+
 			switch tc.name {
 			case "new-mariadb-secret":
-				err := createMariadbPasswordSecret(info)
+				err := createMariadbPasswordSecret(ctx, info)
 				assert.Equal(t, tc.expectedError, err)
 
 				if tc.expectedError == nil {
-					secret, _ := kubeClient.Tracker().Get(secretsResource, testNamespace, "metal3-mariadb-password")
-					assert.NotEmpty(t, secret.(*v1.Secret).Data[baremetalSecretKey])
+					secret := &corev1.Secret{}
+					assert.Nil(t, fc.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "metal3-mariadb-password"}, secret))
+
+					assert.NotEmpty(t, secret.Data[baremetalSecretKey])
 					// Test for making sure that when a secret already exists, a new one is not
 					// created and the old one returned.
 					if tc.testRecreate {
-						original := secret.(*v1.Secret).Data[baremetalSecretKey]
-						err := createMariadbPasswordSecret(info)
+						original := secret.Data[baremetalSecretKey]
+						err := createMariadbPasswordSecret(ctx, info)
 						assert.Equal(t, tc.expectedError, err)
-						newSecret, _ := kubeClient.Tracker().Get(secretsResource, testNamespace, "metal3-mariadb-password")
-						recreated := newSecret.(*v1.Secret).Data[baremetalSecretKey]
+
+						newSecret := &corev1.Secret{}
+						assert.Nil(t, fc.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "metal3-mariadb-password"}, newSecret))
+						recreated := newSecret.Data[baremetalSecretKey]
 						assert.True(t, bytes.Compare(original, recreated) == 0, "re-created mariadb password is invalid")
 					}
 				}
 			case "new-ironic-secret":
-				err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic")
+				err := createIronicSecret(ctx, info, ironicSecretName, ironicUsername, "ironic")
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
 				// Check if Ironic secret exits
-				secret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, ironicSecretName)
+				secret := &corev1.Secret{}
+				assert.Nil(t, fc.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: ironicSecretName}, secret))
 				if apierrors.IsNotFound(err) {
 					t.Errorf("Error creating Ironic secret.")
 				}
-				assert.True(t, strings.Compare(string(secret.(*v1.Secret).Data[ironicUsernameKey]), ironicUsername) == 0, "ironic password created incorrectly")
+				assert.True(t, strings.Compare(string(secret.Data[ironicUsernameKey]), ironicUsername) == 0, "ironic password created incorrectly")
 			case "new-inspector-secret":
-				err := createIronicSecret(info, inspectorSecretName, inspectorUsername, "inspector")
+				err := createIronicSecret(context.TODO(), info, inspectorSecretName, inspectorUsername, "inspector")
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
 				// Check if Ironic secret exits
-				secret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, inspectorSecretName)
+				secret := &corev1.Secret{}
+				assert.Nil(t, fc.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: inspectorSecretName}, secret))
 				if apierrors.IsNotFound(err) {
 					t.Errorf("Error creating Ironic secret.")
 				}
-				assert.True(t, strings.Compare(string(secret.(*v1.Secret).Data[ironicUsernameKey]), inspectorUsername) == 0, "inspector password created incorrectly")
+				assert.True(t, strings.Compare(string(secret.Data[ironicUsernameKey]), inspectorUsername) == 0, "inspector password created incorrectly")
 			case "new-ironic-rpc-secret":
-				err := createIronicSecret(info, ironicrpcSecretName, ironicrpcUsername, "json_rpc")
+				err := createIronicSecret(context.TODO(), info, ironicrpcSecretName, ironicrpcUsername, "json_rpc")
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
 				// Check if Ironic secret exits
-				secret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, ironicrpcSecretName)
+				secret := &corev1.Secret{}
+				assert.Nil(t, fc.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: ironicrpcSecretName}, secret))
 				if apierrors.IsNotFound(err) {
 					t.Errorf("Error creating Ironic secret.")
 				}
-				assert.True(t, strings.Compare(string(secret.(*v1.Secret).Data[ironicUsernameKey]), ironicrpcUsername) == 0, "rpc password created incorrectly")
+				assert.True(t, strings.Compare(string(secret.Data[ironicUsernameKey]), ironicrpcUsername) == 0, "rpc password created incorrectly")
 			}
 		})
 	}
@@ -204,35 +203,35 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
+		ctx := context.TODO()
 		t.Run(tc.name, func(t *testing.T) {
-			secretsResource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
-			kubeClient := fakekube.NewSimpleClientset(nil...)
+			fc := fakeclient.NewFakeClientWithScheme(scheme)
 			info := &ProvisioningInfo{
-				Client:        kubeClient,
+				Client:        fc,
 				Namespace:     testNamespace,
 				ProvConfig:    baremetalCR,
 				Scheme:        scheme,
 				EventRecorder: events.NewLoggingEventRecorder("tests"),
 			}
-
-			err := createOrUpdateTlsSecret(info)
+			err := createOrUpdateTlsSecret(ctx, info)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
 
 			// Check if TLS secret exits
-			secret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, tlsSecretName)
+			secret := &corev1.Secret{}
+			err = fc.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: tlsSecretName}, secret)
 			if apierrors.IsNotFound(err) {
-				t.Errorf("Error creating TLS secret.")
+				t.Errorf("Error creating TLS secret: %v.", err)
 			}
-			original := secret.(*v1.Secret).Data[corev1.TLSCertKey]
+			original := secret.Data[corev1.TLSCertKey]
 			assert.NotEmpty(t, original)
 
 			if tc.expire {
 				// Inject an expired certificate
-				secret.(*v1.Secret).Data[corev1.TLSCertKey] = []byte(expiredTlsCertificate)
-				err = kubeClient.Tracker().Update(secretsResource, secret, testNamespace)
+				secret.Data[corev1.TLSCertKey] = []byte(expiredTlsCertificate)
+				err = fc.Update(ctx, secret)
 				if err != nil {
 					t.Errorf("unexpected error when faking expirted certificate: %v", err)
 					return
@@ -240,17 +239,18 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 				original = []byte(expiredTlsCertificate)
 			}
 
-			err = createOrUpdateTlsSecret(info)
+			err = createOrUpdateTlsSecret(ctx, info)
 			if err != nil {
 				t.Errorf("unexpected error when re-creating: %v", err)
 				return
 			}
 
-			newSecret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, tlsSecretName)
+			newSecret := &corev1.Secret{}
+			err = fc.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: tlsSecretName}, newSecret)
 			if apierrors.IsNotFound(err) {
 				t.Errorf("Error creating TLS secret.")
 			}
-			recreated := newSecret.(*v1.Secret).Data[corev1.TLSCertKey]
+			recreated := newSecret.Data[corev1.TLSCertKey]
 
 			// In case of expiration, the certificate must be re-created
 			assert.Equal(t, tc.expire, bytes.Compare(original, recreated) != 0, "re-created Tls certificate is invalid")

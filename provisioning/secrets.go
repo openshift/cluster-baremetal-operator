@@ -8,16 +8,13 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/cluster-baremetal-operator/pkg/crypto"
-	"github.com/openshift/library-go/pkg/operator/events"
-	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/cluster-baremetal-operator/pkg/resourceapply"
 )
 
 const (
@@ -37,38 +34,8 @@ const (
 	pullSecretName      = "pull-secret"
 )
 
-type shouldUpdateDataFn func(existing *corev1.Secret) (bool, error)
-
-func doNotUpdateData(existing *corev1.Secret) (bool, error) {
-	return false, nil
-}
-
-// applySecret merges objectmeta, applies data if the secret does not exist or shouldUpdateDataFn returns false.
-func applySecret(client coreclientv1.SecretsGetter, recorder events.Recorder, requiredInput *corev1.Secret, shouldUpdateData shouldUpdateDataFn) error {
-	needsApply := false
-	existing, err := client.Secrets(requiredInput.Namespace).Get(context.TODO(), requiredInput.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		err = nil
-		needsApply = true
-	} else if err != nil {
-		return err
-	} else {
-		// Allow the caller to decide whether update.
-		needsApply, err = shouldUpdateData(existing)
-		if err != nil {
-			return err
-		}
-	}
-
-	if needsApply {
-		_, _, err = resourceapply.ApplySecret(client, recorder, requiredInput)
-	}
-
-	return err
-}
-
 // createMariadbPasswordSecret creates a Secret for Mariadb password
-func createMariadbPasswordSecret(info *ProvisioningInfo) error {
+func createMariadbPasswordSecret(ctx context.Context, info *ProvisioningInfo) error {
 	password, err := crypto.GenerateRandomPassword()
 	if err != nil {
 		return err
@@ -88,10 +55,11 @@ func createMariadbPasswordSecret(info *ProvisioningInfo) error {
 		return err
 	}
 
-	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData)
+	_, _, err = resourceapply.ApplySecret(ctx, info.Client, info.EventRecorder, secret, nil)
+	return err
 }
 
-func createIronicSecret(info *ProvisioningInfo, name string, username string, configSection string) error {
+func createIronicSecret(ctx context.Context, info *ProvisioningInfo, name string, username string, configSection string) error {
 	password, err := crypto.GenerateRandomPassword()
 	if err != nil {
 		return err
@@ -135,12 +103,13 @@ password = %s
 		return err
 	}
 
-	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData)
+	_, _, err = resourceapply.ApplySecret(ctx, info.Client, info.EventRecorder, secret, nil)
+	return err
 }
 
 // createRegistryPullSecret creates a copy of the pull-secret in the
 // openshift-config namespace for use with LocalObjectReference
-func createRegistryPullSecret(info *ProvisioningInfo) error {
+func createRegistryPullSecret(ctx context.Context, info *ProvisioningInfo) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pullSecretName,
@@ -156,41 +125,43 @@ func createRegistryPullSecret(info *ProvisioningInfo) error {
 		return err
 	}
 
-	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData)
+	_, _, err := resourceapply.ApplySecret(ctx, info.Client, info.EventRecorder, secret, nil)
+	return err
 }
 
-func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
+func EnsureAllSecrets(ctx context.Context, info *ProvisioningInfo) (bool, error) {
 	// Create a Secret for the Mariadb Password
-	if err := createMariadbPasswordSecret(info); err != nil {
+	if err := createMariadbPasswordSecret(ctx, info); err != nil {
 		return false, errors.Wrap(err, "failed to create Mariadb password")
 	}
 	// Create a Secret for the Ironic Password
-	if err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic"); err != nil {
+	if err := createIronicSecret(ctx, info, ironicSecretName, ironicUsername, "ironic"); err != nil {
 		return false, errors.Wrap(err, "failed to create Ironic password")
 	}
 	// Create a Secret for the Ironic RPC Password
-	if err := createIronicSecret(info, ironicrpcSecretName, ironicrpcUsername, "json_rpc"); err != nil {
+	if err := createIronicSecret(ctx, info, ironicrpcSecretName, ironicrpcUsername, "json_rpc"); err != nil {
 		return false, errors.Wrap(err, "failed to create Ironic rpc password")
 	}
 	// Create a Secret for the Ironic Inspector Password
-	if err := createIronicSecret(info, inspectorSecretName, inspectorUsername, "inspector"); err != nil {
+	if err := createIronicSecret(ctx, info, inspectorSecretName, inspectorUsername, "inspector"); err != nil {
 		return false, errors.Wrap(err, "failed to create Inspector password")
 	}
 	// Generate/update TLS certificate
-	if err := createOrUpdateTlsSecret(info); err != nil {
+	if err := createOrUpdateTlsSecret(ctx, info); err != nil {
 		return false, errors.Wrap(err, "failed to create TLS certificate")
 	}
 	// Create a Secret for the Registry Pull Secret
-	if err := createRegistryPullSecret(info); err != nil {
+	if err := createRegistryPullSecret(ctx, info); err != nil {
 		return false, errors.Wrap(err, "failed to create Registry pull secret")
 	}
 	return false, nil // ApplySecret does not use Generation, so just return false for updated
 }
 
-func DeleteAllSecrets(info *ProvisioningInfo) error {
+func DeleteAllSecrets(ctx context.Context, info *ProvisioningInfo) error {
 	var secretErrors []error
 	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName, tlsSecretName, pullSecretName} {
-		if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{})); err != nil {
+		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: sn, Namespace: info.Namespace}}
+		if err := client.IgnoreNotFound(info.Client.Delete(ctx, secret, &client.DeleteOptions{})); err != nil {
 			secretErrors = append(secretErrors, err)
 		}
 	}
@@ -199,7 +170,7 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 
 // createOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
 // It updates the secret if the existing certificate is close to expiration.
-func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
+func createOrUpdateTlsSecret(ctx context.Context, info *ProvisioningInfo) error {
 	cert, err := crypto.GenerateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
 	if err != nil {
 		return err
@@ -220,11 +191,12 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 		return err
 	}
 
-	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, func(existing *corev1.Secret) (bool, error) {
+	_, _, err = resourceapply.ApplySecret(ctx, info.Client, info.EventRecorder, secret, func(existing *corev1.Secret) (bool, error) {
 		expired, err := crypto.IsTlsCertificateExpired(existing.Data[corev1.TLSCertKey])
 		if err != nil {
 			return false, err
 		}
 		return expired, nil
 	})
+	return err
 }

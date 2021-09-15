@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,7 +58,6 @@ type ProvisioningReconciler struct {
 	// that reads objects from the cache and writes to the apiserver
 	Client          client.Client
 	Scheme          *runtime.Scheme
-	KubeClient      kubernetes.Interface
 	ReleaseVersion  string
 	ImagesFilename  string
 	WebHookEnabled  bool
@@ -67,7 +65,7 @@ type ProvisioningReconciler struct {
 	ExternalClients externalclients.ExternalResourceClient
 }
 
-type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
+type ensureFunc func(context.Context, *provisioning.ProvisioningInfo) (bool, error)
 
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
@@ -89,9 +87,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;update;patch;create
 
 func (r *ProvisioningReconciler) isEnabled() (bool, error) {
-	ctx := context.Background()
-
-	infra, err := r.ExternalClients.ClusterInfrastructure(ctx)
+	infra, err := r.ExternalClients.ClusterInfrastructure(context.Background())
 	if err != nil {
 		return false, errors.Wrap(err, "unable to determine Platform")
 	}
@@ -239,7 +235,7 @@ func (r *ProvisioningReconciler) reconcile(ctx context.Context, b *metal3iov1alp
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
 	} {
-		updated, err := ensureResource(info)
+		updated, err := ensureResource(ctx, info)
 		if err != nil || updated {
 			return ctrl.Result{}, err
 		}
@@ -247,7 +243,7 @@ func (r *ProvisioningReconciler) reconcile(ctx context.Context, b *metal3iov1alp
 	b.Status.ObservedGeneration = b.Generation
 
 	// Determine the status of the deployment
-	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, b)
+	deploymentState, err := provisioning.GetDeploymentState(ctx, r.Client, ComponentNamespace, b)
 	if err != nil {
 		r.updateCOStatus(co, ReasonResourceNotFound, "metal3 deployment inaccessible", "")
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
@@ -257,7 +253,7 @@ func (r *ProvisioningReconciler) reconcile(ctx context.Context, b *metal3iov1alp
 	}
 
 	// Determine the status of the DaemonSet
-	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, b)
+	daemonSetState, err := provisioning.GetDaemonSetState(ctx, r.Client, ComponentNamespace, b)
 	if err != nil {
 		r.updateCOStatus(co, ReasonResourceNotFound, "metal3 image cache daemonset inaccessible", "")
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 image cache daemonset")
@@ -299,7 +295,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 	}
 
 	return &provisioning.ProvisioningInfo{
-		Client:                r.KubeClient,
+		Client:                r.Client,
 		EventRecorder:         events.NewLoggingEventRecorder(ComponentName),
 		ProvConfig:            provConfig,
 		Scheme:                r.Scheme,
@@ -324,16 +320,16 @@ func (r *ProvisioningReconciler) reconcileDelete(ctx context.Context, b *metal3i
 		return ctrl.Result{}, errors.Wrap(err, "unable to create provionsingInfo")
 	}
 
-	if err := provisioning.DeleteAllSecrets(info); err != nil {
+	if err := provisioning.DeleteAllSecrets(ctx, info); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to delete one or more metal3 secrets")
 	}
-	if err := provisioning.DeleteMetal3Deployment(info); err != nil {
+	if err := provisioning.DeleteMetal3Deployment(ctx, info); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to delete metal3 deployment")
 	}
-	if err := provisioning.DeleteMetal3StateService(info); err != nil {
+	if err := provisioning.DeleteMetal3StateService(ctx, info); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to delete metal3 service")
 	}
-	if err := provisioning.DeleteImageCache(info); err != nil {
+	if err := provisioning.DeleteImageCache(ctx, info); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to delete metal3 image cache")
 	}
 

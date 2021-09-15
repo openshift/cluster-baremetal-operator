@@ -27,14 +27,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	configv1 "github.com/openshift/api/config/v1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
-	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/cluster-baremetal-operator/pkg/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
 
@@ -979,46 +978,49 @@ func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
 	}
 }
 
-func getMetal3DeploymentSelector(client appsclientv1.DeploymentsGetter, targetNamespace string) (*metav1.LabelSelector, error) {
-	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
+func getMetal3DeploymentSelector(ctx context.Context, c client.Client, targetNamespace string) (*metav1.LabelSelector, error) {
+	existing := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: baremetalDeploymentName, Namespace: targetNamespace},
+	}
+
+	err := c.Get(ctx, client.ObjectKeyFromObject(existing), existing)
 	if existing != nil && err == nil {
 		return existing.Spec.Selector, nil
 	}
 	return nil, err
 }
 
-func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
-	// Create metal3 deployment object based on current baremetal configuration
-	// It will be created with the cboOwnedAnnotation
-
+// EnsureMetal3Deployment Create metal3 deployment object based on current baremetal configuration
+// It will be created with the cboOwnedAnnotation
+func EnsureMetal3Deployment(ctx context.Context, info *ProvisioningInfo) (bool, error) {
 	metal3Deployment := newMetal3Deployment(info)
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
 
-	err = controllerutil.SetControllerReference(info.ProvConfig, metal3Deployment, info.Scheme)
+	err := controllerutil.SetControllerReference(info.ProvConfig, metal3Deployment, info.Scheme)
 	if err != nil {
-		err = fmt.Errorf("unable to set controllerReference on deployment: %w", err)
-		return
+		return false, fmt.Errorf("unable to set controllerReference on deployment: %w", err)
 	}
 
 	deploymentRolloutStartTime = time.Now()
-	deployment, updated, err := resourceapply.ApplyDeployment(info.Client.AppsV1(),
+	deployment, updated, err := resourceapply.ApplyDeployment(ctx, info.Client,
 		info.EventRecorder, metal3Deployment, expectedGeneration)
+
 	if err != nil {
-		err = fmt.Errorf("unable to apply Metal3 deployment: %w", err)
 		// Check if ApplyDeployment failed because the existing Pod had an outdated
 		// Pod Selector.
-		selector, get_err := getMetal3DeploymentSelector(info.Client.AppsV1(), info.Namespace)
+		selector, get_err := getMetal3DeploymentSelector(ctx, info.Client, info.Namespace)
 		if get_err != nil || equality.Semantic.DeepEqual(selector, metal3Deployment.Spec.Selector) {
-			return
+			return updated, fmt.Errorf("unable to apply Metal3 deployment: %w", err)
 		}
 		// This is an older deployment with the incorrect Pod Selector.
 		// Delete deployment now and re-create in the next reconcile.
 		// The operator is watching deployments so the reconcile should be triggered when metal3 deployment
 		// is deleted.
-		if delete_err := DeleteMetal3Deployment(info); delete_err != nil {
-			err = fmt.Errorf("unable to delete Metal3 deployment with incorrect Pod Selector: %w", delete_err)
-			return
+		if delete_err := DeleteMetal3Deployment(ctx, info); delete_err != nil {
+			resourceapply.ReportDeleteEvent(info.EventRecorder, deployment, delete_err)
+			return updated, fmt.Errorf("unable to delete Metal3 deployment with incorrect Pod Selector: %w", delete_err)
 		}
+		resourceapply.ReportDeleteEvent(info.EventRecorder, deployment, nil)
 	}
 	if updated {
 		resourcemerge.SetDeploymentGeneration(&info.ProvConfig.Status.Generations, deployment)
@@ -1036,8 +1038,9 @@ func getDeploymentCondition(deployment *appsv1.Deployment) appsv1.DeploymentCond
 }
 
 // Provide the current state of metal3 deployment
-func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DeploymentConditionType, error) {
-	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
+func GetDeploymentState(ctx context.Context, c client.Client, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DeploymentConditionType, error) {
+	existing := &appsv1.Deployment{}
+	err := c.Get(ctx, client.ObjectKey{Name: baremetalDeploymentName, Namespace: targetNamespace}, existing)
 	if err != nil || existing == nil {
 		// There were errors accessing the deployment.
 		return appsv1.DeploymentReplicaFailure, err
@@ -1049,6 +1052,9 @@ func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace s
 	return deploymentState, nil
 }
 
-func DeleteMetal3Deployment(info *ProvisioningInfo) error {
-	return client.IgnoreNotFound(info.Client.AppsV1().Deployments(info.Namespace).Delete(context.Background(), baremetalDeploymentName, metav1.DeleteOptions{}))
+func DeleteMetal3Deployment(ctx context.Context, info *ProvisioningInfo) error {
+	obj := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: baremetalDeploymentName, Namespace: info.Namespace}}
+	err := client.IgnoreNotFound(info.Client.Delete(ctx, obj, &client.DeleteOptions{}))
+	resourceapply.ReportDeleteEvent(info.EventRecorder, obj, err)
+	return err
 }

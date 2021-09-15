@@ -16,16 +16,22 @@ limitations under the License.
 package provisioning
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	v1 "github.com/openshift/api/config/v1"
+	configv1 "github.com/openshift/api/config/v1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/pkg/network"
+	"github.com/openshift/library-go/pkg/operator/events"
 )
 
 func TestBuildEnvVar(t *testing.T) {
@@ -446,11 +452,11 @@ func TestProxyAndCAInjection(t *testing.T) {
 			StaticIpManager:     expectedIronicStaticIpManager,
 		},
 		ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
-		Proxy: &v1.Proxy{
+		Proxy: &configv1.Proxy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "cluster",
 			},
-			Status: v1.ProxyStatus{
+			Status: configv1.ProxyStatus{
 				HTTPProxy:  "https://172.2.0.1:3128",
 				HTTPSProxy: "https://172.2.0.1:3128",
 				NoProxy:    ".example.com",
@@ -485,6 +491,100 @@ func TestProxyAndCAInjection(t *testing.T) {
 					ReadOnly:  true},
 				)
 			}
+		})
+	}
+}
+
+func TestEnsureMetal3Deployment(t *testing.T) {
+	info := &ProvisioningInfo{
+		Images: &Images{
+			BaremetalOperator:   expectedBaremetalOperator,
+			Ironic:              expectedIronic,
+			IpaDownloader:       expectedIronicIpaDownloader,
+			MachineOsDownloader: expectedMachineOsDownloader,
+			StaticIpManager:     expectedIronicStaticIpManager,
+		},
+		ProvConfig:    &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
+		Namespace:     testNamespace,
+		Scheme:        scheme,
+		EventRecorder: events.NewLoggingEventRecorder("tests"),
+	}
+	selector := &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"k8s-app":    metal3AppName,
+			cboLabelName: stateService,
+		},
+	}
+
+	existing := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      baremetalDeploymentName,
+			Namespace: testNamespace,
+			Annotations: map[string]string{
+				cboOwnedAnnotation: "",
+			},
+			Labels: map[string]string{
+				"k8s-app":    metal3AppName,
+				cboLabelName: stateService,
+			},
+			ResourceVersion: "123",
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: selector,
+		},
+	}
+
+	tests := []struct {
+		name                string
+		existingDep         func() *appsv1.Deployment
+		existingGeneration  *operatorv1.GenerationStatus
+		wantResourceVersion string
+		wantUpdated         bool
+		wantErr             bool
+	}{
+		{
+			name:                "create",
+			existingDep:         func() *appsv1.Deployment { return nil },
+			wantUpdated:         true,
+			wantResourceVersion: "1",
+		},
+		{
+			name:                "patch",
+			existingDep:         func() *appsv1.Deployment { return existing },
+			existingGeneration:  &operatorv1.GenerationStatus{Group: "apps", Resource: "deployments", Namespace: "test-namespce", Name: "metal3", LastGeneration: 4},
+			wantUpdated:         true,
+			wantResourceVersion: "124",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.TODO()
+			obj := tt.existingDep()
+			fcb := fakeclient.NewClientBuilder()
+			if obj != nil {
+				fcb.WithObjects(obj)
+			}
+			fc := fcb.WithScheme(scheme).Build()
+			info.Client = fc
+			if tt.existingGeneration == nil {
+				info.ProvConfig.Status.Generations = []operatorv1.GenerationStatus{}
+			} else {
+				info.ProvConfig.Status.Generations = []operatorv1.GenerationStatus{*tt.existingGeneration}
+			}
+
+			got, err := EnsureMetal3Deployment(ctx, info)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EnsureMetal3Deployment() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.wantUpdated {
+				t.Errorf("EnsureMetal3Deployment() = %v, want %v", got, tt.wantUpdated)
+			}
+
+			dep := &appsv1.Deployment{}
+			assert.Nil(t, fc.Get(ctx, client.ObjectKey{Namespace: info.Namespace, Name: baremetalDeploymentName}, dep))
+			assert.Equal(t, tt.wantResourceVersion, dep.ResourceVersion)
+			// Note: can't test outgoing generation because the fake client does not set generation on the object.
 		})
 	}
 }

@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/cluster-baremetal-operator/pkg/resourceapply"
 )
 
 const (
@@ -40,23 +40,22 @@ func newMetal3StateService(targetNamespace string) *corev1.Service {
 	}
 }
 
-func EnsureMetal3StateService(info *ProvisioningInfo) (updated bool, err error) {
+func EnsureMetal3StateService(ctx context.Context, info *ProvisioningInfo) (bool, error) {
 	metal3StateService := newMetal3StateService(info.Namespace)
 
-	err = controllerutil.SetControllerReference(info.ProvConfig, metal3StateService, info.Scheme)
+	err := controllerutil.SetControllerReference(info.ProvConfig, metal3StateService, info.Scheme)
 	if err != nil {
-		err = fmt.Errorf("unable to set controllerReference on service: %w", err)
-		return
+		return false, fmt.Errorf("unable to set controllerReference on service: %w", err)
 	}
 
-	_, updated, err = resourceapply.ApplyService(info.Client.CoreV1(),
-		info.EventRecorder, metal3StateService)
-	if err != nil {
-		err = fmt.Errorf("unable to apply Metal3-state service: %w", err)
-	}
-	return
+	var updated bool
+	_, updated, err = resourceapply.ApplyService(ctx, info.Client, info.EventRecorder, metal3StateService)
+	return updated, err
 }
 
-func DeleteMetal3StateService(info *ProvisioningInfo) error {
-	return client.IgnoreNotFound(info.Client.CoreV1().Services(info.Namespace).Delete(context.Background(), stateService, metav1.DeleteOptions{}))
+func DeleteMetal3StateService(ctx context.Context, info *ProvisioningInfo) error {
+	obj := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: stateService, Namespace: info.Namespace}}
+	err := client.IgnoreNotFound(info.Client.Delete(ctx, obj, &client.DeleteOptions{}))
+	resourceapply.ReportDeleteEvent(info.EventRecorder, obj, err)
+	return err
 }
