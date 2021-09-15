@@ -61,11 +61,11 @@ const (
 // ClusterOperator resource used on first creation of the ClusterOperator.
 func defaultStatusConditions() []osconfigv1.ClusterOperatorStatusCondition {
 	return []osconfigv1.ClusterOperatorStatusCondition{
-		setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
-		setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
-		setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
-		setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
-		setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
+		newStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, "", ""),
+		newStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+		newStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
+		newStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+		newStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
 	}
 }
 
@@ -140,8 +140,8 @@ func (r *ProvisioningReconciler) ensureDefaultsClusterOperator(co *osconfigv1.Cl
 	}
 }
 
-// setStatusCondition initalizes and returns a ClusterOperatorStatusCondition
-func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
+// newStatusCondition initalizes and returns a ClusterOperatorStatusCondition
+func newStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 	conditionStatus osconfigv1.ConditionStatus, reason string,
 	message string) osconfigv1.ClusterOperatorStatusCondition {
 	return osconfigv1.ClusterOperatorStatusCondition{
@@ -157,22 +157,22 @@ func (r *ProvisioningReconciler) updateCOStatus(co *osconfigv1.ClusterOperator, 
 	conds := defaultStatusConditions()
 	switch newReason {
 	case ReasonUnsupported:
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(OperatorDisabled, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonExpected), "Operational"))
 	case ReasonSyncing:
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
 	case ReasonComplete, ReasonProvisioningCRNotFound:
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
 	case ReasonInvalidConfiguration, ReasonDeployTimedOut, ReasonResourceNotFound:
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, string(ReasonEmpty), ""))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(newReason), progressMsg))
 	case ReasonDeploymentCrashLooping:
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, string(newReason), msg))
-		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, string(newReason), msg))
+		v1helpers.SetStatusCondition(&conds, newStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
 	}
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
