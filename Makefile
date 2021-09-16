@@ -34,7 +34,7 @@ cluster-baremetal-operator: generate lint
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate lint manifests
-	go run ./main.go -images-json $(IMAGES_JSON)
+	DISABLE_WEBHOOK=true go run ./main.go -images-json $(IMAGES_JSON)
 
 # Install CRDs into a cluster
 install: manifests

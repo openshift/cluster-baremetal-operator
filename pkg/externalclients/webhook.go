@@ -86,6 +86,10 @@ func (e *externalResourceClient) WebhookEnable(mgr manager.Manager, namespace st
 }
 
 func (e *externalResourceClient) WebhookDependenciesReady(ctx context.Context) bool {
+	if os.Getenv("DISABLE_WEBHOOK") != "" {
+		return false
+	}
+
 	co, err := e.osClient.ConfigV1().ClusterOperators().Get(ctx, "service-ca", metav1.GetOptions{})
 	if err != nil {
 		return false

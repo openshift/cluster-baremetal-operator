@@ -94,7 +94,10 @@ func main() {
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
 	externalClient := externalclients.NewExternalResourceClient(kubeClient, osClient)
-	enableWebhook := externalClient.WebhookDependenciesReady(context.TODO())
+	enableWebhook := false
+	if os.Getenv("DISABLE_WEBHOOK") != "" {
+		enableWebhook = externalClient.WebhookDependenciesReady(context.TODO())
+	}
 
 	if err = (&controllers.ProvisioningReconciler{
 		Client:          mgr.GetClient(),
