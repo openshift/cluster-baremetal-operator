@@ -86,19 +86,8 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager) error 
 }
 
 func WebhookDependenciesReady(client osclientset.Interface) bool {
-	co, err := client.ConfigV1().ClusterOperators().Get(context.Background(), "service-ca", metav1.GetOptions{})
-	if err != nil {
+	if !serviceCAOperatorReady(client) {
 		return false
-	}
-
-	for condName, condVal := range map[osconfigv1.ClusterStatusConditionType]osconfigv1.ConditionStatus{
-		osconfigv1.OperatorDegraded:    osconfigv1.ConditionFalse,
-		osconfigv1.OperatorProgressing: osconfigv1.ConditionFalse,
-		osconfigv1.OperatorAvailable:   osconfigv1.ConditionTrue} {
-		if !v1helpers.IsStatusConditionPresentAndEqual(co.Status.Conditions, condName, condVal) {
-			klog.Infof("WebhookDependenciesReady: service-ca not ready %s!=%s", condName, condVal)
-			return false
-		}
 	}
 
 	for _, fname := range []string{
@@ -112,5 +101,25 @@ func WebhookDependenciesReady(client osclientset.Interface) bool {
 		}
 	}
 	klog.Info("WebhookDependenciesReady: everything ready for webhooks")
+	return true
+}
+
+func serviceCAOperatorReady(client osclientset.Interface) bool {
+	co, err := client.ConfigV1().ClusterOperators().Get(context.Background(), "service-ca", metav1.GetOptions{})
+	if err != nil {
+		klog.Infof("serviceCAOperatorReady: service-ca retrieval error %v", err)
+		return false
+	}
+
+	for condName, condVal := range map[osconfigv1.ClusterStatusConditionType]osconfigv1.ConditionStatus{
+		osconfigv1.OperatorDegraded:    osconfigv1.ConditionFalse,
+		osconfigv1.OperatorProgressing: osconfigv1.ConditionFalse,
+		osconfigv1.OperatorAvailable:   osconfigv1.ConditionTrue} {
+		if !v1helpers.IsStatusConditionPresentAndEqual(co.Status.Conditions, condName, condVal) {
+			klog.Infof("serviceCAOperatorReady: service-ca not ready %s!=%s", condName, condVal)
+			return false
+		}
+	}
+
 	return true
 }

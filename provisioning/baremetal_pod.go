@@ -60,6 +60,10 @@ const (
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
 	pullSecretEnvVar                 = "IRONIC_AGENT_PULL_SECRET" // #nosec
+	// Default cert directory set by kubebuilder
+	webhookCertMountPath       = "/tmp/k8s-webhook-server/serving-certs"
+	baremetalWebhookCertVolume = "cert"
+	baremetalWebhookSecretName = "baremetal-operator-webhook-server-cert"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -104,6 +108,12 @@ var inspectorTlsMount = corev1.VolumeMount{
 	ReadOnly:  true,
 }
 
+var webhookCertMount = corev1.VolumeMount{
+	Name:      "cert",
+	ReadOnly:  true,
+	MountPath: webhookCertMountPath,
+}
+
 var mariadbPassword = corev1.EnvVar{
 	Name: mariadbPwdEnvVar,
 	ValueFrom: &corev1.EnvVarSource{
@@ -146,6 +156,14 @@ var metal3Volumes = []corev1.Volume{
 					{Key: ironicPasswordKey, Path: ironicPasswordKey},
 					{Key: ironicConfigKey, Path: ironicConfigKey},
 				},
+			},
+		},
+	},
+	{
+		Name: baremetalWebhookCertVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: baremetalWebhookSecretName,
 			},
 		},
 	},
@@ -433,7 +451,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 
 func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 	containers := []corev1.Container{
-		createContainerMetal3BaremetalOperator(info.Images, &info.ProvConfig.Spec),
+		createContainerMetal3BaremetalOperator(info.Images, &info.ProvConfig.Spec, info.BaremetalWebhookEnabled),
 		createContainerMetal3Mariadb(info.Images),
 		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3IronicConductor(info.Images, &info.ProvConfig.Spec, info.SSHKey),
@@ -479,7 +497,8 @@ func buildSSHKeyEnvVar(sshKey string) corev1.EnvVar {
 	return corev1.EnvVar{Name: sshKeyEnvVar, Value: sshKey}
 }
 
-func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1alpha1.ProvisioningSpec, enableWebhook bool) corev1.Container {
+	webhookPort, _ := strconv.ParseInt(baremetalWebhookPort, 10, 32) // #nosec
 	container := corev1.Container{
 		Name:  "metal3-baremetal-operator",
 		Image: images.BaremetalOperator,
@@ -489,6 +508,11 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 				ContainerPort: 60000,
 				HostPort:      60000,
 			},
+			{
+				Name:          "webhook-server",
+				HostPort:      int32(webhookPort),
+				ContainerPort: int32(webhookPort),
+			},
 		},
 		Command:         []string{"/baremetal-operator"},
 		Args:            []string{"--health-addr", ":9446"},
@@ -497,6 +521,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			ironicCredentialsMount,
 			inspectorCredentialsMount,
 			ironicTlsMount,
+			webhookCertMount,
 		},
 		Env: []corev1.EnvVar{
 			getWatchNamespace(config),
@@ -548,6 +573,15 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			},
 		},
 	}
+
+	if !enableWebhook {
+		// Webhook dependencies are not ready, thus we disable webhook explicitly,
+		// since default is enabled.
+		container.Args = append(container.Args, "--webhook-port", "0")
+	} else {
+		container.Args = append(container.Args, "--webhook-port", baremetalWebhookPort)
+	}
+
 	return container
 }
 

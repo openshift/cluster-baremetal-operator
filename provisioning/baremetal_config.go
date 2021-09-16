@@ -27,6 +27,7 @@ import (
 
 var (
 	baremetalHttpPort              = "6180"
+	baremetalWebhookPort           = "9443"
 	baremetalIronicPort            = "6385"
 	baremetalIronicInspectorPort   = "5050"
 	baremetalKernelUrlSubPath      = "images/ironic-python-agent.kernel"

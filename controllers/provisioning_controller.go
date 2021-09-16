@@ -262,6 +262,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureMetal3Deployment,
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
+		provisioning.EnsureBaremetalOperatorWebhook,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -331,16 +332,19 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		return nil, err
 	}
 
+	enableBaremetalWebhook := provisioning.BaremetalWebhookDependenciesReady(r.OSClient)
+
 	return &provisioning.ProvisioningInfo{
-		Client:        r.KubeClient,
-		EventRecorder: events.NewLoggingEventRecorder(ComponentName),
-		ProvConfig:    provConfig,
-		Scheme:        r.Scheme,
-		Namespace:     ComponentNamespace,
-		Images:        images,
-		Proxy:         proxy,
-		NetworkStack:  r.NetworkStack,
-		SSHKey:        sshkey,
+		Client:                  r.KubeClient,
+		EventRecorder:           events.NewLoggingEventRecorder(ComponentName),
+		ProvConfig:              provConfig,
+		Scheme:                  r.Scheme,
+		Namespace:               ComponentNamespace,
+		Images:                  images,
+		Proxy:                   proxy,
+		NetworkStack:            r.NetworkStack,
+		SSHKey:                  sshkey,
+		BaremetalWebhookEnabled: enableBaremetalWebhook,
 	}, nil
 }
 
@@ -385,6 +389,9 @@ func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *p
 func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.ProvisioningInfo) error {
 	if err := provisioning.DeleteAllSecrets(info); err != nil {
 		return errors.Wrap(err, "failed to delete one or more metal3 secrets")
+	}
+	if err := provisioning.DeleteValidatingWebhook(info); err != nil {
+		return errors.Wrap(err, "failed to delete validatingwebhook and service")
 	}
 	if err := provisioning.DeleteMetal3Deployment(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 deployment")
