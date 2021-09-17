@@ -154,6 +154,7 @@ func newStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 }
 
 func (r *ProvisioningReconciler) updateCOStatus(co *osconfigv1.ClusterOperator, newReason StatusReason, msg, progressMsg string) {
+	klog.Infof("updating ClusterOperator, reason: %s, message: %s", newReason, msg)
 	conds := defaultStatusConditions()
 	switch newReason {
 	case ReasonUnsupported:

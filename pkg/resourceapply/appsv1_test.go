@@ -63,6 +63,7 @@ func TestApplyDeployment(t *testing.T) {
 				d := dep2.DeepCopy()
 				d.ResourceVersion = "1"
 				d.Annotations["operator.openshift.io/spec-hash"] = "c20ebbe295b75967078c1dfd91ee78ec779055a31684bc1c567a66c90760a398"
+				d.OwnerReferences = []metav1.OwnerReference{}
 				return d
 			}(),
 			wantUpdated: true,
@@ -77,6 +78,7 @@ func TestApplyDeployment(t *testing.T) {
 				d.APIVersion = "apps/v1"
 				d.ResourceVersion = "1000"
 				d.Annotations["operator.openshift.io/spec-hash"] = "c20ebbe295b75967078c1dfd91ee78ec779055a31684bc1c567a66c90760a398"
+				d.OwnerReferences = []metav1.OwnerReference{}
 				return d
 			}(),
 			wantUpdated: true,
@@ -98,6 +100,7 @@ func TestApplyDeployment(t *testing.T) {
 				d.APIVersion = "apps/v1"
 				d.ResourceVersion = "1000"
 				d.Annotations["operator.openshift.io/spec-hash"] = "b5b911841fc5536440bcf323b0bcb2591510724ffc751f3f03e3bbf9107868f7"
+				d.OwnerReferences = []metav1.OwnerReference{}
 				return d
 			}(),
 			expectedGeneration: 3,
@@ -172,6 +175,7 @@ func TestApplyDaemonSet(t *testing.T) {
 				d := dep2.DeepCopy()
 				d.ResourceVersion = "1"
 				d.Annotations["operator.openshift.io/spec-hash"] = "909f8edcae535fea7ed89dfa14f4791a0f93248191622a6ce9c6e69984da864f"
+				d.OwnerReferences = []metav1.OwnerReference{}
 				return d
 			}(),
 			wantUpdated: true,
@@ -186,6 +190,7 @@ func TestApplyDaemonSet(t *testing.T) {
 				d.APIVersion = "apps/v1"
 				d.ResourceVersion = "1000"
 				d.Annotations["operator.openshift.io/spec-hash"] = "909f8edcae535fea7ed89dfa14f4791a0f93248191622a6ce9c6e69984da864f"
+				d.OwnerReferences = []metav1.OwnerReference{}
 				return d
 			}(),
 			wantUpdated: true,
@@ -207,6 +212,7 @@ func TestApplyDaemonSet(t *testing.T) {
 				d.APIVersion = "apps/v1"
 				d.ResourceVersion = "1000"
 				d.Annotations["operator.openshift.io/spec-hash"] = "2037037c77b73ce0cd27a2710bdfe16f4bca52551aebade71be16ac6e4bea9d5"
+				d.OwnerReferences = []metav1.OwnerReference{}
 				return d
 			}(),
 			expectedGeneration: 3,

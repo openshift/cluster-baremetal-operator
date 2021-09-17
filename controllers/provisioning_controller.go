@@ -18,6 +18,8 @@ package controllers
 import (
 	"context"
 	"os"
+	"reflect"
+	goruntime "runtime"
 	"strings"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -43,6 +46,7 @@ import (
 	"github.com/openshift/cluster-baremetal-operator/pkg/network"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
 
 const (
@@ -179,7 +183,8 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			},
 		}
 		_, err := controllerutil.CreateOrPatch(ctx, r.Client, existingProv, func() error {
-			existingProv = b.DeepCopy()
+			resourcemerge.EnsureObjectMeta(pointer.BoolPtr(false), &existingProv.ObjectMeta, b.ObjectMeta)
+			existingProv.Status = b.DeepCopy().Status
 			return nil
 		})
 
@@ -210,6 +215,11 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return lowestNonZeroResult(result, reconcileRes), err
 }
 
+// friendlyName returns a "friendly" stringified name of the given func.
+func friendlyName(f interface{}) string {
+	return goruntime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
+}
+
 func (r *ProvisioningReconciler) reconcile(ctx context.Context, b *metal3iov1alpha1.Provisioning, co *osconfigv1.ClusterOperator) (ctrl.Result, error) {
 	if err := b.ValidateBaremetalProvisioningConfig(); err != nil {
 		klog.Error(err, "invalid config in Provisioning CR")
@@ -224,8 +234,7 @@ func (r *ProvisioningReconciler) reconcile(ctx context.Context, b *metal3iov1alp
 		return ctrl.Result{}, err
 	}
 
-	specChanged := b.Generation != b.Status.ObservedGeneration
-	if specChanged {
+	if r.needsProvisioning(ctx, b) {
 		r.updateCOStatus(co, ReasonSyncing, "", "Applying metal3 resources")
 	}
 
@@ -237,7 +246,10 @@ func (r *ProvisioningReconciler) reconcile(ctx context.Context, b *metal3iov1alp
 	} {
 		updated, err := ensureResource(ctx, info)
 		if err != nil || updated {
-			return ctrl.Result{}, err
+			if updated {
+				klog.Info("generation updated by ", friendlyName(ensureResource))
+			}
+			return ctrl.Result{Requeue: true}, err
 		}
 	}
 	b.Status.ObservedGeneration = b.Generation
@@ -261,11 +273,31 @@ func (r *ProvisioningReconciler) reconcile(ctx context.Context, b *metal3iov1alp
 	if daemonSetState == provisioning.DaemonSetReplicaFailure {
 		r.updateCOStatus(co, ReasonDeployTimedOut, "metal3 image cache rollout taking too long", "")
 	}
+
 	if deploymentState == appsv1.DeploymentAvailable && daemonSetState == provisioning.DaemonSetAvailable {
 		r.updateCOStatus(co, ReasonComplete, "metal3 pod and image cache are running", "")
+	} else {
+		klog.Infof("deployment(%s) and daemonset(%s) not totally up yet ", deploymentState, daemonSetState)
+		return ctrl.Result{RequeueAfter: time.Minute}, nil // if it is not totally up, check later to set the CO Status.
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ProvisioningReconciler) needsProvisioning(ctx context.Context, b *metal3iov1alpha1.Provisioning) bool {
+	if b.Generation != b.Status.ObservedGeneration {
+		return true
+	}
+	deploymentState, err := provisioning.GetDeploymentState(ctx, r.Client, ComponentNamespace, b)
+	if err != nil || deploymentState == appsv1.DeploymentReplicaFailure {
+		return true
+	}
+	daemonSetState, err := provisioning.GetDaemonSetState(ctx, r.Client, ComponentNamespace, b)
+	if err != nil || daemonSetState == provisioning.DaemonSetReplicaFailure {
+		return true
+	}
+
+	return false
 }
 
 func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) (*provisioning.ProvisioningInfo, error) {
@@ -402,7 +434,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// is not synced and we can't use it.
 	oneInitialEvent := make(chan event.GenericEvent)
 	go func() {
-		time.Sleep(time.Second)
 		oneInitialEvent <- event.GenericEvent{
 			Object: &metal3iov1alpha1.Provisioning{
 				ObjectMeta: metav1.ObjectMeta{

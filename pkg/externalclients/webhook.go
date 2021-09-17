@@ -77,7 +77,7 @@ func (e *externalResourceClient) WebhookEnable(mgr manager.Manager, namespace st
 	// we might not have a baremetalCR (when disabled), so we have no where to store
 	// the expectedGeneration, so just fake it.
 	expectedGeneration := int64(0)
-	_, _, err := resourceapply.ApplyValidatingWebhookConfiguration(e.kubeClient.AdmissionregistrationV1(), eventRecorder, instance, expectedGeneration)
+	_, _, err := resourceapply.ApplyValidatingWebhookConfiguration(context.Background(), e.kubeClient.AdmissionregistrationV1(), eventRecorder, instance, expectedGeneration)
 	if err != nil {
 		return err
 	}

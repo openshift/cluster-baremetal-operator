@@ -59,6 +59,7 @@ func newFakeMetal3StateService() *corev1.Service {
 		},
 	}
 }
+
 func TestApplyService(t *testing.T) {
 	ctx := context.TODO()
 	expect := &corev1.Service{
@@ -68,6 +69,7 @@ func TestApplyService(t *testing.T) {
 			ResourceVersion: "1",
 			Labels:          map[string]string{},
 			Annotations:     map[string]string{},
+			OwnerReferences: []metav1.OwnerReference{},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -172,6 +174,7 @@ func TestApplySecret(t *testing.T) {
 	expect.Type = corev1.SecretTypeOpaque
 	expect.Labels = map[string]string{}
 	expect.Annotations = map[string]string{}
+	expect.OwnerReferences = []metav1.OwnerReference{}
 
 	existingDifferent := expect.DeepCopy()
 	existingDifferent.Data["test"] = []byte("yes")
@@ -216,6 +219,7 @@ func TestApplySecret(t *testing.T) {
 				exp.Kind = "Secret"
 				exp.Labels = nil
 				exp.Annotations = nil
+				exp.OwnerReferences = nil
 				return exp
 			}(),
 			wantUpdated: false,
@@ -231,6 +235,7 @@ func TestApplySecret(t *testing.T) {
 				exp.Type = ""
 				exp.Labels = nil
 				exp.Annotations = nil
+				exp.OwnerReferences = nil
 				return exp
 			}(),
 			wantUpdated: false,
