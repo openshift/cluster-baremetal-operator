@@ -18,6 +18,7 @@ package provisioning
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 
 	"k8s.io/utils/pointer"
@@ -138,7 +139,9 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 	case provisioningInterface:
 		return &baremetalConfig.ProvisioningInterface
 	case provisioningMacAddresses:
-		return pointer.StringPtr(strings.Join(baremetalConfig.ProvisioningMacAddresses, ","))
+		macs := baremetalConfig.ProvisioningMacAddresses
+		sort.Strings(macs)
+		return pointer.StringPtr(strings.Join(macs, ","))
 	case deployKernelUrl:
 		return getDeployKernelUrl()
 	case deployRamdiskUrl:
