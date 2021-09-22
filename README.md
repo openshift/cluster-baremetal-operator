@@ -51,28 +51,99 @@ The configuration of the provisioning resource determines the options used when 
 
 The configurable portions of the Provisioning CRD are:
 
-- ProvisioningIP: This is the IP address assigned to the provisioningInterface of master node that is running the metal3 pod.
-This IP address should be within the provisioning subnet, and outside of the DHCP range.
+- ProvisioningInterface is the name of the network interface
+on a baremetal server to the provisioning network. It can
+have values like eth1 or ens3.
 
-- ProvisioningInterface: This is the name of the network interface on the baremetal masters which will be used to provision new nodes.
-Note that all masters must have the same network interface name (if one is provided).
+- ProvisioningMacAddresses is a list of mac addresses of network interfaces
+on a baremetal server to the provisioning network.
+Use this instead of ProvisioningInterface to allow interfaces of different
+names. If not provided it will be populated by the BMH.Spec.BootMacAddress
+of each master.
 
-- ProvisioningNetwork: This specifies the way in which you want to have your provisioning network configured.
+- ProvisioningIP is the IP address assigned to the
+provisioningInterface of the baremetal server. This IP
+address should be within the provisioning subnet, and
+outside of the DHCP range.
 
-    - Managed: DHCP is "managed" by metal3.  This will cause CBO to deploy the metal3 pod with a DHCP server configured.
-	All settings for network configuration below will be required for this to work.
+- ProvisioningNetworkCIDR is the network on which the
+baremetal nodes are provisioned. The provisioningIP and the
+IPs in the dhcpRange all come from within this network. When using IPv6
+and in a network managed by the Baremetal IPI solution this cannot be a
+network larger than a /64.
 
-    - Unmanaged: DHCP is not managed by metal3.  The administrator of the installation is responsible for configuring DHCP appropriately.
+- ProvisioningDHCPExternal indicates whether the DHCP server
+for IP addresses in the provisioning DHCP range is present
+within the metal3 cluster or external to it. This field is being
+deprecated in favor of provisioningNetwork.
 
-    - Disabled: Provisioning is disabled.  This is generally the result of not using the installer for installation.
-	Note you can still use metal3 to do power management.
+- ProvisioningDHCPRange needs to be interpreted along with
+ProvisioningDHCPExternal. If the value of
+provisioningDHCPExternal is set to False, then
+ProvisioningDHCPRange represents the range of IP addresses
+that the DHCP server running within the metal3 cluster can
+use while provisioning baremetal servers. If the value of
+ProvisioningDHCPExternal is set to True, then the value of
+ProvisioningDHCPRange will be ignored. When the value of
+ProvisioningDHCPExternal is set to False, indicating an
+internal DHCP server and the value of ProvisioningDHCPRange
+is not set, then the DHCP range is taken to be the default
+range which goes from .10 to .100 of the
+ProvisioningNetworkCIDR. This is the only value in all of
+the Provisioning configuration that can be changed after
+the installer has created the CR. This value needs to be
+two comma sererated IP addresses within the
+ProvisioningNetworkCIDR where the 1st address represents
+the start of the range and the 2nd address represents the
+last usable address in the  range.
 
-- ProvisioningNetworkCIDR: This defines the address space used for the provisioning network.
+- ProvisioningOSDownloadURL is the location from which the OS
+Image used to boot baremetal host machines can be downloaded
+by the metal3 cluster.
 
-- ProvisioningOSDownloadURL: This is the location from which the OS Image used to boot baremetal host machines can be downloaded by the metal3 pod.
+- ProvisioningNetwork provides a way to indicate the state of the
+underlying network configuration for the provisioning network.
+This field can have one of the following values -
+`Managed`- when the provisioning network is completely managed by
+the Baremetal IPI solution.
+`Unmanaged`- when the provsioning network is present and used but
+the user is responsible for managing DHCP. Virtual media provisioning
+is recommended but PXE is still available if required.
+`Disabled`- when the provisioning network is fully disabled. User can
+bring up the baremetal cluster using virtual media or assisted
+installation. If using metal3 for power management, BMCs must be
+accessible from the machine networks. User should provide two IPs on
+the external network that would be used for provisioning services.
 
-- WatchAllNamespaces: This provides a way to explicitly allow CBO to instruct the Baremetal Operator (BMO)  watch for BareMetal Host (BMH) objects in all namespaces
-and not just the openshift-machine-api namespace. The default is 'false' and this must be set to 'true' manually after installation.
+- WatchAllNamespaces provides a way to explicitly allow use of this
+Provisioning configuration across all Namespaces. It is an
+optional configuration which defaults to false and in that state
+will be used to provision baremetal hosts in only the
+openshift-machine-api namespace. When set to true, this provisioning
+configuration would be used for baremetal hosts across all namespaces.
+
+- BootIsoSource provides a way to set the location where the iso image
+to boot the nodes will be served from.
+By default the boot iso image is cached locally and served from
+the Provisioning service (Ironic) nodes using an auxiliary httpd server.
+If the boot iso image is already served by an httpd server, setting
+this option to http allows to directly provide the image from there;
+in this case, the network (either internal or external) where the
+httpd server that hosts the boot iso is needs to be accessible
+by the metal3 pod.
+
+- VirtualMediaViaExternalNetwork flag when set to "true" allows for workers
+to boot via Virtual Media and contact metal3 over the External Network.
+When the flag is set to "false" (which is the default), virtual media
+deployments can still happen based on the configuration specified in the
+ProvisioningNetwork i.e when in Disabled mode, over the External Network
+and over Provisioning Network when in Managed mode.
+PXE deployments will always use the Provisioning Network and will not be
+affected by this flag.
+
+- PreprovisioningOSDownloadURLs is set of CoreOS Live URLs that would be necessary to provision a worker
+either using virtual media or PXE.
+
 
 ## What are its outputs?
 

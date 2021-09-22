@@ -13,6 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Generate the README.md input section.
+//go:generate go run ../../hack/readme_inputs ../../README.md ./
+
 package v1alpha1
 
 import (
