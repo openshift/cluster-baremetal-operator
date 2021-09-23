@@ -339,6 +339,7 @@ func createInitContainerConfigureCoreOSIPA(info *ProvisioningInfo) corev1.Contai
 			buildSSHKeyEnvVar(info.SSHKey),
 			pullSecret,
 			buildEnvVar(provisioningMacAddresses, config),
+			{Name: "IRONIC_AGENT_IMAGE", Value: info.Images.IronicAgent},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
