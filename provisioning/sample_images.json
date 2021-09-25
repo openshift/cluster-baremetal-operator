@@ -4,5 +4,6 @@
   "baremetalIronic": "registry.ci.openshift.org/openshift:ironic",
   "baremetalIpaDownloader": "registry.ci.openshift.org/openshift:ironic-ipa-downloader",
   "baremetalMachineOsDownloader": "registry.ci.openshift.org/openshift:ironic-machine-os-downloader",
-  "baremetalStaticIpManager": "registry.ci.openshift.org/openshift:ironic-static-ip-manager"
+  "baremetalStaticIpManager": "registry.ci.openshift.org/openshift:ironic-static-ip-manager",
+  "baremetalIronicAgent": "registry.ci.openshift.org/openshift:ironic-agent"
 }
