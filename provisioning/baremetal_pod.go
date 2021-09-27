@@ -61,9 +61,9 @@ const (
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
 	pullSecretEnvVar                 = "IRONIC_AGENT_PULL_SECRET" // #nosec
 	// Default cert directory set by kubebuilder
-	webhookCertMountPath       = "/tmp/k8s-webhook-server/serving-certs"
-	baremetalWebhookCertVolume = "cert"
-	baremetalWebhookSecretName = "baremetal-operator-webhook-server-cert"
+	baremetalWebhookCertMountPath = "/tmp/k8s-webhook-server/serving-certs"
+	baremetalWebhookCertVolume    = "cert"
+	baremetalWebhookSecretName    = "baremetal-operator-webhook-server-cert"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -108,10 +108,10 @@ var inspectorTlsMount = corev1.VolumeMount{
 	ReadOnly:  true,
 }
 
-var webhookCertMount = corev1.VolumeMount{
-	Name:      "cert",
+var baremetalWebhookCertMount = corev1.VolumeMount{
+	Name:      baremetalWebhookCertVolume,
 	ReadOnly:  true,
-	MountPath: webhookCertMountPath,
+	MountPath: baremetalWebhookCertMountPath,
 }
 
 var mariadbPassword = corev1.EnvVar{
@@ -521,7 +521,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			ironicCredentialsMount,
 			inspectorCredentialsMount,
 			ironicTlsMount,
-			webhookCertMount,
+			baremetalWebhookCertMount,
 		},
 		Env: []corev1.EnvVar{
 			getWatchNamespace(config),

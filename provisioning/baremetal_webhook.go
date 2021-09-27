@@ -5,22 +5,16 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-
-	osclientset "github.com/openshift/client-go/config/clientset/versioned"
-
-	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	admissionregistration "k8s.io/api/admissionregistration/v1"
-	"k8s.io/utils/pointer"
-
-	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
-
-	"k8s.io/apimachinery/pkg/util/intstr"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	osclientset "github.com/openshift/client-go/config/clientset/versioned"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
 
 const (
