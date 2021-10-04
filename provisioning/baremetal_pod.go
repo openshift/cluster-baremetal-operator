@@ -64,6 +64,8 @@ const (
 	baremetalWebhookCertMountPath = "/tmp/k8s-webhook-server/serving-certs"
 	baremetalWebhookCertVolume    = "cert"
 	baremetalWebhookSecretName    = "baremetal-operator-webhook-server-cert"
+	baremetalWebhookLabelName     = "baremetal.openshift.io/metal3-validating-webhook"
+	baremetalWebhookServiceLabel  = "metal3-validating-webhook"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -993,13 +995,15 @@ func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar) []corev1.EnvVa
 func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
 	selector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
-			"k8s-app":    metal3AppName,
-			cboLabelName: stateService,
+			"k8s-app":                 metal3AppName,
+			cboLabelName:              stateService,
+			baremetalWebhookLabelName: baremetalWebhookServiceLabel,
 		},
 	}
 	podSpecLabels := map[string]string{
-		"k8s-app":    metal3AppName,
-		cboLabelName: stateService,
+		"k8s-app":                 metal3AppName,
+		cboLabelName:              stateService,
+		baremetalWebhookLabelName: baremetalWebhookServiceLabel,
 	}
 	template := newMetal3PodTemplateSpec(info, &podSpecLabels)
 	return &appsv1.Deployment{
@@ -1010,8 +1014,9 @@ func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
 				cboOwnedAnnotation: "",
 			},
 			Labels: map[string]string{
-				"k8s-app":    metal3AppName,
-				cboLabelName: stateService,
+				"k8s-app":                 metal3AppName,
+				cboLabelName:              stateService,
+				baremetalWebhookLabelName: baremetalWebhookServiceLabel,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{

@@ -21,6 +21,7 @@ const (
 	validatingWebhookService           = "baremetal-operator-webhook-service"
 	validatingWebhookConfigurationName = "baremetal-operator-validating-webhook-configuration"
 	validatingWebhookServiceHttpsPort  = 443
+	validatingWebhookHttpPortName      = "http"
 )
 
 // EnsureBaremetalOperatorWebhook ensures ValidatingWebhook resources are ready to serve.
@@ -91,19 +92,19 @@ func newBaremetalOperatorWebhookService(targetNamespace string) *corev1.Service 
 				"service.beta.openshift.io/serving-cert-secret-name":          baremetalWebhookSecretName,
 			},
 			Labels: map[string]string{
-				"k8s-app":    metal3AppName,
-				cboLabelName: stateService,
+				"k8s-app":                 metal3AppName,
+				baremetalWebhookLabelName: baremetalWebhookServiceLabel,
 			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
 			Selector: map[string]string{
-				"k8s-app":    metal3AppName,
-				cboLabelName: stateService,
+				"k8s-app":                 metal3AppName,
+				baremetalWebhookLabelName: baremetalWebhookServiceLabel,
 			},
 			Ports: []corev1.ServicePort{
 				{
-					Name:       httpPortName,
+					Name:       validatingWebhookHttpPortName,
 					Port:       validatingWebhookServiceHttpsPort,
 					TargetPort: intstr.FromInt(int(webhookPort)),
 				},
