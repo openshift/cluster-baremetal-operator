@@ -26,7 +26,7 @@ func TestValidatingWebhookService(t *testing.T) {
     service.beta.openshift.io/serving-cert-secret-name: baremetal-operator-webhook-server-cert
   creationTimestamp: null
   labels:
-    baremetal.openshift.io/cluster-baremetal-operator: metal3-state
+    baremetal.openshift.io/metal3-validating-webhook: metal3-validating-webhook
     k8s-app: metal3
   name: baremetal-operator-webhook-service
   namespace: test-namespace
@@ -36,7 +36,7 @@ spec:
     port: 443
     targetPort: 9443
   selector:
-    baremetal.openshift.io/cluster-baremetal-operator: metal3-state
+    baremetal.openshift.io/metal3-validating-webhook: metal3-validating-webhook
     k8s-app: metal3
   type: ClusterIP
 status:
