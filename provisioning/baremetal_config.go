@@ -27,6 +27,7 @@ import (
 
 var (
 	baremetalHttpPort              = "6180"
+	baremetalVmediaHttpsPort       = "6183"
 	baremetalWebhookPort           = "9447"
 	baremetalIronicPort            = "6385"
 	baremetalIronicInspectorPort   = "5050"
@@ -41,6 +42,7 @@ var (
 	ironicEndpoint                 = "IRONIC_ENDPOINT"
 	ironicInspectorEndpoint        = "IRONIC_INSPECTOR_ENDPOINT"
 	httpPort                       = "HTTP_PORT"
+	vmediaHttpsPort                = "VMEDIA_TLS_PORT"
 	dhcpRange                      = "DHCP_RANGE"
 	machineImageUrl                = "RHCOS_IMAGE_URL"
 	ipOptions                      = "IP_OPTIONS"
@@ -150,6 +152,8 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 		return getIronicInspectorEndpoint()
 	case httpPort:
 		return pointer.StringPtr(baremetalHttpPort)
+	case vmediaHttpsPort:
+		return pointer.StringPtr(baremetalVmediaHttpsPort)
 	case dhcpRange:
 		return getDHCPRange(baremetalConfig)
 	case machineImageUrl:

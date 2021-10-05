@@ -144,6 +144,9 @@ affected by this flag.
 - PreprovisioningOSDownloadURLs is set of CoreOS Live URLs that would be necessary to provision a worker
 either using virtual media or PXE.
 
+- DisableVirtualMediaTLS turns off TLS on the virtual media server,
+which may be required for hardware that cannot accept HTTPS links.
+
 
 ## What are its outputs?
 

@@ -234,6 +234,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				{Name: "IRONIC_RAMDISK_SSH_KEY"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
 			},
 		},
 		"metal3-ironic-conductor": {
@@ -249,6 +250,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				envWithSecret("HTTP_BASIC_HTPASSWD", "metal3-ironic-rpc-password", "htpasswd"),
 				{Name: "IRONIC_EXTERNAL_IP"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
 			},
 		},
 		"metal3-ironic-api": {
@@ -262,6 +264,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				envWithSecret("HTTP_BASIC_HTPASSWD", "metal3-ironic-password", "htpasswd"),
 				{Name: "IRONIC_EXTERNAL_IP"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
 			},
 		},
 		"metal3-ramdisk-logs": {

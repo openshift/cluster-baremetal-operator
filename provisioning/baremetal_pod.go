@@ -49,6 +49,7 @@ const (
 	inspectorCredentialsVolume       = "metal3-inspector-basic-auth"
 	ironicTlsVolume                  = "metal3-ironic-tls"
 	inspectorTlsVolume               = "metal3-inspector-tls"
+	vmediaTlsVolume                  = "metal3-vmedia-tls"
 	htpasswdEnvVar                   = "HTTP_BASIC_HTPASSWD" // #nosec
 	mariadbPwdEnvVar                 = "MARIADB_PASSWORD"    // #nosec
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
@@ -107,6 +108,12 @@ var ironicTlsMount = corev1.VolumeMount{
 var inspectorTlsMount = corev1.VolumeMount{
 	Name:      inspectorTlsVolume,
 	MountPath: metal3TlsRootDir + "/ironic-inspector",
+	ReadOnly:  true,
+}
+
+var vmediaTlsMount = corev1.VolumeMount{
+	Name:      vmediaTlsVolume,
+	MountPath: metal3TlsRootDir + "/vmedia",
 	ReadOnly:  true,
 }
 
@@ -217,6 +224,14 @@ var metal3Volumes = []corev1.Volume{
 	},
 	{
 		Name: inspectorTlsVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: tlsSecretName,
+			},
+		},
+	},
+	{
+		Name: vmediaTlsVolume,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: tlsSecretName,
@@ -648,7 +663,32 @@ func createContainerMetal3Mariadb(images *Images) corev1.Container {
 }
 
 func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
-	port, _ := strconv.Atoi(baremetalHttpPort) // #nosec
+	port, _ := strconv.Atoi(baremetalHttpPort)             // #nosec
+	httpsPort, _ := strconv.Atoi(baremetalVmediaHttpsPort) // #nosec
+
+	volumes := []corev1.VolumeMount{
+		sharedVolumeMount,
+		imageVolumeMount,
+		ironicTlsMount,
+		inspectorTlsMount,
+	}
+	ports := []corev1.ContainerPort{
+		{
+			Name:          httpPortName,
+			ContainerPort: int32(port),
+			HostPort:      int32(port),
+		},
+	}
+
+	if !config.DisableVirtualMediaTLS {
+		volumes = append(volumes, vmediaTlsMount)
+		ports = append(ports, corev1.ContainerPort{
+			Name:          vmediaHttpsPortName,
+			ContainerPort: int32(httpsPort),
+			HostPort:      int32(httpsPort),
+		})
+	}
+
 	container := corev1.Container{
 		Name:            "metal3-httpd",
 		Image:           images.Ironic,
@@ -656,27 +696,17 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command: []string{"/bin/runhttpd"},
-		VolumeMounts: []corev1.VolumeMount{
-			sharedVolumeMount,
-			imageVolumeMount,
-			ironicTlsMount,
-			inspectorTlsMount,
-		},
+		Command:      []string{"/bin/runhttpd"},
+		VolumeMounts: volumes,
 		Env: []corev1.EnvVar{
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			buildSSHKeyEnvVar(sshKey),
 			buildEnvVar(provisioningMacAddresses, config),
+			buildEnvVar(vmediaHttpsPort, config),
 		},
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          httpPortName,
-				ContainerPort: int32(port),
-				HostPort:      int32(port),
-			},
-		},
+		Ports: ports,
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("5m"),
@@ -689,6 +719,18 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 }
 
 func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
+	volumes := []corev1.VolumeMount{
+		sharedVolumeMount,
+		imageVolumeMount,
+		inspectorCredentialsMount,
+		rpcCredentialsMount,
+		ironicTlsMount,
+		inspectorTlsMount,
+	}
+	if !config.DisableVirtualMediaTLS {
+		volumes = append(volumes, vmediaTlsMount)
+	}
+
 	container := corev1.Container{
 		Name:            "metal3-ironic-conductor",
 		Image:           images.Ironic,
@@ -696,15 +738,8 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command: []string{"/bin/runironic-conductor"},
-		VolumeMounts: []corev1.VolumeMount{
-			sharedVolumeMount,
-			imageVolumeMount,
-			inspectorCredentialsMount,
-			rpcCredentialsMount,
-			ironicTlsMount,
-			inspectorTlsMount,
-		},
+		Command:      []string{"/bin/runironic-conductor"},
+		VolumeMounts: volumes,
 		Env: []corev1.EnvVar{
 			mariadbPassword,
 			{
@@ -722,6 +757,7 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			setIronicHtpasswdHash(htpasswdEnvVar, ironicrpcSecretName),
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
+			buildEnvVar(vmediaHttpsPort, config),
 		},
 		Ports: []corev1.ContainerPort{
 			{
@@ -742,6 +778,15 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 }
 
 func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	volumes := []corev1.VolumeMount{
+		sharedVolumeMount,
+		rpcCredentialsMount,
+		ironicTlsMount,
+	}
+	if !config.DisableVirtualMediaTLS {
+		volumes = append(volumes, vmediaTlsMount)
+	}
+
 	container := corev1.Container{
 		Name:            "metal3-ironic-api",
 		Image:           images.Ironic,
@@ -749,12 +794,8 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command: []string{"/bin/runironic-api"},
-		VolumeMounts: []corev1.VolumeMount{
-			sharedVolumeMount,
-			rpcCredentialsMount,
-			ironicTlsMount,
-		},
+		Command:      []string{"/bin/runironic-api"},
+		VolumeMounts: volumes,
 		Env: []corev1.EnvVar{
 			mariadbPassword,
 			{
@@ -767,6 +808,7 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 			setIronicHtpasswdHash(htpasswdEnvVar, ironicSecretName),
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
+			buildEnvVar(vmediaHttpsPort, config),
 		},
 		Ports: []corev1.ContainerPort{
 			{

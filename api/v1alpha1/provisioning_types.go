@@ -173,6 +173,10 @@ type ProvisioningSpec struct {
 	// PreprovisioningOSDownloadURLs is set of CoreOS Live URLs that would be necessary to provision a worker
 	// either using virtual media or PXE.
 	PreProvisioningOSDownloadURLs PreProvisioningOSDownloadURLs `json:"preProvisioningOSDownloadURLs,omitempty"`
+
+	// DisableVirtualMediaTLS turns off TLS on the virtual media server,
+	// which may be required for hardware that cannot accept HTTPS links.
+	DisableVirtualMediaTLS bool `json:"disableVirtualMediaTLS,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning
