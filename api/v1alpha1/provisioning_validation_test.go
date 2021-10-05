@@ -82,6 +82,14 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 			expectedMsg:   "is not in the range defined by the provisioningNetworkCIDR",
 		},
 		{
+			// ProvisioningIP missing
+			name:          "MissingProvisioningIP",
+			spec:          managedProvisioning().ProvisioningIP("").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "could not parse provisioningIP",
+		},
+		{
 			// DHCPRange is invalid
 			name:          "InvalidManagedDHCPRangeIPIncorrect",
 			spec:          managedProvisioning().ProvisioningDHCPRange("172.30.20.11, 172.30.20.xxx").build(),
@@ -198,6 +206,14 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 			expectedMode:  ProvisioningNetworkUnmanaged,
 			expectedMsg:   "provisioningIP",
 		},
+		{
+			// Missing provisioning IP.
+			name:          "MissingProvisioningIP",
+			spec:          unmanagedProvisioning().ProvisioningIP("").ProvisioningDHCPExternal(true).build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkUnmanaged,
+			expectedMsg:   "provisioningIP",
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -279,6 +295,13 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			expectedError: true,
 			expectedMode:  ProvisioningNetworkDisabled,
 			expectedMsg:   "provisioningNetworkCIDR",
+		},
+		{
+			// No Provisioning IP or Network
+			name:          "NoProvisioningIPNetwork",
+			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
+			expectedError: false,
+			expectedMode:  ProvisioningNetworkDisabled,
 		},
 	}
 	for _, tc := range tCases {
