@@ -16,6 +16,10 @@ limitations under the License.
 package provisioning
 
 import (
+	"context"
+	"fmt"
+	"strings"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -30,28 +34,57 @@ const (
 	ironicAgentImage = "IRONIC_AGENT_IMAGE"
 )
 
-func setIronicBaseUrl(name string, config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
+func imageRegistriesVolume() corev1.Volume {
+	// TODO: Should this be corev1.HostPathFile?
+	volType := corev1.HostPathFileOrCreate
+
+	return corev1.Volume{
+		Name: imageCustomizationVolume,
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: containerRegistriesConfPath,
+				Type: &volType,
+			},
+		},
+	}
+}
+
+func hostForIP(ipAddr string) string {
+	if strings.Contains(ipAddr, ":") {
+		return fmt.Sprintf("[%s]", ipAddr)
+	}
+	return ipAddr
+}
+
+func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
+	config := info.ProvConfig.Spec
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		return corev1.EnvVar{
 			Name:  name,
-			Value: "http://" + config.ProvisioningIP,
+			Value: "https://" + hostForIP(config.ProvisioningIP),
 		}
 	} else {
+		hostIP, err := getPodHostIP(info.Client.CoreV1(), info.Namespace)
+		if err == nil && hostIP != "" {
+			return corev1.EnvVar{
+				Name:  name,
+				Value: "https://" + hostForIP(hostIP),
+			}
+		}
 		return corev1.EnvVar{
 			Name: name,
-			//Value: "http://" + $(externalIpEnvVar),
 		}
 	}
 }
 
-func createImageCustomizationContainer(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) corev1.Container {
 	container := corev1.Container{
 		Name:            "image-customization-controller",
 		Image:           images.ImageCustomizationController,
 		Command:         []string{"/image-customization-controller"},
 		ImagePullPolicy: "IfNotPresent",
 		Env: []corev1.EnvVar{
-			setIronicBaseUrl(ironicBaseUrl, config),
+			setIronicBaseUrl(ironicBaseUrl, info),
 			{
 				Name:  ironicAgentImage,
 				Value: images.IronicAgent,
@@ -71,7 +104,7 @@ func createImageCustomizationContainer(images *Images, config *metal3iov1alpha1.
 
 func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) *corev1.PodTemplateSpec {
 	containers := []corev1.Container{
-		createImageCustomizationContainer(info.Images, &info.ProvConfig.Spec),
+		createImageCustomizationContainer(info.Images, info),
 	}
 
 	tolerations := []corev1.Toleration{
