@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -1124,4 +1125,19 @@ func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace s
 
 func DeleteMetal3Deployment(info *ProvisioningInfo) error {
 	return client.IgnoreNotFound(info.Client.AppsV1().Deployments(info.Namespace).Delete(context.Background(), baremetalDeploymentName, metav1.DeleteOptions{}))
+}
+
+func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (string, error) {
+	listOptions := metav1.ListOptions{
+		LabelSelector: metal3AppName,
+		FieldSelector: "status.hostIP",
+	}
+
+	podList, err := podClient.Pods(targetNamespace).List(context.Background(), listOptions)
+	if err == nil && len(podList.Items) > 0 {
+		// We expect only one pod with the above LabelSelector
+		hostIP := podList.Items[0].Status.HostIP
+		return hostIP, err
+	}
+	return "", err
 }

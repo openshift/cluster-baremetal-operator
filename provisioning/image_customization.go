@@ -30,28 +30,35 @@ const (
 	ironicAgentImage = "IRONIC_AGENT_IMAGE"
 )
 
-func setIronicBaseUrl(name string, config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
+func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
+	config := info.ProvConfig.Spec
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		return corev1.EnvVar{
 			Name:  name,
 			Value: "http://" + config.ProvisioningIP,
 		}
 	} else {
+		hostIP, err := getPodHostIP(info.Client.CoreV1(), info.Namespace)
+		if err == nil && hostIP != "" {
+			return corev1.EnvVar{
+				Name:  name,
+				Value: "http://" + hostIP,
+			}
+		}
 		return corev1.EnvVar{
 			Name: name,
-			//Value: "http://" + $(externalIpEnvVar),
 		}
 	}
 }
 
-func createImageCustomizationContainer(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) corev1.Container {
 	container := corev1.Container{
 		Name:            "image-customization-controller",
 		Image:           images.ImageCustomizationController,
 		Command:         []string{"/image-customization-controller"},
 		ImagePullPolicy: "IfNotPresent",
 		Env: []corev1.EnvVar{
-			setIronicBaseUrl(ironicBaseUrl, config),
+			setIronicBaseUrl(ironicBaseUrl, info),
 			{
 				Name:  ironicAgentImage,
 				Value: images.IronicAgent,
@@ -71,7 +78,7 @@ func createImageCustomizationContainer(images *Images, config *metal3iov1alpha1.
 
 func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) *corev1.PodTemplateSpec {
 	containers := []corev1.Container{
-		createImageCustomizationContainer(info.Images, &info.ProvConfig.Spec),
+		createImageCustomizationContainer(info.Images, info),
 	}
 
 	tolerations := []corev1.Toleration{
