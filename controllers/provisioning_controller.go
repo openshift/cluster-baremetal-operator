@@ -91,6 +91,9 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
+// +kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings/status,verbs=update
+// +kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;update;patch;create
 
 func (r *ProvisioningReconciler) isEnabled() (bool, error) {
