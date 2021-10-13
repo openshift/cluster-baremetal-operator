@@ -164,6 +164,32 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
+  - firmwareschemas
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwaresettings
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwaresettings/status
+  verbs:
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
   - provisionings
   - provisionings/finalizers
   verbs:
