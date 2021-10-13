@@ -203,10 +203,6 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Read container images from Config Map
 	var containerImages provisioning.Images
 	if err := provisioning.GetContainerImages(&containerImages, r.ImagesFilename); err != nil {
-		// Images config map is not valid
-		// Provisioning configuration is not valid.
-		// Requeue request.
-		klog.ErrorS(err, "invalid contents in images Config Map")
 		co_err := r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "invalid contents in images Config Map")
 		if co_err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, co_err)
@@ -254,19 +250,15 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	if !r.WebHookEnabled {
-		// Check if provisioning configuration is valid
-		if err := baremetalConfig.ValidateBaremetalProvisioningConfig(); err != nil {
-			// Provisioning configuration is not valid.
-			// Requeue request.
-			klog.Error(err, "invalid config in Provisioning CR")
-			err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
-			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
-			}
-			// Temporarily not requeuing request
-			return ctrl.Result{}, nil
+	// Always re-validate the provisioning configuration is valid.
+	// This can occur if the CR was created prior to cbo getting upgraded.
+	if err := baremetalConfig.ValidateBaremetalProvisioningConfig(r.EnabledFeatures); err != nil {
+		err = r.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %v", clusterOperatorName, err)
 		}
+		// Temporarily not requeuing request, as the user will have to fix the CR.
+		return ctrl.Result{}, nil
 	}
 
 	for _, ensureResource := range []ensureFunc{
