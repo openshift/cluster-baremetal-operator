@@ -111,6 +111,8 @@ rules:
   resources:
   - firmwareschemas
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -121,6 +123,8 @@ rules:
   resources:
   - hostfirmwaresettings
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch
