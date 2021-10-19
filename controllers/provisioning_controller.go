@@ -158,11 +158,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		result.RequeueAfter = 5 * time.Minute
 	}
 
-	enabled, err := IsEnabled(ctx, r.OSClient)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "could not determine whether to run")
-	}
-	if !enabled {
+	if !IsEnabled(r.EnabledFeatures) {
 		// set ClusterOperator status to disabled=true, available=true
 		// We're disabled; don't requeue
 		return ctrl.Result{}, errors.Wrapf(
@@ -458,10 +454,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	klog.InfoS("Network stack calculation", "APIServerInternalHost", apiInt, "NetworkStack", r.NetworkStack)
 
 	// Check the Platform Type to determine the state of the CO
-	enabled, err := IsEnabled(ctx, r.OSClient)
-	if err != nil {
-		return errors.Wrap(err, "could not determine whether to run")
-	}
+	enabled := IsEnabled(r.EnabledFeatures)
 	if !enabled {
 		//Set ClusterOperator status to disabled=true, available=true
 		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")

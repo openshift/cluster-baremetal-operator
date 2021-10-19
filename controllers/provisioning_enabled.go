@@ -11,24 +11,17 @@ import (
 	"github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
-func IsEnabled(ctx context.Context, osClient osclientset.Interface) (bool, error) {
-	infra, err := osClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
-	if err != nil {
-		return false, errors.Wrap(err, "unable to determine Platform")
+// IsEnabled returns true if there is at least one feature enabled.
+func IsEnabled(enabledFeatures v1alpha1.EnabledFeatures) bool {
+	for _, f := range enabledFeatures.ProvisioningNetwork {
+		if f {
+			return true
+		}
 	}
-
-	if infra.Status.ControlPlaneTopology == osconfigv1.ExternalTopologyMode {
-		return false, nil
-	}
-
-	switch infra.Status.Platform {
-	case osconfigv1.BareMetalPlatformType, osconfigv1.OpenStackPlatformType, osconfigv1.NonePlatformType, osconfigv1.VSpherePlatformType:
-		return true, nil
-	default:
-		return false, nil
-	}
+	return false
 }
 
+// EnabledFeatures returns the features that are enabled on the current platform.
 func EnabledFeatures(ctx context.Context, osClient osclientset.Interface) (v1alpha1.EnabledFeatures, error) {
 	features := v1alpha1.EnabledFeatures{
 		ProvisioningNetwork: map[v1alpha1.ProvisioningNetwork]bool{
