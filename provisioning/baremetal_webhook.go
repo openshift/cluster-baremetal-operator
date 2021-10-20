@@ -27,12 +27,7 @@ const (
 // EnsureBaremetalOperatorWebhook ensures ValidatingWebhook resources are ready to serve.
 func EnsureBaremetalOperatorWebhook(info *ProvisioningInfo) (bool, error) {
 	if !info.BaremetalWebhookEnabled {
-		// In case service-ca operator is degraded and we detect it in reconciliation loop
-		// We should delete validatingwebhook resources(ValidatingWebhookConfiguration, Service)
-		// to allow BMO continues serving. If we detect in first run, it is safe to run these
-		// deletions.
-		err := DeleteValidatingWebhook(info)
-		return false, err
+		return false, nil
 	}
 
 	webhookService := newBaremetalOperatorWebhookService(info.Namespace)
@@ -73,11 +68,9 @@ func DeleteValidatingWebhook(info *ProvisioningInfo) error {
 		return err
 	}
 
-	err = client.IgnoreNotFound(info.Client.AdmissionregistrationV1().
+	return client.IgnoreNotFound(info.Client.AdmissionregistrationV1().
 		ValidatingWebhookConfigurations().
 		Delete(context.Background(), validatingWebhookConfigurationName, metav1.DeleteOptions{}))
-
-	return err
 }
 
 func newBaremetalOperatorWebhookService(targetNamespace string) *corev1.Service {
