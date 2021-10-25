@@ -65,6 +65,11 @@ spec:
               provisioningInterface:
                 description: ProvisioningInterface is the name of the network interface on a baremetal server to the provisioning network. It can have values like eth1 or ens3.
                 type: string
+              provisioningMacAddresses:
+                description: ProvisioningMacAddresses is a list of mac addresses of network interfaces on a baremetal server to the provisioning network. Use this instead of ProvisioningInterface to allow interfaces of different names. If not provided it will be populated by the BMH.Spec.BootMacAddress of each master.
+                items:
+                  type: string
+                type: array
               provisioningNetwork:
                 description: ProvisioningNetwork provides a way to indicate the state of the underlying network configuration for the provisioning network. This field can have one of the following values - `Managed`- when the provisioning network is completely managed by the Baremetal IPI solution. `Unmanaged`- when the provsioning network is present and used but the user is responsible for managing DHCP. Virtual media provisioning is recommended but PXE is still available if required. `Disabled`- when the provisioning network is fully disabled. User can bring up the baremetal cluster using virtual media or assisted installation. If using metal3 for power management, BMCs must be accessible from the machine networks. User should provide two IPs on the external network that would be used for provisioning services.
                 enum:

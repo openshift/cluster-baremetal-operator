@@ -71,6 +71,13 @@ type ProvisioningSpec struct {
 	// have values like eth1 or ens3.
 	ProvisioningInterface string `json:"provisioningInterface,omitempty"`
 
+	// ProvisioningMacAddresses is a list of mac addresses of network interfaces
+	// on a baremetal server to the provisioning network.
+	// Use this instead of ProvisioningInterface to allow interfaces of different
+	// names. If not provided it will be populated by the BMH.Spec.BootMacAddress
+	// of each master.
+	ProvisioningMacAddresses []string `json:"provisioningMacAddresses,omitempty"`
+
 	// ProvisioningIP is the IP address assigned to the
 	// provisioningInterface of the baremetal server. This IP
 	// address should be within the provisioning subnet, and
