@@ -188,6 +188,7 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 }
 
 func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
+	klog.InfoS("new CO status", "reason", newReason, "processMessage", progressMsg, "message", msg)
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if err != nil {
 		klog.ErrorS(err, "failed to get or create ClusterOperator")

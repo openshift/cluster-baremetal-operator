@@ -26,8 +26,10 @@ import (
 
 // log is for logging in this package.
 var provisioninglog = logf.Log.WithName("provisioning-resource")
+var enabledFeatures EnabledFeatures
 
-func (r *Provisioning) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (r *Provisioning) SetupWebhookWithManager(mgr ctrl.Manager, features EnabledFeatures) error {
+	enabledFeatures = features
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()
@@ -44,13 +46,13 @@ func (r *Provisioning) ValidateCreate() error {
 		return fmt.Errorf("Provisioning object is a singleton and must be named \"%s\"", ProvisioningSingletonName)
 	}
 
-	return r.ValidateBaremetalProvisioningConfig()
+	return r.ValidateBaremetalProvisioningConfig(enabledFeatures)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *Provisioning) ValidateUpdate(old runtime.Object) error {
 	provisioninglog.Info("validate update", "name", r.Name)
-	return r.ValidateBaremetalProvisioningConfig()
+	return r.ValidateBaremetalProvisioningConfig(enabledFeatures)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

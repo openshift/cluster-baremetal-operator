@@ -16,6 +16,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -92,16 +93,23 @@ func main() {
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
+	enabledFeatures, err := controllers.EnabledFeatures(context.Background(), osClient)
+	if err != nil {
+		klog.ErrorS(err, "unable to get enabled features")
+		os.Exit(1)
+	}
+
 	enableWebhook := provisioning.WebhookDependenciesReady(osClient)
 
 	if err = (&controllers.ProvisioningReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		OSClient:       osClient,
-		KubeClient:     kubeClient,
-		ReleaseVersion: releaseVersion,
-		ImagesFilename: imagesJSONFilename,
-		WebHookEnabled: enableWebhook,
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		OSClient:        osClient,
+		KubeClient:      kubeClient,
+		ReleaseVersion:  releaseVersion,
+		ImagesFilename:  imagesJSONFilename,
+		WebHookEnabled:  enableWebhook,
+		EnabledFeatures: enabledFeatures,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
 		os.Exit(1)
@@ -112,7 +120,7 @@ func main() {
 			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
 			Namespace:     controllers.ComponentNamespace,
 		}
-		if err = provisioning.EnableValidatingWebhook(info, mgr); err != nil {
+		if err = provisioning.EnableValidatingWebhook(info, mgr, enabledFeatures); err != nil {
 			klog.ErrorS(err, "problem enabling validating webhook")
 			os.Exit(1)
 		}

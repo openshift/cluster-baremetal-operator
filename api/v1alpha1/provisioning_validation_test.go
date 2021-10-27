@@ -142,7 +142,11 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = *tc.spec
-			err := baremetalCR.ValidateBaremetalProvisioningConfig()
+			err := baremetalCR.ValidateBaremetalProvisioningConfig(EnabledFeatures{
+				ProvisioningNetwork: map[ProvisioningNetwork]bool{
+					ProvisioningNetworkManaged: true,
+				},
+			})
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected errors: %v", err)
 				return
@@ -219,7 +223,11 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = *tc.spec
-			err := baremetalCR.ValidateBaremetalProvisioningConfig()
+			err := baremetalCR.ValidateBaremetalProvisioningConfig(EnabledFeatures{
+				ProvisioningNetwork: map[ProvisioningNetwork]bool{
+					ProvisioningNetworkUnmanaged: true,
+				},
+			})
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected errors: %v", err)
 				return
@@ -308,7 +316,94 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			baremetalCR.Spec = *tc.spec
-			err := baremetalCR.ValidateBaremetalProvisioningConfig()
+			err := baremetalCR.ValidateBaremetalProvisioningConfig(EnabledFeatures{
+				ProvisioningNetwork: map[ProvisioningNetwork]bool{
+					ProvisioningNetworkDisabled: true,
+				},
+			})
+			if !tc.expectedError && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+				return
+			}
+			assert.Equal(t, tc.expectedMode, baremetalCR.getProvisioningNetworkMode(), "enabled results did not match")
+			if tc.expectedError {
+				assert.True(t, strings.Contains(err.Error(), tc.expectedMsg))
+				if !strings.Contains(err.Error(), tc.expectedMsg) {
+					t.Errorf("Non-matching errors: %v", err)
+				}
+			}
+			return
+		})
+	}
+}
+
+func TestValidateSupportedFeatures(t *testing.T) {
+	baremetalCR := &Provisioning{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Provisioning",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testBaremetalProvisioningCR,
+		},
+	}
+
+	tCases := []struct {
+		name            string
+		spec            *ProvisioningSpec
+		enabledfeatures EnabledFeatures
+		expectedError   bool
+		expectedMode    ProvisioningNetwork
+		expectedMsg     string
+	}{
+		{
+			name:            "managed feature enabled",
+			enabledfeatures: EnabledFeatures{ProvisioningNetwork: map[ProvisioningNetwork]bool{ProvisioningNetworkManaged: true}},
+			spec:            managedProvisioning().build(),
+			expectedError:   false,
+			expectedMode:    ProvisioningNetworkManaged,
+		},
+		{
+			name:            "managed feature disabled",
+			enabledfeatures: EnabledFeatures{ProvisioningNetwork: map[ProvisioningNetwork]bool{}},
+			spec:            managedProvisioning().build(),
+			expectedError:   true,
+			expectedMode:    ProvisioningNetworkManaged,
+		},
+		{
+			name:            "unmanaged feature enabled",
+			enabledfeatures: EnabledFeatures{ProvisioningNetwork: map[ProvisioningNetwork]bool{ProvisioningNetworkUnmanaged: true}},
+			spec:            unmanagedProvisioning().build(),
+			expectedError:   false,
+			expectedMode:    ProvisioningNetworkUnmanaged,
+		},
+		{
+			name:            "managed feature disabled",
+			enabledfeatures: EnabledFeatures{ProvisioningNetwork: map[ProvisioningNetwork]bool{}},
+			spec:            unmanagedProvisioning().build(),
+			expectedError:   true,
+			expectedMode:    ProvisioningNetworkUnmanaged,
+		},
+		{
+			name:            "disabled feature enabled",
+			spec:            disabledProvisioning().build(),
+			enabledfeatures: EnabledFeatures{ProvisioningNetwork: map[ProvisioningNetwork]bool{ProvisioningNetworkDisabled: true}},
+			expectedError:   false,
+			expectedMode:    ProvisioningNetworkDisabled,
+		},
+		{
+			name:            "disabled feature disabled",
+			spec:            disabledProvisioning().build(),
+			enabledfeatures: EnabledFeatures{ProvisioningNetwork: map[ProvisioningNetwork]bool{}},
+			expectedError:   true,
+			expectedMode:    ProvisioningNetworkDisabled,
+		},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing tc : %s", tc.name)
+			baremetalCR.Spec = *tc.spec
+			err := baremetalCR.ValidateBaremetalProvisioningConfig(tc.enabledfeatures)
 			if !tc.expectedError && err != nil {
 				t.Errorf("unexpected errors: %v", err)
 				return

@@ -26,12 +26,16 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+type EnabledFeatures struct {
+	ProvisioningNetwork map[ProvisioningNetwork]bool
+}
+
 var (
 	log = ctrl.Log.WithName("provisioning_validation")
 )
 
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
-func (prov *Provisioning) ValidateBaremetalProvisioningConfig() error {
+func (prov *Provisioning) ValidateBaremetalProvisioningConfig(enabledFeatures EnabledFeatures) error {
 	provisioningNetworkMode := prov.getProvisioningNetworkMode()
 	log.V(1).Info("provisioning network", "mode", provisioningNetworkMode)
 
@@ -56,6 +60,10 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig() error {
 	*/
 
 	var errs []error
+
+	if !enabledFeatures.ProvisioningNetwork[provisioningNetworkMode] {
+		return errors.NewAggregate(append(errs, fmt.Errorf("ProvisioningNetwork %s is not supported", provisioningNetworkMode)))
+	}
 
 	// They all use provisioningOSDownloadURL
 	if err := validateProvisioningOSDownloadURL(prov.Spec.ProvisioningOSDownloadURL); err != nil {
