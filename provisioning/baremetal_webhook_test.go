@@ -34,7 +34,7 @@ spec:
   ports:
   - name: http
     port: 443
-    targetPort: 9443
+    targetPort: 9447
   selector:
     baremetal.openshift.io/metal3-validating-webhook: metal3-validating-webhook
     k8s-app: metal3
