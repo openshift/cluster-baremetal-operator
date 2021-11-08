@@ -178,7 +178,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// Cannot proceed wtih metal3 deployment.
 		klog.Info("Provisioning CR not found")
 		return result, errors.Wrapf(
-			r.updateCOStatus(ReasonProvisioningCRNotFound, "Provisioning CR not found", ""),
+			r.updateCOStatus(ReasonProvisioningCRNotFound, "Waiting for Provisioning CR", ""),
 			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
 	}
 
@@ -476,7 +476,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if enabled {
 		baremetalConfig, err := r.readProvisioningCR(context.Background())
 		if err != nil || baremetalConfig == nil {
-			err = r.updateCOStatus(ReasonProvisioningCRNotFound, "Provisioning CR not found on BareMetal Platform", "")
+			err = r.updateCOStatus(ReasonProvisioningCRNotFound, "Waiting for Provisioning CR on BareMetal Platform", "")
 			if err != nil {
 				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
 			}
