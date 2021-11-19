@@ -114,7 +114,7 @@ func main() {
 		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
 		os.Exit(1)
 	}
-	if enableWebhook {
+	if controllers.IsEnabled(enabledFeatures) && enableWebhook {
 		info := &provisioning.ProvisioningInfo{
 			Client:        kubeClient,
 			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
