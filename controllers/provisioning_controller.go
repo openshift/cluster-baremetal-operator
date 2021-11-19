@@ -149,6 +149,14 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	if !IsEnabled(r.EnabledFeatures) {
+		// set ClusterOperator status to disabled=true, available=true
+		// We're disabled; don't requeue
+		return ctrl.Result{}, errors.Wrapf(
+			r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", ""),
+			"unable to put %q ClusterOperator in Disabled state", clusterOperatorName)
+	}
+
 	result := ctrl.Result{}
 	if !r.WebHookEnabled {
 		if provisioning.WebhookDependenciesReady(r.OSClient) {
@@ -158,14 +166,6 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// Keep checking for our webhook dependencies to be ready, so we can
 		// enable the webhook.
 		result.RequeueAfter = 5 * time.Minute
-	}
-
-	if !IsEnabled(r.EnabledFeatures) {
-		// set ClusterOperator status to disabled=true, available=true
-		// We're disabled; don't requeue
-		return ctrl.Result{}, errors.Wrapf(
-			r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", ""),
-			"unable to put %q ClusterOperator in Disabled state", clusterOperatorName)
 	}
 
 	baremetalConfig, err := r.readProvisioningCR(ctx)
