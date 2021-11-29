@@ -152,12 +152,12 @@ func newImageCustomizationDeployment(info *ProvisioningInfo) *appsv1.Deployment 
 	selector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"k8s-app":    metal3AppName,
-			cboLabelName: stateService,
+			cboLabelName: imageCustomizationService,
 		},
 	}
 	podSpecLabels := map[string]string{
 		"k8s-app":    metal3AppName,
-		cboLabelName: stateService,
+		cboLabelName: imageCustomizationService,
 	}
 	template := newImageCustomizationPodTemplateSpec(info, &podSpecLabels)
 	return &appsv1.Deployment{
@@ -167,7 +167,7 @@ func newImageCustomizationDeployment(info *ProvisioningInfo) *appsv1.Deployment 
 			Annotations: map[string]string{},
 			Labels: map[string]string{
 				"k8s-app":    metal3AppName,
-				cboLabelName: stateService,
+				cboLabelName: imageCustomizationService,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
