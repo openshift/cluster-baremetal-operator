@@ -16,6 +16,9 @@ limitations under the License.
 package provisioning
 
 import (
+	"context"
+	"fmt"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -26,8 +29,15 @@ import (
 )
 
 const (
-	ironicBaseUrl    = "IRONIC_BASE_URL"
-	ironicAgentImage = "IRONIC_AGENT_IMAGE"
+	ironicBaseUrl                    = "IRONIC_BASE_URL"
+	ironicAgentImage                 = "IRONIC_AGENT_IMAGE"
+	imagesBindAddress                = "images-bind-addr"
+	imagesBindAddressDefault         = "8084"
+	imagesPublishAddress             = "images-publish-addr"
+	imageCustomizationDeploymentName = "metal3-image-customization"
+	imageCustomizationVolume         = "metal3-image-customization-volume"
+	imageRegistriesConfPath          = "/etc/containers/registries.conf"
+	imageRegistriesEnvVar            = "REGISTRIES_CONF_PATH"
 )
 
 func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
@@ -51,6 +61,14 @@ func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
 	}
 }
 
+func setImagePublishUrl(imageCustomizationService string, imagesBindAddress string, namespace string) corev1.EnvVar {
+	imageCustomizationServiceName := imageCustomizationService + "." + namespace + "." + "svc.cluster.local"
+	return corev1.EnvVar{
+		Name:  imagesPublishAddress,
+		Value: "http://" + imageCustomizationServiceName + ":" + imagesBindAddress,
+	}
+}
+
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) corev1.Container {
 	container := corev1.Container{
 		Name:            "image-customization-controller",
@@ -58,6 +76,11 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 		Command:         []string{"/image-customization-controller"},
 		ImagePullPolicy: "IfNotPresent",
 		Env: []corev1.EnvVar{
+			{
+				Name:  imagesBindAddress,
+				Value: imagesBindAddressDefault,
+			},
+			setImagePublishUrl(imageCustomizationService, imagesBindAddressDefault, info.Namespace),
 			setIronicBaseUrl(ironicBaseUrl, info),
 			{
 				Name:  ironicAgentImage,
