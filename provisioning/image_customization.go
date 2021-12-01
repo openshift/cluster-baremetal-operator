@@ -25,8 +25,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
 
 const (
@@ -182,7 +186,7 @@ func newImageCustomizationDeployment(info *ProvisioningInfo) *appsv1.Deployment 
 	template := newImageCustomizationPodTemplateSpec(info, &podSpecLabels)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "metal3ImageCustomization",
+			Name:        imageCustomizationDeploymentName,
 			Namespace:   info.Namespace,
 			Annotations: map[string]string{},
 			Labels: map[string]string{
@@ -199,6 +203,24 @@ func newImageCustomizationDeployment(info *ProvisioningInfo) *appsv1.Deployment 
 }
 
 func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, err error) {
-	_ = newImageCustomizationDeployment(info)
-	return false, nil
+	imageCustomizationDeployment := newImageCustomizationDeployment(info)
+	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(imageCustomizationDeployment, info.ProvConfig.Status.Generations)
+	err = controllerutil.SetControllerReference(info.ProvConfig, imageCustomizationDeployment, info.Scheme)
+	if err != nil {
+		err = fmt.Errorf("unable to set controllerReference on image-customization deployment: %w", err)
+		return
+	}
+	deployment, updated, err := resourceapply.ApplyDeployment(info.Client.AppsV1(),
+		info.EventRecorder, imageCustomizationDeployment, expectedGeneration)
+	if err != nil {
+		return updated, err
+	}
+	if updated {
+		resourcemerge.SetDeploymentGeneration(&info.ProvConfig.Status.Generations, deployment)
+	}
+	return updated, nil
+}
+
+func DeleteImageCustomizationDeployment(info *ProvisioningInfo) error {
+	return client.IgnoreNotFound(info.Client.AppsV1().Deployments(info.Namespace).Delete(context.Background(), imageCustomizationDeploymentName, metav1.DeleteOptions{}))
 }

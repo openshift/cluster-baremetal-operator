@@ -242,6 +242,8 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
 		provisioning.EnsureBaremetalOperatorWebhook,
+		provisioning.EnsureImageCustomizationService,
+		provisioning.EnsureImageCustomizationDeployment,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -380,6 +382,12 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteImageCache(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 image cache")
+	}
+	if err := provisioning.DeleteImageCustomizationService(info); err != nil {
+		return errors.Wrap(err, "failed to delete metal3 image customization service")
+	}
+	if err := provisioning.DeleteImageCustomizationDeployment(info); err != nil {
+		return errors.Wrap(err, "failed to delete metal3 image customization deployment")
 	}
 	return nil
 }
