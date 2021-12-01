@@ -116,7 +116,6 @@ func validateProvisioningOSDownloadURL(uri string) []error {
 	var errs []error
 
 	if uri == "" {
-		errs = append(errs, fmt.Errorf("provisioningOSDownloadURL is required but is empty"))
 		return errs
 	}
 

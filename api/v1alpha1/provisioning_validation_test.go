@@ -284,9 +284,8 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			// Missing ProvisioningOSDownloadURL
 			name:          "InvalidDisabled",
 			spec:          disabledProvisioning().ProvisioningOSDownloadURL("").build(),
-			expectedError: true,
+			expectedError: false,
 			expectedMode:  ProvisioningNetworkDisabled,
-			expectedMsg:   "provisioningOSDownloadURL",
 		},
 		{
 			// IP and CIDR set with bad CIDR

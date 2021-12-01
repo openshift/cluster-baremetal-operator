@@ -287,14 +287,14 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 			name: "Incorrect Config",
 			spec: metal3iov1alpha1.ProvisioningSpec{
 				ProvisioningInterface:     "eth0",
-				ProvisioningIP:            "172.30.20.3",
+				ProvisioningIP:            "172.30.20.11",
 				ProvisioningNetworkCIDR:   "172.30.20.0/24",
 				ProvisioningDHCPRange:     "172.30.20.11,172.30.20.101",
 				ProvisioningOSDownloadURL: "",
 				ProvisioningNetwork:       "Managed",
 			},
 			expectedConditions: []osconfigv1.ClusterOperatorStatusCondition{
-				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "InvalidConfiguration", "provisioningOSDownloadURL is required but is empty"),
+				setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionTrue, "InvalidConfiguration", "invalid provisioningIP \"172.30.20.11\", value must be outside of the provisioningDHCPRange \"172.30.20.11,172.30.20.101\""),
 				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, "InvalidConfiguration", "Unable to apply Provisioning CR: invalid configuration"),
 				setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionTrue, "", ""),
 				setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
