@@ -42,9 +42,17 @@ const (
 	imageCustomizationDeploymentName = "metal3-image-customization"
 	imageCustomizationVolume         = "metal3-image-customization-volume"
 	imageRegistriesConfPath          = "/etc/containers/registries.conf"
-	imageRegistriesEnvVar            = "REGISTRIES_CONF_PATH"
+	containerRegistriesEnvVar            = "REGISTRIES_CONF_PATH"
 )
 
+var (
+	imageRegistriesVolumeMount = corev1.VolumeMount{
+		Name:      imageCustomizationVolume,
+		MountPath: containerRegistriesConfPath,
+	}
+)
+
+>>>>>>> 5cd6cfb... Set REGISTRIES_CONF_PATH env var and mount registries.conf file
 func imageRegistriesVolume() corev1.Volume {
 	// TODO: Should this be corev1.HostPathFile?
 	volType := corev1.HostPathFileOrCreate
@@ -101,6 +109,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 		Name:            "image-customization-controller",
 		Image:           images.ImageCustomizationController,
 		Command:         []string{"/image-customization-controller"},
+		VolumeMounts:    []corev1.VolumeMount{imageRegistriesVolumeMount},
 		ImagePullPolicy: "IfNotPresent",
 		Env: []corev1.EnvVar{
 			{
@@ -112,6 +121,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 			{
 				Name:  ironicAgentImage,
 				Value: images.IronicAgent,
+			},
+			{
+				Name:  imageRegistriesEnvVar,
+				Value: imageRegistriesConfPath,
 			},
 			buildSSHKeyEnvVar(info.SSHKey),
 			pullSecret,
@@ -168,6 +181,9 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			NodeSelector:       map[string]string{"node-role.kubernetes.io/master": ""},
 			ServiceAccountName: "cluster-baremetal-operator",
 			Tolerations:        tolerations,
+			Volumes: []corev1.Volume{
+				imageRegistriesVolume(),
+			},
 		},
 	}
 }
