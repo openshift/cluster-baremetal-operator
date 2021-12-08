@@ -213,7 +213,6 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_CACERT_FILE", Value: "/certs/ironic/tls.crt"},
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "DEPLOY_KERNEL_URL", Value: "http://localhost:6181/images/ironic-python-agent.kernel"},
-				{Name: "DEPLOY_RAMDISK_URL", Value: "http://localhost:6181/images/ironic-python-agent.initramfs"},
 				{Name: "IRONIC_ENDPOINT", Value: "https://localhost:6385/v1/"},
 				{Name: "IRONIC_INSPECTOR_ENDPOINT", Value: "https://localhost:5050/v1/"},
 				{Name: "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE", Value: "Never"},

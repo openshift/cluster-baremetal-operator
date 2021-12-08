@@ -533,7 +533,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			},
 		},
 		Command:         []string{"/baremetal-operator"},
-		Args:            []string{"--health-addr", ":9446"},
+		Args:            []string{"--health-addr", ":9446", "-build-preprov-image"},
 		ImagePullPolicy: "IfNotPresent",
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
@@ -572,7 +572,6 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 				Value: "true",
 			},
 			buildEnvVar(deployKernelUrl, config),
-			buildEnvVar(deployRamdiskUrl, config),
 			buildEnvVar(ironicEndpoint, config),
 			buildEnvVar(ironicInspectorEndpoint, config),
 			{
