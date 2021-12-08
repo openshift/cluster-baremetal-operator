@@ -32,13 +32,11 @@ var (
 	baremetalIronicPort            = "6385"
 	baremetalIronicInspectorPort   = "5050"
 	baremetalKernelUrlSubPath      = "images/ironic-python-agent.kernel"
-	baremetalRamdiskUrlSubPath     = "images/ironic-python-agent.initramfs"
 	baremetalIronicEndpointSubpath = "v1/"
 	provisioningIP                 = "PROVISIONING_IP"
 	provisioningInterface          = "PROVISIONING_INTERFACE"
 	provisioningMacAddresses       = "PROVISIONING_MACS"
 	deployKernelUrl                = "DEPLOY_KERNEL_URL"
-	deployRamdiskUrl               = "DEPLOY_RAMDISK_URL"
 	ironicEndpoint                 = "IRONIC_ENDPOINT"
 	ironicInspectorEndpoint        = "IRONIC_INSPECTOR_ENDPOINT"
 	httpPort                       = "HTTP_PORT"
@@ -76,11 +74,6 @@ func getProvisioningIPCIDR(config *metal3iov1alpha1.ProvisioningSpec) *string {
 func getDeployKernelUrl() *string {
 	deployKernelUrl := fmt.Sprintf("http://localhost:%d/%s", imageCachePort, baremetalKernelUrlSubPath)
 	return &deployKernelUrl
-}
-
-func getDeployRamdiskUrl() *string {
-	deployRamdiskUrl := fmt.Sprintf("http://localhost:%d/%s", imageCachePort, baremetalRamdiskUrlSubPath)
-	return &deployRamdiskUrl
 }
 
 func getIronicEndpoint() *string {
@@ -144,8 +137,6 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 		return pointer.StringPtr(strings.Join(baremetalConfig.ProvisioningMacAddresses, ","))
 	case deployKernelUrl:
 		return getDeployKernelUrl()
-	case deployRamdiskUrl:
-		return getDeployRamdiskUrl()
 	case ironicEndpoint:
 		return getIronicEndpoint()
 	case ironicInspectorEndpoint:

@@ -57,18 +57,6 @@ func TestGetMetal3DeploymentConfig(t *testing.T) {
 			expectedValue: "http://localhost:6181/images/ironic-python-agent.kernel",
 		},
 		{
-			name:          "Unmanaged DeployRamdiskUrl",
-			configName:    deployRamdiskUrl,
-			spec:          unmanagedProvisioning().build(),
-			expectedValue: "http://localhost:6181/images/ironic-python-agent.initramfs",
-		},
-		{
-			name:          "Disabled DeployRamdiskUrl",
-			configName:    deployRamdiskUrl,
-			spec:          disabledProvisioning().build(),
-			expectedValue: "http://localhost:6181/images/ironic-python-agent.initramfs",
-		},
-		{
 			name:          "Disabled IronicEndpoint",
 			configName:    ironicEndpoint,
 			spec:          disabledProvisioning().build(),
