@@ -44,6 +44,28 @@ const (
 	imageRegistriesEnvVar            = "REGISTRIES_CONF_PATH"
 )
 
+var (
+	imageRegistriesVolumeMount = corev1.VolumeMount{
+		Name:      imageCustomizationVolume,
+		MountPath: imageRegistriesConfPath,
+	}
+)
+
+func imageRegistriesVolume() corev1.Volume {
+	// TODO: Should this be corev1.HostPathFile?
+	volType := corev1.HostPathFileOrCreate
+
+	return corev1.Volume{
+		Name: imageCustomizationVolume,
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: imageRegistriesConfPath,
+				Type: &volType,
+			},
+		},
+	}
+}
+
 func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
 	config := info.ProvConfig.Spec
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
@@ -78,6 +100,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 		Name:            "image-customization-controller",
 		Image:           images.ImageCustomizationController,
 		Command:         []string{"/image-customization-controller"},
+		VolumeMounts:    []corev1.VolumeMount{imageRegistriesVolumeMount},
 		ImagePullPolicy: "IfNotPresent",
 		Env: []corev1.EnvVar{
 			{
@@ -89,6 +112,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 			{
 				Name:  ironicAgentImage,
 				Value: images.IronicAgent,
+			},
+			{
+				Name:  imageRegistriesEnvVar,
+				Value: imageRegistriesConfPath,
 			},
 			buildSSHKeyEnvVar(info.SSHKey),
 			pullSecret,
@@ -145,6 +172,9 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			NodeSelector:       map[string]string{"node-role.kubernetes.io/master": ""},
 			ServiceAccountName: "cluster-baremetal-operator",
 			Tolerations:        tolerations,
+			Volumes: []corev1.Volume{
+				imageRegistriesVolume(),
+			},
 		},
 	}
 }
