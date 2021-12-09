@@ -40,14 +40,18 @@ const (
 	imagesPublishAddress             = "images-publish-addr"
 	imageCustomizationDeploymentName = "metal3-image-customization"
 	imageCustomizationVolume         = "metal3-image-customization-volume"
-	imageRegistriesConfPath          = "/etc/containers/registries.conf"
-	imageRegistriesEnvVar            = "REGISTRIES_CONF_PATH"
+	containerRegistriesConfPath      = "/etc/containers/registries.conf"
+	containerRegistriesEnvVar        = "REGISTRIES_CONF_PATH"
+	deployISOEnvVar                  = "DEPLOY_ISO"
+	deployISOFile                    = "/shared/html/images/ironic-python-agent.iso"
+	deployInitrdEnvVar               = "DEPLOY_INITRD"
+	deployInitrdFile                 = "/shared/html/images/ironic-python-agent.initramfs"
 )
 
 var (
 	imageRegistriesVolumeMount = corev1.VolumeMount{
 		Name:      imageCustomizationVolume,
-		MountPath: imageRegistriesConfPath,
+		MountPath: containerRegistriesConfPath,
 	}
 )
 
@@ -59,7 +63,7 @@ func imageRegistriesVolume() corev1.Volume {
 		Name: imageCustomizationVolume,
 		VolumeSource: corev1.VolumeSource{
 			HostPath: &corev1.HostPathVolumeSource{
-				Path: imageRegistriesConfPath,
+				Path: containerRegistriesConfPath,
 				Type: &volType,
 			},
 		},
@@ -97,12 +101,23 @@ func setImagePublishUrl(imageCustomizationService string, imagesBindAddress stri
 
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) corev1.Container {
 	container := corev1.Container{
-		Name:            "image-customization-controller",
-		Image:           images.ImageCustomizationController,
-		Command:         []string{"/image-customization-controller"},
-		VolumeMounts:    []corev1.VolumeMount{imageRegistriesVolumeMount},
+		Name:    "image-customization-controller",
+		Image:   images.ImageCustomizationController,
+		Command: []string{"/image-customization-controller"},
+		VolumeMounts: []corev1.VolumeMount{
+			imageRegistriesVolumeMount,
+			imageVolumeMount,
+		},
 		ImagePullPolicy: "IfNotPresent",
 		Env: []corev1.EnvVar{
+			{
+				Name:  deployISOEnvVar,
+				Value: deployISOFile,
+			},
+			{
+				Name:  deployInitrdEnvVar,
+				Value: deployInitrdFile,
+			},
 			{
 				Name:  imagesBindAddress,
 				Value: imagesBindAddressDefault,
@@ -114,8 +129,8 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 				Value: images.IronicAgent,
 			},
 			{
-				Name:  imageRegistriesEnvVar,
-				Value: imageRegistriesConfPath,
+				Name:  containerRegistriesEnvVar,
+				Value: containerRegistriesConfPath,
 			},
 			buildSSHKeyEnvVar(info.SSHKey),
 			pullSecret,
@@ -174,6 +189,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			Tolerations:        tolerations,
 			Volumes: []corev1.Volume{
 				imageRegistriesVolume(),
+				imageVolume(),
 			},
 		},
 	}
