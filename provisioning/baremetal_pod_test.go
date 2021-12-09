@@ -145,10 +145,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 			config: configWithPreProvisioningOSDownloadURLs().build(),
 			expectedContainers: []corev1.Container{
 				{
-					Name:  "metal3-configure-coreos-ipa",
-					Image: images.Ironic,
-				},
-				{
 					Name:  "metal3-machine-os-downloader-live-images",
 					Image: images.MachineOsDownloader,
 				},

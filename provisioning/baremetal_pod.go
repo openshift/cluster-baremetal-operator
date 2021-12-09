@@ -309,12 +309,6 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	liveURLs := getPreProvisioningOSDownloadURLs(&info.ProvConfig.Spec)
 	if len(liveURLs) > 0 {
 		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, strings.Join(liveURLs, ","), true, true))
-
-		// If the ISO URL is also specified, start the createInitContainerConfigureCoreOSIPA init container
-		if info.ProvConfig.Spec.PreProvisioningOSDownloadURLs.IsoURL != "" {
-			// Configure the LiveISO by embedding ignition and other startup files
-			initContainers = append(initContainers, createInitContainerConfigureCoreOSIPA(info))
-		}
 	}
 	// If the ProvisioningOSDownloadURL is set, we download the URL specified in it
 	if info.ProvConfig.Spec.ProvisioningOSDownloadURL != "" {
@@ -340,43 +334,6 @@ func createInitContainerIpaDownloader(images *Images) corev1.Container {
 		},
 		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Env:          []corev1.EnvVar{},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("10m"),
-				corev1.ResourceMemory: resource.MustParse("50Mi"),
-			},
-		},
-	}
-	return initContainer
-}
-
-// This initContainer configures RHCOS Live ISO images by embedding the IPA
-// agent ignition. See:
-// https://github.com/openshift/ironic-image/blob/master/scripts/configure-coreos-ipa
-func createInitContainerConfigureCoreOSIPA(info *ProvisioningInfo) corev1.Container {
-	config := &info.ProvConfig.Spec
-	initContainer := corev1.Container{
-		Name:            "metal3-configure-coreos-ipa",
-		Image:           info.Images.Ironic,
-		Command:         []string{"/bin/configure-coreos-ipa"},
-		ImagePullPolicy: "IfNotPresent",
-		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			sharedVolumeMount,
-			imageVolumeMount,
-			ironicCredentialsMount,
-			ironicTlsMount,
-		},
-		Env: []corev1.EnvVar{
-			buildEnvVar(provisioningIP, config),
-			buildEnvVar(provisioningInterface, config),
-			buildSSHKeyEnvVar(info.SSHKey),
-			pullSecret,
-			buildEnvVar(provisioningMacAddresses, config),
-			{Name: "IRONIC_AGENT_IMAGE", Value: info.Images.IronicAgent},
-		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("10m"),
