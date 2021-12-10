@@ -106,6 +106,11 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 			"-images-publish-addr",
 			fmt.Sprintf("http://%s.%s.svc.cluster.local/",
 				imageCustomizationService, info.Namespace)},
+		SecurityContext: &corev1.SecurityContext{
+			// It appears this container must be privileged in order to be able
+			// to access the machine images in the imageVolumeMount
+			Privileged: pointer.BoolPtr(true),
+		},
 		VolumeMounts: []corev1.VolumeMount{
 			imageRegistriesVolumeMount,
 			imageVolumeMount,

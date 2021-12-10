@@ -93,33 +93,6 @@ func getProvisioningOSDownloadURL(config *metal3iov1alpha1.ProvisioningSpec) *st
 	return nil
 }
 
-// Check whether the PreProvisionOSDownloadURLs are set. If yes, we
-// construct a comma-separated list of RHCOS live images and return it
-func getPreProvisioningOSDownloadURLs(config *metal3iov1alpha1.ProvisioningSpec) []string {
-	var liveURLs []string
-	if config.PreProvisioningOSDownloadURLs.IsoURL != "" {
-		liveURLs = append(liveURLs, config.PreProvisioningOSDownloadURLs.IsoURL)
-	}
-	if isCoreOSIPAAvailable(config) {
-		liveURLs = append(liveURLs, config.PreProvisioningOSDownloadURLs.InitramfsURL)
-		liveURLs = append(liveURLs, config.PreProvisioningOSDownloadURLs.KernelURL)
-		liveURLs = append(liveURLs, config.PreProvisioningOSDownloadURLs.RootfsURL)
-	}
-
-	return liveURLs
-}
-
-// isCoreOSIPAAvailable is a helper to check whether the CoreOS based IPA URLs are available.
-// Only return true when kernel, rootfs and initramfs URLs are present
-func isCoreOSIPAAvailable(config *metal3iov1alpha1.ProvisioningSpec) bool {
-	if config.PreProvisioningOSDownloadURLs.KernelURL != "" &&
-		config.PreProvisioningOSDownloadURLs.RootfsURL != "" &&
-		config.PreProvisioningOSDownloadURLs.InitramfsURL != "" {
-		return true
-	}
-	return false
-}
-
 func getBootIsoSource(config *metal3iov1alpha1.ProvisioningSpec) *string {
 	if config.BootIsoSource != "" {
 		return (*string)(&config.BootIsoSource)
