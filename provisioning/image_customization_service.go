@@ -15,7 +15,7 @@ import (
 
 const (
 	imageCustomizationService = "metal3-image-customization-service"
-	customizedImagePortName   = "customizedImagePortName"
+	customizedImagePortName   = "customized-image-port"
 	imageCustomizationPort    = "6184"
 )
 
