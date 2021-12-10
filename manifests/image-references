@@ -39,3 +39,7 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:image-customization-controller
+  - name: machine-os-images
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:machine-os-images

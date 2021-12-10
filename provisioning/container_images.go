@@ -30,6 +30,7 @@ type Images struct {
 	StaticIpManager              string `json:"baremetalStaticIpManager"`
 	IronicAgent                  string `json:"baremetalIronicAgent"`
 	ImageCustomizationController string `json:"imageCustomizationController"`
+	MachineOSImages              string `json:"machineOSImages"`
 }
 
 func GetContainerImages(containerImages *Images, imagesFilePath string) error {
