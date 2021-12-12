@@ -5,12 +5,14 @@ import (
 )
 
 var (
-	TestImagesFile                = "sample_images.json"
-	expectedBaremetalOperator     = "registry.ci.openshift.org/openshift:baremetal-operator"
-	expectedIronic                = "registry.ci.openshift.org/openshift:ironic"
-	expectedIronicIpaDownloader   = "registry.ci.openshift.org/openshift:ironic-ipa-downloader"
-	expectedMachineOsDownloader   = "registry.ci.openshift.org/openshift:ironic-machine-os-downloader"
-	expectedIronicStaticIpManager = "registry.ci.openshift.org/openshift:ironic-static-ip-manager"
+	TestImagesFile                       = "sample_images.json"
+	expectedBaremetalOperator            = "registry.ci.openshift.org/openshift:baremetal-operator"
+	expectedIronic                       = "registry.ci.openshift.org/openshift:ironic"
+	expectedIronicIpaDownloader          = "registry.ci.openshift.org/openshift:ironic-ipa-downloader"
+	expectedMachineOsDownloader          = "registry.ci.openshift.org/openshift:ironic-machine-os-downloader"
+	expectedIronicStaticIpManager        = "registry.ci.openshift.org/openshift:ironic-static-ip-manager"
+	expectedIronicAgent                  = "registry.ci.openshift.org/openshift:ironic-agent"
+	expectedImageCustomizationController = "registry.ci.openshift.org/openshift:image-customization-controller"
 )
 
 func TestGetContainerImages(t *testing.T) {
@@ -46,7 +48,9 @@ func TestGetContainerImages(t *testing.T) {
 					containerImages.Ironic != expectedIronic ||
 					containerImages.IpaDownloader != expectedIronicIpaDownloader ||
 					containerImages.MachineOsDownloader != expectedMachineOsDownloader ||
-					containerImages.StaticIpManager != expectedIronicStaticIpManager {
+					containerImages.StaticIpManager != expectedIronicStaticIpManager ||
+					containerImages.IronicAgent != expectedIronicAgent ||
+					containerImages.ImageCustomizationController != expectedImageCustomizationController {
 					t.Errorf("failed GetContainerImages. One or more Baremetal container images do not match the expected images.")
 				}
 			}

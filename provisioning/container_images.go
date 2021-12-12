@@ -23,12 +23,13 @@ import (
 )
 
 type Images struct {
-	BaremetalOperator   string `json:"baremetalOperator"`
-	Ironic              string `json:"baremetalIronic"`
-	IpaDownloader       string `json:"baremetalIpaDownloader"`
-	MachineOsDownloader string `json:"baremetalMachineOsDownloader"`
-	StaticIpManager     string `json:"baremetalStaticIpManager"`
-	IronicAgent         string `json:"baremetalIronicAgent"`
+	BaremetalOperator            string `json:"baremetalOperator"`
+	Ironic                       string `json:"baremetalIronic"`
+	IpaDownloader                string `json:"baremetalIpaDownloader"`
+	MachineOsDownloader          string `json:"baremetalMachineOsDownloader"`
+	StaticIpManager              string `json:"baremetalStaticIpManager"`
+	IronicAgent                  string `json:"baremetalIronicAgent"`
+	ImageCustomizationController string `json:"imageCustomizationController"`
 }
 
 func GetContainerImages(containerImages *Images, imagesFilePath string) error {
