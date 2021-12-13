@@ -38,7 +38,7 @@ const (
 	ironicAgentImage                 = "IRONIC_AGENT_IMAGE"
 	imageCustomizationDeploymentName = "metal3-image-customization"
 	imageCustomizationVolume         = "metal3-image-customization-volume"
-	imageBindPort                    = 8084
+	imageCustomizationPort           = 8084
 	containerRegistriesConfPath      = "/etc/containers/registries.conf"
 	containerRegistriesEnvVar        = "REGISTRIES_CONF_PATH"
 	deployISOEnvVar                  = "DEPLOY_ISO"
@@ -102,7 +102,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 		Name:  "image-customization-controller",
 		Image: images.ImageCustomizationController,
 		Command: []string{"/image-customization-controller",
-			"-images-bind-addr", fmt.Sprintf(":%d", imageBindPort),
+			"-images-bind-addr", fmt.Sprintf(":%d", imageCustomizationPort),
 			"-images-publish-addr",
 			fmt.Sprintf("http://%s.%s.svc.cluster.local/",
 				imageCustomizationService, info.Namespace)},
@@ -131,6 +131,12 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 			},
 			buildSSHKeyEnvVar(info.SSHKey),
 			pullSecret,
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "http",
+				ContainerPort: imageCustomizationPort,
+			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{

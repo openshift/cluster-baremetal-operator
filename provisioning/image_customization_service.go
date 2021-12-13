@@ -3,10 +3,10 @@ package provisioning
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -15,17 +15,14 @@ import (
 
 const (
 	imageCustomizationService = "metal3-image-customization-service"
-	customizedImagePortName   = "customized-image-port"
-	imageCustomizationPort    = "6184"
 )
 
 func newImageCustomizationService(targetNamespace string) *corev1.Service {
-	port, _ := strconv.Atoi(imageCustomizationPort) // #nosec
-
 	ports := []corev1.ServicePort{
 		{
-			Name: customizedImagePortName,
-			Port: int32(port),
+			Name:       "http",
+			Port:       80,
+			TargetPort: intstr.FromInt(imageCustomizationPort),
 		},
 	}
 	return &corev1.Service{
@@ -34,7 +31,7 @@ func newImageCustomizationService(targetNamespace string) *corev1.Service {
 			Namespace: targetNamespace,
 		},
 		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeNodePort,
+			Type: corev1.ServiceTypeClusterIP,
 			Selector: map[string]string{
 				cboLabelName: imageCustomizationService,
 			},
