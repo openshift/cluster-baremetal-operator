@@ -73,14 +73,14 @@ func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		return corev1.EnvVar{
 			Name:  name,
-			Value: "http://" + config.ProvisioningIP,
+			Value: "https://" + config.ProvisioningIP,
 		}
 	} else {
 		hostIP, err := getPodHostIP(info.Client.CoreV1(), info.Namespace)
 		if err == nil && hostIP != "" {
 			return corev1.EnvVar{
 				Name:  name,
-				Value: "http://" + hostIP,
+				Value: "https://" + hostIP,
 			}
 		}
 		return corev1.EnvVar{
