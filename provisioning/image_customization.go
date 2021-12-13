@@ -106,6 +106,9 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 			"-images-publish-addr",
 			fmt.Sprintf("http://%s.%s.svc.cluster.local/",
 				imageCustomizationService, info.Namespace)},
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+		},
 		VolumeMounts: []corev1.VolumeMount{
 			imageRegistriesVolumeMount,
 			imageVolumeMount,
