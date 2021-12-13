@@ -35,11 +35,9 @@ import (
 const (
 	ironicBaseUrl                    = "IRONIC_BASE_URL"
 	ironicAgentImage                 = "IRONIC_AGENT_IMAGE"
-	imagesBindAddress                = "images-bind-addr"
-	imagesBindAddressDefault         = "8084"
-	imagesPublishAddress             = "images-publish-addr"
 	imageCustomizationDeploymentName = "metal3-image-customization"
 	imageCustomizationVolume         = "metal3-image-customization-volume"
+	imageCustomizationPort           = 8084
 	containerRegistriesConfPath      = "/etc/containers/registries.conf"
 	containerRegistriesEnvVar        = "REGISTRIES_CONF_PATH"
 	deployISOEnvVar                  = "DEPLOY_ISO"
@@ -91,19 +89,15 @@ func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
 	}
 }
 
-func setImagePublishUrl(imageCustomizationService string, imagesBindAddress string, namespace string) corev1.EnvVar {
-	imageCustomizationServiceName := imageCustomizationService + "." + namespace + "." + "svc.cluster.local"
-	return corev1.EnvVar{
-		Name:  imagesPublishAddress,
-		Value: "http://" + imageCustomizationServiceName + ":" + imagesBindAddress,
-	}
-}
-
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) corev1.Container {
 	container := corev1.Container{
-		Name:    "image-customization-controller",
-		Image:   images.ImageCustomizationController,
-		Command: []string{"/image-customization-controller"},
+		Name:  "image-customization-controller",
+		Image: images.ImageCustomizationController,
+		Command: []string{"/image-customization-controller",
+			"-images-bind-addr", fmt.Sprintf(":%d", imageCustomizationPort),
+			"-images-publish-addr",
+			fmt.Sprintf("http://%s.%s.svc.cluster.local/",
+				imageCustomizationService, info.Namespace)},
 		VolumeMounts: []corev1.VolumeMount{
 			imageRegistriesVolumeMount,
 			imageVolumeMount,
@@ -118,11 +112,6 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 				Name:  deployInitrdEnvVar,
 				Value: deployInitrdFile,
 			},
-			{
-				Name:  imagesBindAddress,
-				Value: imagesBindAddressDefault,
-			},
-			setImagePublishUrl(imageCustomizationService, imagesBindAddressDefault, info.Namespace),
 			setIronicBaseUrl(ironicBaseUrl, info),
 			{
 				Name:  ironicAgentImage,
@@ -134,6 +123,12 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 			},
 			buildSSHKeyEnvVar(info.SSHKey),
 			pullSecret,
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "http",
+				ContainerPort: imageCustomizationPort,
+			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
