@@ -449,19 +449,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
 	}
 
-	apiInt, err := r.apiServerInternalHost(ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not get internal APIServer")
-	}
-
-	ips, err := net.LookupIP(apiInt)
-	if err != nil {
-		return errors.Wrap(err, "could not lookupIP for internal APIServer: "+apiInt)
-	}
-
-	r.NetworkStack = networkStack(ips)
-	klog.InfoS("Network stack calculation", "APIServerInternalHost", apiInt, "NetworkStack", r.NetworkStack)
-
 	// Check the Platform Type to determine the state of the CO
 	enabled := IsEnabled(r.EnabledFeatures)
 	if !enabled {
@@ -470,6 +457,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if err != nil {
 			return fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %w", clusterOperatorName, err)
 		}
+		return nil
 	}
 
 	// If Platform is BareMetal, we could still be missing the Provisioning CR
@@ -482,6 +470,18 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 		}
 	}
+	apiInt, err := r.apiServerInternalHost(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get internal APIServer")
+	}
+
+	ips, err := net.LookupIP(apiInt)
+	if err != nil {
+		return errors.Wrap(err, "could not lookupIP for internal APIServer: "+apiInt)
+	}
+
+	r.NetworkStack = networkStack(ips)
+	klog.InfoS("Network stack calculation", "APIServerInternalHost", apiInt, "NetworkStack", r.NetworkStack)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).
