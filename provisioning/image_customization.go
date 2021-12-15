@@ -18,6 +18,7 @@ package provisioning
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -68,19 +69,26 @@ func imageRegistriesVolume() corev1.Volume {
 	}
 }
 
+func hostForIP(ipAddr string) string {
+	if strings.Contains(ipAddr, ":") {
+		return fmt.Sprintf("[%s]", ipAddr)
+	}
+	return ipAddr
+}
+
 func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
 	config := info.ProvConfig.Spec
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		return corev1.EnvVar{
 			Name:  name,
-			Value: "https://" + config.ProvisioningIP,
+			Value: "https://" + hostForIP(config.ProvisioningIP),
 		}
 	} else {
 		hostIP, err := getPodHostIP(info.Client.CoreV1(), info.Namespace)
 		if err == nil && hostIP != "" {
 			return corev1.EnvVar{
 				Name:  name,
-				Value: "https://" + hostIP,
+				Value: "https://" + hostForIP(hostIP),
 			}
 		}
 		return corev1.EnvVar{
