@@ -69,35 +69,20 @@ func imageRegistriesVolume() corev1.Volume {
 	}
 }
 
-func hostForIP(ipAddr string) string {
+func getUrlFromIP(ipAddr string) string {
 	if strings.Contains(ipAddr, ":") {
-		return fmt.Sprintf("[%s]", ipAddr)
+		// This is an IPv6 addr
+		return "https://" + fmt.Sprintf("[%s]", ipAddr)
 	}
-	return ipAddr
-}
-
-func setIronicBaseUrl(name string, info *ProvisioningInfo) corev1.EnvVar {
-	config := info.ProvConfig.Spec
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
-		return corev1.EnvVar{
-			Name:  name,
-			Value: "https://" + hostForIP(config.ProvisioningIP),
-		}
+	if ipAddr != "" {
+		// This is an IPv4 addr
+		return "https://" + ipAddr
 	} else {
-		hostIP, err := getPodHostIP(info.Client.CoreV1(), info.Namespace)
-		if err == nil && hostIP != "" {
-			return corev1.EnvVar{
-				Name:  name,
-				Value: "https://" + hostForIP(hostIP),
-			}
-		}
-		return corev1.EnvVar{
-			Name: name,
-		}
+		return ""
 	}
 }
 
-func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) corev1.Container {
+func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIP string) corev1.Container {
 	container := corev1.Container{
 		Name:  "image-customization-controller",
 		Image: images.ImageCustomizationController,
@@ -106,6 +91,9 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 			"-images-publish-addr",
 			fmt.Sprintf("http://%s.%s.svc.cluster.local/",
 				imageCustomizationService, info.Namespace)},
+
+		// TODO: This container does not have to run in privileged mode when the i-c-c has
+		// its own volume and does not have to use the imageCacheSharedVolume
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
@@ -123,7 +111,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 				Name:  deployInitrdEnvVar,
 				Value: deployInitrdFile,
 			},
-			setIronicBaseUrl(ironicBaseUrl, info),
+			{
+				Name:  ironicBaseUrl,
+				Value: getUrlFromIP(ironicIP),
+			},
 			{
 				Name:  ironicAgentImage,
 				Value: images.IronicAgent,
@@ -151,9 +142,9 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo) c
 	return container
 }
 
-func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) *corev1.PodTemplateSpec {
+func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string, ironicIP string) *corev1.PodTemplateSpec {
 	containers := []corev1.Container{
-		createImageCustomizationContainer(info.Images, info),
+		createImageCustomizationContainer(info.Images, info, ironicIP),
 	}
 
 	tolerations := []corev1.Toleration{
@@ -201,7 +192,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 	}
 }
 
-func newImageCustomizationDeployment(info *ProvisioningInfo) *appsv1.Deployment {
+func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIP string) *appsv1.Deployment {
 	selector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"k8s-app":    metal3AppName,
@@ -212,7 +203,7 @@ func newImageCustomizationDeployment(info *ProvisioningInfo) *appsv1.Deployment 
 		"k8s-app":    metal3AppName,
 		cboLabelName: imageCustomizationService,
 	}
-	template := newImageCustomizationPodTemplateSpec(info, &podSpecLabels)
+	template := newImageCustomizationPodTemplateSpec(info, &podSpecLabels, ironicIP)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        imageCustomizationDeploymentName,
@@ -231,8 +222,28 @@ func newImageCustomizationDeployment(info *ProvisioningInfo) *appsv1.Deployment 
 	}
 }
 
+func getIronicIP(info *ProvisioningInfo) (string, error) {
+	config := info.ProvConfig.Spec
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
+		return config.ProvisioningIP, nil
+	} else {
+		// Couple of things can go wrong here:
+		// 1. err != nil could be caused when Pod.List() and hence getPodHostIP() fails due to a temporary
+		// glitch (like a dropped network connection). So, report the error and try again.
+		// 2. hostIP == "" can happen when the metal3 pod is still coming up. The image-customization-controller
+		// has been updated to accept hostIP as ""
+
+		return getPodHostIP(info.Client.CoreV1(), info.Namespace)
+	}
+}
+
 func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, err error) {
-	imageCustomizationDeployment := newImageCustomizationDeployment(info)
+	ironicIP, err := getIronicIP(info)
+	if err != nil {
+		return false, fmt.Errorf("unable to determine Ironic's IP to pass to the image-customization-controller: %w", err)
+	}
+
+	imageCustomizationDeployment := newImageCustomizationDeployment(info, ironicIP)
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(imageCustomizationDeployment, info.ProvConfig.Status.Generations)
 	err = controllerutil.SetControllerReference(info.ProvConfig, imageCustomizationDeployment, info.Scheme)
 	if err != nil {
