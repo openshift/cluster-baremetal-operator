@@ -8,7 +8,6 @@ import (
 	"path"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -135,22 +134,10 @@ func createContainerImageCache(images *Images) corev1.Container {
 
 func newImageCacheInitContainers(info *ProvisioningInfo) ([]corev1.Container, error) {
 	initContainers := []corev1.Container{}
-	// If the PreProvisioningOSDownloadURLs are set, we fetch the URLs of either CoreOS ISO and IPA URLs or in some
-	// cases only the IPA URLs
-	liveURLs := getPreProvisioningOSDownloadURLs(&info.ProvConfig.Spec)
-	var newURLs []string
-	if len(liveURLs) > 0 {
-		for _, URL := range liveURLs {
-			if URL != "" {
-				newURL, err := transformURL(info.Namespace, URL)
-				if err != nil {
-					return nil, err
-				}
-				newURLs = append(newURLs, newURL)
-			}
-		}
-		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, strings.Join(newURLs, ","), true, false))
-	}
+
+	// Extract the pre-provisioning images from a container in the payload
+	initContainers = append(initContainers, createInitContainerMachineOSImages(info, "--all", imageVolumeMount, "/shared/html/images"))
+
 	// Download the transformed URL containing qcow2
 	if info.ProvConfig.Spec.ProvisioningOSDownloadURL != "" {
 		newURL, err := transformURL(info.Namespace, info.ProvConfig.Spec.ProvisioningOSDownloadURL)
@@ -160,10 +147,6 @@ func newImageCacheInitContainers(info *ProvisioningInfo) ([]corev1.Container, er
 		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, newURL, false, false))
 	}
 
-	// If the CoreOS IPA URLs are not available we will use the IPA downloader
-	if !isCoreOSIPAAvailable(&info.ProvConfig.Spec) {
-		initContainers = append(initContainers, createInitContainerIpaDownloader(info.Images))
-	}
 	return initContainers, nil
 }
 

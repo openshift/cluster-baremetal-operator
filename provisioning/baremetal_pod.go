@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -55,6 +54,7 @@ const (
 	mariadbPwdEnvVar                 = "MARIADB_PASSWORD"    // #nosec
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
 	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
+	ironicKernelParamsEnvVar         = "IRONIC_KERNEL_PARAMS"
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
 	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
 	externalIpEnvVar                 = "IRONIC_EXTERNAL_IP"
@@ -304,44 +304,15 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 		initContainers = append(initContainers, createInitContainerStaticIpSet(info.Images, &info.ProvConfig.Spec))
 	}
 
-	// If the PreProvisioningOSDownloadURLs are set, we fetch the URLs of either CoreOS ISO and IPA assets or in some
-	// cases only the IPA assets
-	liveURLs := getPreProvisioningOSDownloadURLs(&info.ProvConfig.Spec)
-	if len(liveURLs) > 0 {
-		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, strings.Join(liveURLs, ","), true, true))
-	}
+	// Extract the pre-provisioning images from a container in the payload
+	initContainers = append(initContainers, createInitContainerMachineOSImages(info, "--all", imageVolumeMount, "/shared/html/images"))
+
 	// If the ProvisioningOSDownloadURL is set, we download the URL specified in it
 	if info.ProvConfig.Spec.ProvisioningOSDownloadURL != "" {
 		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, info.ProvConfig.Spec.ProvisioningOSDownloadURL, false, true))
 	}
 
-	// If the CoreOS IPA assets are not available we will use the IPA downloader
-	if !isCoreOSIPAAvailable(&info.ProvConfig.Spec) {
-		initContainers = append(initContainers, createInitContainerIpaDownloader(info.Images))
-	}
-
 	return injectProxyAndCA(initContainers, info.Proxy)
-}
-
-func createInitContainerIpaDownloader(images *Images) corev1.Container {
-	initContainer := corev1.Container{
-		Name:            "metal3-ipa-downloader",
-		Image:           images.IpaDownloader,
-		Command:         []string{"/usr/local/bin/get-resource.sh"},
-		ImagePullPolicy: "IfNotPresent",
-		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
-		},
-		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
-		Env:          []corev1.EnvVar{},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("10m"),
-				corev1.ResourceMemory: resource.MustParse("50Mi"),
-			},
-		},
-	}
-	return initContainer
 }
 
 func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
@@ -430,10 +401,10 @@ func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 		createContainerMetal3BaremetalOperator(info.Images, &info.ProvConfig.Spec, info.BaremetalWebhookEnabled),
 		createContainerMetal3Mariadb(info.Images),
 		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
-		createContainerMetal3IronicConductor(info.Images, &info.ProvConfig.Spec, info.SSHKey),
+		createContainerMetal3IronicConductor(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3IronicApi(info.Images, &info.ProvConfig.Spec),
 		createContainerMetal3RamdiskLogs(info.Images),
-		createContainerMetal3IronicInspector(info.Images, &info.ProvConfig.Spec),
+		createContainerMetal3IronicInspector(info.Images, info, &info.ProvConfig.Spec),
 	}
 
 	// If the provisioning network is disabled, and the user hasn't requested a
@@ -675,7 +646,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	return container
 }
 
-func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
+func createContainerMetal3IronicConductor(images *Images, info *ProvisioningInfo, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
 	volumes := []corev1.VolumeMount{
 		sharedVolumeMount,
 		imageVolumeMount,
@@ -706,6 +677,10 @@ func createContainerMetal3IronicConductor(images *Images, config *metal3iov1alph
 			{
 				Name:  inspectorInsecureEnvVar,
 				Value: "true",
+			},
+			{
+				Name:  ironicKernelParamsEnvVar,
+				Value: ipOptionForMachineOsDownloader(info),
 			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
@@ -805,7 +780,7 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 	return container
 }
 
-func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
 	container := corev1.Container{
 		Name:            "metal3-ironic-inspector",
 		Image:           images.Ironic,
@@ -824,6 +799,10 @@ func createContainerMetal3IronicInspector(images *Images, config *metal3iov1alph
 			{
 				Name:  ironicInsecureEnvVar,
 				Value: "true",
+			},
+			{
+				Name:  ironicKernelParamsEnvVar,
+				Value: ipOptionForMachineOsDownloader(info),
 			},
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),

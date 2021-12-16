@@ -238,6 +238,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				envWithSecret("MARIADB_PASSWORD", "metal3-mariadb-password", "password"),
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "IRONIC_INSPECTOR_INSECURE", Value: "true"},
+				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp6"},
 				{Name: "HTTP_PORT", Value: "6180"},
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
@@ -270,6 +271,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			Name: "metal3-ironic-inspector",
 			Env: []corev1.EnvVar{
 				{Name: "IRONIC_INSECURE", Value: "true"},
+				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp6"},
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				envWithSecret("HTTP_BASIC_HTPASSWD", "metal3-ironic-inspector-password", "htpasswd"),
