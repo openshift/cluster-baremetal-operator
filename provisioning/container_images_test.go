@@ -13,6 +13,7 @@ var (
 	expectedIronicStaticIpManager        = "registry.ci.openshift.org/openshift:ironic-static-ip-manager"
 	expectedIronicAgent                  = "registry.ci.openshift.org/openshift:ironic-agent"
 	expectedImageCustomizationController = "registry.ci.openshift.org/openshift:image-customization-controller"
+	expectedMachineOSImages              = "registry.ci.openshift.org/openshift:machine-os-images"
 )
 
 func TestGetContainerImages(t *testing.T) {
@@ -50,7 +51,8 @@ func TestGetContainerImages(t *testing.T) {
 					containerImages.MachineOsDownloader != expectedMachineOsDownloader ||
 					containerImages.StaticIpManager != expectedIronicStaticIpManager ||
 					containerImages.IronicAgent != expectedIronicAgent ||
-					containerImages.ImageCustomizationController != expectedImageCustomizationController {
+					containerImages.ImageCustomizationController != expectedImageCustomizationController ||
+					containerImages.MachineOSImages != expectedMachineOSImages {
 					t.Errorf("failed GetContainerImages. One or more Baremetal container images do not match the expected images.")
 				}
 			}
