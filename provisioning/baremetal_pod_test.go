@@ -145,10 +145,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 			config: configWithPreProvisioningOSDownloadURLs().build(),
 			expectedContainers: []corev1.Container{
 				{
-					Name:  "metal3-configure-coreos-ipa",
-					Image: images.Ironic,
-				},
-				{
 					Name:  "metal3-machine-os-downloader-live-images",
 					Image: images.MachineOsDownloader,
 				},
@@ -213,7 +209,6 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_CACERT_FILE", Value: "/certs/ironic/tls.crt"},
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "DEPLOY_KERNEL_URL", Value: "http://localhost:6181/images/ironic-python-agent.kernel"},
-				{Name: "DEPLOY_RAMDISK_URL", Value: "http://localhost:6181/images/ironic-python-agent.initramfs"},
 				{Name: "IRONIC_ENDPOINT", Value: "https://localhost:6385/v1/"},
 				{Name: "IRONIC_INSPECTOR_ENDPOINT", Value: "https://localhost:5050/v1/"},
 				{Name: "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE", Value: "Never"},
@@ -243,6 +238,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				envWithSecret("MARIADB_PASSWORD", "metal3-mariadb-password", "password"),
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "IRONIC_INSPECTOR_INSECURE", Value: "true"},
+				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp6"},
 				{Name: "HTTP_PORT", Value: "6180"},
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
@@ -275,6 +271,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			Name: "metal3-ironic-inspector",
 			Env: []corev1.EnvVar{
 				{Name: "IRONIC_INSECURE", Value: "true"},
+				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp6"},
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				envWithSecret("HTTP_BASIC_HTPASSWD", "metal3-ironic-inspector-password", "htpasswd"),
