@@ -12,10 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
@@ -132,26 +130,13 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 }
 
 // ensureClusterOperator makes sure that the CO exists
-func (r *ProvisioningReconciler) ensureClusterOperator(baremetalConfig *metal3iov1alpha1.Provisioning) error {
+func (r *ProvisioningReconciler) ensureClusterOperator() error {
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if k8serrors.IsNotFound(err) {
 		co, err = r.createClusterOperator()
 	}
 	if err != nil {
 		return err
-	}
-
-	// if the CO has been created with the manifest then we need to update the ownership
-	if baremetalConfig != nil && len(co.ObjectMeta.OwnerReferences) == 0 {
-		err = controllerutil.SetControllerReference(baremetalConfig, co, r.Scheme)
-		if err != nil {
-			return err
-		}
-
-		co, err = r.OSClient.ConfigV1().ClusterOperators().Update(context.Background(), co, metav1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
 	}
 
 	needsUpdate := false

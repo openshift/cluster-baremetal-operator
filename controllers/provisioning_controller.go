@@ -153,7 +153,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Make sure ClusterOperator exists
-	err := r.ensureClusterOperator(nil)
+	err := r.ensureClusterOperator()
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -193,12 +193,6 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return result, errors.Wrapf(
 			r.updateCOStatus(ReasonProvisioningCRNotFound, "Provisioning CR not found", ""),
 			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
-	}
-
-	// Make sure ClusterOperator's ownership is updated
-	err = r.ensureClusterOperator(baremetalConfig)
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 
 	// Read container images from Config Map
@@ -464,7 +458,7 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	ctx := context.Background()
-	err := r.ensureClusterOperator(nil)
+	err := r.ensureClusterOperator()
 	if err != nil {
 		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
 	}
