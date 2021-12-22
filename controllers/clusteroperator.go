@@ -52,7 +52,7 @@ const (
 	ReasonResourceNotFound StatusReason = "ResourceNotFound"
 
 	// ReasonProvisioningCRNotFound indicates that the provsioning CR is not found
-	ReasonProvisioningCRNotFound StatusReason = "ProvisioningCRNotFound"
+	ReasonProvisioningCRNotFound StatusReason = "WaitingForProvisioningCR"
 
 	// ReasonUnsupported is an unsupported StatusReason
 	ReasonUnsupported StatusReason = "UnsupportedPlatform"
