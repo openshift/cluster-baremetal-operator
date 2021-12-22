@@ -190,7 +190,9 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// Provisioning configuration not available at this time.
 		// Cannot proceed wtih metal3 deployment.
 		klog.Info("Provisioning CR not found")
-		return result, nil
+		return result, errors.Wrapf(
+			r.updateCOStatus(ReasonProvisioningCRNotFound, "Provisioning CR not found", ""),
+			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
 	}
 
 	// Make sure ClusterOperator's ownership is updated
@@ -234,7 +236,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 	if deleted {
 		return result, errors.Wrapf(
-			r.updateCOStatus(ReasonComplete, "all Metal3 resources deleted", ""),
+			r.updateCOStatus(ReasonResourceNotFound, "all Metal3 resources deleted", ""),
 			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
 	}
 
@@ -287,7 +289,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Determine the status of the deployment
 	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	if err != nil {
-		err = r.updateCOStatus(ReasonNotFound, "metal3 deployment inaccessible", "")
+		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 deployment inaccessible", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
@@ -303,7 +305,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Determine the status of the DaemonSet
 	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	if err != nil {
-		err = r.updateCOStatus(ReasonNotFound, "metal3 image cache daemonset inaccessible", "")
+		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 image cache daemonset inaccessible", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
@@ -497,7 +499,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if enabled {
 		baremetalConfig, err := r.readProvisioningCR(context.Background())
 		if err != nil || baremetalConfig == nil {
-			err = r.updateCOStatus(ReasonComplete, "Provisioning CR not found on BareMetal Platform; marking operator as available", "")
+			err = r.updateCOStatus(ReasonProvisioningCRNotFound, "Provisioning CR not found on BareMetal Platform", "")
 			if err != nil {
 				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
 			}
