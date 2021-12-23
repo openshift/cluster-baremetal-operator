@@ -1063,16 +1063,31 @@ func DeleteMetal3Deployment(info *ProvisioningInfo) error {
 }
 
 func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (string, error) {
+	labelSelector := &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"k8s-app":    metal3AppName,
+			cboLabelName: stateService,
+		}}
+
+	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
+	if err != nil {
+		return "", err
+	}
+
 	listOptions := metav1.ListOptions{
-		LabelSelector: metal3AppName,
-		FieldSelector: "status.hostIP",
+		LabelSelector: selector.String(),
 	}
 
 	podList, err := podClient.Pods(targetNamespace).List(context.Background(), listOptions)
-	if err == nil && len(podList.Items) > 0 {
-		// We expect only one pod with the above LabelSelector
-		hostIP := podList.Items[0].Status.HostIP
-		return hostIP, err
+	if err != nil {
+		return "", err
 	}
-	return "", err
+
+	// We expect only one pod with the above LabelSelector
+	if len(podList.Items) != 1 {
+		return "", fmt.Errorf("there should be only one pod listed for the given label")
+	}
+
+	hostIP := podList.Items[0].Status.HostIP
+	return hostIP, err
 }
