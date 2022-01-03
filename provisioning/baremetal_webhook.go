@@ -4,11 +4,14 @@ import (
 	"context"
 	"strconv"
 
+	appsv1 "k8s.io/api/apps/v1"
+
 	"github.com/pkg/errors"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -26,15 +29,23 @@ const (
 
 // EnsureBaremetalOperatorWebhook ensures ValidatingWebhook resources are ready to serve.
 func EnsureBaremetalOperatorWebhook(info *ProvisioningInfo) (bool, error) {
-	if !info.BaremetalWebhookEnabled {
-		return false, nil
-	}
-
 	webhookService := newBaremetalOperatorWebhookService(info.Namespace)
 	_, _, err := resourceapply.ApplyService(info.Client.CoreV1(), info.EventRecorder, webhookService)
 	if err != nil {
 		err = errors.Wrap(err, "unable to create validatingwebhook service")
 		return false, err
+	}
+
+	if !info.BaremetalWebhookEnabled {
+		return false, nil
+	}
+
+	ds, _ := GetDeploymentState(info.Client.AppsV1(), info.Namespace)
+
+	// If Metal3 deployment is not available, we should not
+	// create validatingwebhook resources.
+	if ds != appsv1.DeploymentAvailable {
+		return false, nil
 	}
 
 	vw := newBaremetalOperatorWebhook(info.Namespace)
@@ -62,13 +73,13 @@ func BaremetalWebhookDependenciesReady(client osclientset.Interface) bool {
 
 // DeleteValidatingWebhook deletes ValidatingWebhookConfiguration and
 // service resources.
-func DeleteValidatingWebhook(info *ProvisioningInfo) error {
-	err := client.IgnoreNotFound(info.Client.CoreV1().Services(info.Namespace).Delete(context.Background(), validatingWebhookService, metav1.DeleteOptions{}))
+func DeleteValidatingWebhook(c kubernetes.Interface, namespace string) error {
+	err := client.IgnoreNotFound(c.CoreV1().Services(namespace).Delete(context.Background(), validatingWebhookService, metav1.DeleteOptions{}))
 	if err != nil {
 		return err
 	}
 
-	return client.IgnoreNotFound(info.Client.AdmissionregistrationV1().
+	return client.IgnoreNotFound(c.AdmissionregistrationV1().
 		ValidatingWebhookConfigurations().
 		Delete(context.Background(), validatingWebhookConfigurationName, metav1.DeleteOptions{}))
 }

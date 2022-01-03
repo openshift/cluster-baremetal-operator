@@ -266,7 +266,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Determine the status of the deployment
-	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), info.Namespace)
 	if err != nil {
 		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 deployment inaccessible", "")
 		if err != nil {
@@ -282,7 +282,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Determine the status of the DaemonSet
-	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), info.Namespace)
 	if err != nil {
 		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 image cache daemonset inaccessible", "")
 		if err != nil {
@@ -374,7 +374,7 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	if err := provisioning.DeleteAllSecrets(info); err != nil {
 		return errors.Wrap(err, "failed to delete one or more metal3 secrets")
 	}
-	if err := provisioning.DeleteValidatingWebhook(info); err != nil {
+	if err := provisioning.DeleteValidatingWebhook(info.Client, info.Namespace); err != nil {
 		return errors.Wrap(err, "failed to delete validatingwebhook and service")
 	}
 	if err := provisioning.DeleteMetal3Deployment(info); err != nil {
@@ -493,6 +493,18 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	r.NetworkStack = networkStack(ips)
 	klog.InfoS("Network stack calculation", "APIServerInternalHost", apiInt, "NetworkStack", r.NetworkStack)
+
+	// We don't have an explicit way to find out this is fresh install or upgrade. In fresh
+	// install, validatingwebhook resources are not expected to be existed and this deletion
+	// has no effect. On contrary, in upgrade, there is a gap between new metal3 resources are started
+	// being rolled out but validatingwebhookconfiguration exists from the previous version and within
+	// this small gap validatingwebhook API gets connection refused errors.
+	// We are safely deleting because when new metal3 pods are ready, reconciler will create new
+	// validatingwebhookconfiguration.
+	err = provisioning.DeleteValidatingWebhook(r.KubeClient, ComponentNamespace)
+	if err != nil {
+		return errors.Wrap(err, "unable to clear stale validatingwebhookconfiguration resources")
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).

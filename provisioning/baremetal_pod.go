@@ -1059,8 +1059,8 @@ func getDeploymentCondition(deployment *appsv1.Deployment) appsv1.DeploymentCond
 	return appsv1.DeploymentProgressing
 }
 
-// Provide the current state of metal3 deployment
-func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DeploymentConditionType, error) {
+// GetDeploymentState provides the current state of metal3 deployment
+func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace string) (appsv1.DeploymentConditionType, error) {
 	existing, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
 	if err != nil || existing == nil {
 		// There were errors accessing the deployment.

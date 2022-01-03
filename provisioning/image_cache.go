@@ -23,8 +23,6 @@ import (
 	osconfigv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
-
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 const (
@@ -287,8 +285,8 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 	return
 }
 
-// Provide the current state of metal3 image-cache daemonset
-func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DaemonSetConditionType, error) {
+// GetDaemonSetState provides the current state of metal3 image-cache daemonset
+func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace string) (appsv1.DaemonSetConditionType, error) {
 	existing, err := client.DaemonSets(targetNamespace).Get(context.Background(), imageCacheService, metav1.GetOptions{})
 	if err != nil || existing == nil {
 		// There were errors accessing the deployment.
