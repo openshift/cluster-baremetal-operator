@@ -15,10 +15,6 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:ironic
-  - name: ironic-ipa-downloader
-    from:
-      kind: DockerImage
-      name: registry.ci.openshift.org/openshift:ironic-ipa-downloader
   - name: ironic-machine-os-downloader
     from:
       kind: DockerImage
