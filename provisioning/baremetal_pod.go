@@ -18,6 +18,7 @@ package provisioning
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
 	"time"
 
@@ -328,6 +329,20 @@ func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
 	return optionValue
 }
 
+func ipOptionForProvisioning(info *ProvisioningInfo) string {
+	var optionValue string
+	ip := net.ParseIP(info.ProvConfig.Spec.ProvisioningIP)
+	if info.ProvConfig.Spec.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled || ip == nil {
+		// It ProvisioningNetworkDisabled or no valid IP to check, fallback to the external network
+		return ipOptionForMachineOsDownloader(info)
+	}
+	if ip.To4() != nil {
+		optionValue = "ip=dhcp"
+	} else {
+		optionValue = "ip=dhcp6"
+	}
+	return optionValue
+}
 func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs string, useLiveImages, setIpOptions bool) corev1.Container {
 	var command string
 	name := "metal3-machine-os-downloader"
@@ -680,7 +695,7 @@ func createContainerMetal3IronicConductor(images *Images, info *ProvisioningInfo
 			},
 			{
 				Name:  ironicKernelParamsEnvVar,
-				Value: ipOptionForMachineOsDownloader(info),
+				Value: ipOptionForProvisioning(info),
 			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
@@ -802,7 +817,7 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 			},
 			{
 				Name:  ironicKernelParamsEnvVar,
-				Value: ipOptionForMachineOsDownloader(info),
+				Value: ipOptionForProvisioning(info),
 			},
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
