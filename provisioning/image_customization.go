@@ -123,6 +123,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 				Name:  containerRegistriesEnvVar,
 				Value: containerRegistriesConfPath,
 			},
+			{
+				Name:  ipOptions,
+				Value: ipOptionForExternal(info),
+			},
 			buildSSHKeyEnvVar(info.SSHKey),
 			pullSecret,
 		},
