@@ -25,7 +25,6 @@ import (
 type Images struct {
 	BaremetalOperator            string `json:"baremetalOperator"`
 	Ironic                       string `json:"baremetalIronic"`
-	IpaDownloader                string `json:"baremetalIpaDownloader"`
 	MachineOsDownloader          string `json:"baremetalMachineOsDownloader"`
 	StaticIpManager              string `json:"baremetalStaticIpManager"`
 	IronicAgent                  string `json:"baremetalIronicAgent"`
