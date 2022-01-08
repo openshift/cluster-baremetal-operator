@@ -1098,11 +1098,16 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 		return "", err
 	}
 
-	// We expect only one pod with the above LabelSelector
-	if len(podList.Items) != 1 {
-		return "", fmt.Errorf("there should be only one pod listed for the given label")
+	var hostIP string
+	switch len(podList.Items) {
+	case 0:
+		// Ironic IP not available yet, just return an empty string
+	case 1:
+		hostIP = podList.Items[0].Status.HostIP
+	default:
+		// We expect only one pod with the above LabelSelector
+		err = fmt.Errorf("there should be only one pod listed for the given label")
 	}
 
-	hostIP := podList.Items[0].Status.HostIP
 	return hostIP, err
 }

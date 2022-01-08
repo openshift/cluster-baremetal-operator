@@ -227,12 +227,6 @@ func getIronicIP(info *ProvisioningInfo) (string, error) {
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		return config.ProvisioningIP, nil
 	} else {
-		// Couple of things can go wrong here:
-		// 1. err != nil could be caused when Pod.List() and hence getPodHostIP() fails due to a temporary
-		// glitch (like a dropped network connection). So, report the error and try again.
-		// 2. hostIP == "" can happen when the metal3 pod is still coming up. The image-customization-controller
-		// has been updated to accept hostIP as ""
-
 		return getPodHostIP(info.Client.CoreV1(), info.Namespace)
 	}
 }
