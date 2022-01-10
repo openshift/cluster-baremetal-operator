@@ -23,6 +23,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apps
   resources:
   - daemonsets
@@ -84,13 +92,6 @@ rules:
   - list
   - patch
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - get
-  - list
 - apiGroups:
   - admissionregistration.k8s.io
   resources:
