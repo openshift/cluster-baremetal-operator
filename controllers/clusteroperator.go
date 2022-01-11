@@ -90,6 +90,30 @@ func relatedObjects() []osconfigv1.ObjectReference {
 			Resource: "provisioning",
 			Name:     "",
 		},
+		{
+			Group:     "metal3.io",
+			Resource:  "hostfirmwaresettings",
+			Name:      "",
+			Namespace: ComponentNamespace,
+		},
+		{
+			Group:     "metal3.io",
+			Resource:  "firmwareschemas",
+			Name:      "",
+			Namespace: ComponentNamespace,
+		},
+		{
+			Group:     "metal3.io",
+			Resource:  "preprovisioningimages",
+			Name:      "",
+			Namespace: ComponentNamespace,
+		},
+		{
+			Group:     "metal3.io",
+			Resource:  "bmceventsubscriptions",
+			Name:      "",
+			Namespace: ComponentNamespace,
+		},
 	}
 }
 
