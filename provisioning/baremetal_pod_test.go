@@ -476,7 +476,7 @@ func TestProxyAndCAInjection(t *testing.T) {
 	}
 }
 
-func TestIPOptionForMachineOsDownloader(t *testing.T) {
+func TestIPOptionForExternal(t *testing.T) {
 	tests := []struct {
 		ns   NetworkStackType
 		want string
@@ -496,8 +496,8 @@ func TestIPOptionForMachineOsDownloader(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
-			if got := ipOptionForMachineOsDownloader(&ProvisioningInfo{NetworkStack: tt.ns}); got != tt.want {
-				t.Errorf("ipOptionForMachineOsDownloader() = %v, want %v", got, tt.want)
+			if got := ipOptionForExternal(&ProvisioningInfo{NetworkStack: tt.ns}); got != tt.want {
+				t.Errorf("ipOptionForExternal() = %v, want %v", got, tt.want)
 			}
 		})
 	}

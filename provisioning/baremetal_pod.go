@@ -316,7 +316,7 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	return injectProxyAndCA(initContainers, info.Proxy)
 }
 
-func ipOptionForMachineOsDownloader(info *ProvisioningInfo) string {
+func ipOptionForExternal(info *ProvisioningInfo) string {
 	var optionValue string
 	switch info.NetworkStack {
 	case NetworkStackV4:
@@ -334,7 +334,7 @@ func ipOptionForProvisioning(info *ProvisioningInfo) string {
 	ip := net.ParseIP(info.ProvConfig.Spec.ProvisioningIP)
 	if info.ProvConfig.Spec.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled || ip == nil {
 		// It ProvisioningNetworkDisabled or no valid IP to check, fallback to the external network
-		return ipOptionForMachineOsDownloader(info)
+		return ipOptionForExternal(info)
 	}
 	if ip.To4() != nil {
 		optionValue = "ip=dhcp"
@@ -343,6 +343,7 @@ func ipOptionForProvisioning(info *ProvisioningInfo) string {
 	}
 	return optionValue
 }
+
 func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs string, useLiveImages, setIpOptions bool) corev1.Container {
 	var command string
 	name := "metal3-machine-os-downloader"
@@ -363,7 +364,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 		env = append(env,
 			corev1.EnvVar{
 				Name:  ipOptions,
-				Value: ipOptionForMachineOsDownloader(info),
+				Value: ipOptionForExternal(info),
 			})
 	}
 	initContainer := corev1.Container{

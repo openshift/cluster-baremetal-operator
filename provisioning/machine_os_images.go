@@ -6,6 +6,11 @@ import (
 )
 
 func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages string, dest corev1.VolumeMount, destPath string) corev1.Container {
+	ipOptionValue := ipOptionForExternal(info)
+	if !info.ProvConfig.Spec.VirtualMediaViaExternalNetwork {
+		ipOptionValue = ipOptionForProvisioning(info)
+	}
+
 	container := corev1.Container{
 		Name:    "machine-os-images",
 		Image:   info.Images.MachineOSImages,
@@ -17,7 +22,7 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 		Env: []corev1.EnvVar{
 			{
 				Name:  ipOptions,
-				Value: ipOptionForMachineOsDownloader(info),
+				Value: ipOptionValue,
 			},
 		},
 		Resources: corev1.ResourceRequirements{
