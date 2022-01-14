@@ -27,8 +27,6 @@ const (
 	ironicHtpasswdKey        = "htpasswd"
 	ironicConfigKey          = "auth-config"
 	ironicSecretName         = "metal3-ironic-password"
-	ironicrpcSecretName      = "metal3-ironic-rpc-password" // #nosec
-	ironicrpcUsername        = "rpc-user"
 	ironicUsername           = "ironic-user"
 	inspectorSecretName      = "metal3-ironic-inspector-password"
 	inspectorUsername        = "inspector-user"
@@ -36,6 +34,9 @@ const (
 	openshiftConfigNamespace = "openshift-config"
 	openshiftConfigSecretKey = ".dockerconfigjson" // #nosec
 	pullSecretName           = "pull-secret"
+	// NOTE(dtantsur): this is kept here to be able to remove the old
+	// secret when a Provisioning is removed.
+	ironicrpcSecretName = "metal3-ironic-rpc-password" // #nosec
 )
 
 type shouldUpdateDataFn func(existing *corev1.Secret) (bool, error)
@@ -173,10 +174,6 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	// Create a Secret for the Ironic Password
 	if err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic"); err != nil {
 		return false, errors.Wrap(err, "failed to create Ironic password")
-	}
-	// Create a Secret for the Ironic RPC Password
-	if err := createIronicSecret(info, ironicrpcSecretName, ironicrpcUsername, "json_rpc"); err != nil {
-		return false, errors.Wrap(err, "failed to create Ironic rpc password")
 	}
 	// Create a Secret for the Ironic Inspector Password
 	if err := createIronicSecret(info, inspectorSecretName, inspectorUsername, "inspector"); err != nil {

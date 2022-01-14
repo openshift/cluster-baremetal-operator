@@ -229,33 +229,26 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_RAMDISK_SSH_KEY"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
 				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
+				envWithSecret("IRONIC_HTPASSWD", "metal3-ironic-password", "htpasswd"),
+				envWithSecret("INSPECTOR_HTPASSWD", "metal3-ironic-inspector-password", "htpasswd"),
+				{Name: "IRONIC_REVERSE_PROXY_SETUP", Value: "true"},
+				{Name: "INSPECTOR_REVERSE_PROXY_SETUP", Value: "true"},
+				{Name: "IRONIC_HTTPD", Value: "true"},
 			},
 		},
-		"metal3-ironic-conductor": {
-			Name: "metal3-ironic-conductor",
+		"metal3-ironic": {
+			Name: "metal3-ironic",
 			Env: []corev1.EnvVar{
 				envWithSecret("MARIADB_PASSWORD", "metal3-mariadb-password", "password"),
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "IRONIC_INSPECTOR_INSECURE", Value: "true"},
 				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp"},
+				{Name: "IRONIC_REVERSE_PROXY_SETUP", Value: "true"},
+				{Name: "IRONIC_HTTPD", Value: "true"},
 				{Name: "HTTP_PORT", Value: "6180"},
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				{Name: "IRONIC_RAMDISK_SSH_KEY"},
-				envWithSecret("IRONIC_HTPASSWD", "metal3-ironic-rpc-password", "htpasswd"),
-				{Name: "IRONIC_EXTERNAL_IP"},
-				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
-				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
-			},
-		},
-		"metal3-ironic-api": {
-			Name: "metal3-ironic-api",
-			Env: []corev1.EnvVar{
-				envWithSecret("MARIADB_PASSWORD", "metal3-mariadb-password", "password"),
-				{Name: "IRONIC_INSECURE", Value: "true"},
-				{Name: "HTTP_PORT", Value: "6180"},
-				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
-				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				envWithSecret("IRONIC_HTPASSWD", "metal3-ironic-password", "htpasswd"),
 				{Name: "IRONIC_EXTERNAL_IP"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
@@ -271,6 +264,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			Env: []corev1.EnvVar{
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp"},
+				{Name: "INSPECTOR_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				envWithSecret("INSPECTOR_HTPASSWD", "metal3-ironic-inspector-password", "htpasswd"),
@@ -332,8 +326,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				containers["metal3-baremetal-operator"],
 				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], sshkey),
-				withEnv(containers["metal3-ironic-conductor"], sshkey),
-				containers["metal3-ironic-api"],
+				withEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
 				containers["metal3-ironic-inspector"],
 				containers["metal3-static-ip-manager"],
@@ -348,8 +341,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				containers["metal3-baremetal-operator"],
 				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], sshkey),
-				withEnv(containers["metal3-ironic-conductor"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
-				withEnv(containers["metal3-ironic-api"], envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
+				withEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
 				containers["metal3-ramdisk-logs"],
 				containers["metal3-ironic-inspector"],
 				containers["metal3-static-ip-manager"],
@@ -364,8 +356,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				containers["metal3-baremetal-operator"],
 				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
-				withEnv(containers["metal3-ironic-conductor"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
-				withEnv(containers["metal3-ironic-api"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
+				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
 				containers["metal3-ramdisk-logs"],
 				withEnv(containers["metal3-ironic-inspector"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
 				withEnv(containers["metal3-static-ip-manager"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
@@ -380,8 +371,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				containers["metal3-baremetal-operator"],
 				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "")),
-				withEnv(containers["metal3-ironic-conductor"], envWithValue("PROVISIONING_INTERFACE", ""), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
-				withEnv(containers["metal3-ironic-api"], envWithValue("PROVISIONING_INTERFACE", "")),
+				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", ""), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
 				containers["metal3-ramdisk-logs"],
 				withEnv(containers["metal3-ironic-inspector"], envWithValue("PROVISIONING_INTERFACE", ""), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
 			},
@@ -394,8 +384,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				containers["metal3-baremetal-operator"],
 				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP")),
-				withEnv(containers["metal3-ironic-conductor"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP"), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
-				withEnv(containers["metal3-ironic-api"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP")),
+				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP"), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
 				containers["metal3-ramdisk-logs"],
 				withEnv(containers["metal3-ironic-inspector"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP"), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
 			},
@@ -415,7 +404,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 			for i, container := range actualContainers {
 				assert.Equal(t, tc.expectedContainers[i].Name, actualContainers[i].Name)
-				assert.Equal(t, len(tc.expectedContainers[i].Env), len(actualContainers[i].Env))
+				assert.Equal(t, len(tc.expectedContainers[i].Env), len(actualContainers[i].Env), "container name: ", tc.expectedContainers[i].Name)
 				for e := range container.Env {
 					assert.EqualValues(t, tc.expectedContainers[i].Env[e], actualContainers[i].Env[e], "container name: ", tc.expectedContainers[i].Name)
 				}

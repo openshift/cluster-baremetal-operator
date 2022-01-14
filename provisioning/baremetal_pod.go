@@ -40,26 +40,30 @@ import (
 )
 
 const (
-	metal3AppName                    = "metal3"
-	baremetalDeploymentName          = "metal3"
-	baremetalSharedVolume            = "metal3-shared"
-	metal3AuthRootDir                = "/auth"
-	metal3TlsRootDir                 = "/certs"
-	ironicCredentialsVolume          = "metal3-ironic-basic-auth"
-	ironicrpcCredentialsVolume       = "metal3-ironic-rpc-basic-auth"
-	inspectorCredentialsVolume       = "metal3-inspector-basic-auth"
-	ironicTlsVolume                  = "metal3-ironic-tls"
-	inspectorTlsVolume               = "metal3-inspector-tls"
-	vmediaTlsVolume                  = "metal3-vmedia-tls"
-	ironicHtpasswdEnvVar             = "IRONIC_HTPASSWD"    // #nosec
-	inspectorHtpasswdEnvVar          = "INSPECTOR_HTPASSWD" // #nosec
-	mariadbPwdEnvVar                 = "MARIADB_PASSWORD"   // #nosec
-	ironicInsecureEnvVar             = "IRONIC_INSECURE"
-	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
-	ironicKernelParamsEnvVar         = "IRONIC_KERNEL_PARAMS"
-	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
-	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
-	externalIpEnvVar                 = "IRONIC_EXTERNAL_IP"
+	metal3AppName              = "metal3"
+	baremetalDeploymentName    = "metal3"
+	baremetalSharedVolume      = "metal3-shared"
+	metal3AuthRootDir          = "/auth"
+	metal3TlsRootDir           = "/certs"
+	ironicCredentialsVolume    = "metal3-ironic-basic-auth"
+	inspectorCredentialsVolume = "metal3-inspector-basic-auth"
+	ironicTlsVolume            = "metal3-ironic-tls"
+	inspectorTlsVolume         = "metal3-inspector-tls"
+	vmediaTlsVolume            = "metal3-vmedia-tls"
+	ironicHtpasswdEnvVar       = "IRONIC_HTPASSWD"    // #nosec
+	inspectorHtpasswdEnvVar    = "INSPECTOR_HTPASSWD" // #nosec
+	mariadbPwdEnvVar           = "MARIADB_PASSWORD"   // #nosec
+	ironicInsecureEnvVar       = "IRONIC_INSECURE"
+	inspectorInsecureEnvVar    = "IRONIC_INSPECTOR_INSECURE"
+	ironicKernelParamsEnvVar   = "IRONIC_KERNEL_PARAMS"
+	ironicCertEnvVar           = "IRONIC_CACERT_FILE"
+	sshKeyEnvVar               = "IRONIC_RAMDISK_SSH_KEY"
+	externalIpEnvVar           = "IRONIC_EXTERNAL_IP"
+	ironicProxyEnvVar          = "IRONIC_REVERSE_PROXY_SETUP"
+	inspectorProxyEnvVar       = "INSPECTOR_REVERSE_PROXY_SETUP"
+	// TODO(dtantsur): remove this variable from ironic-image, it does not
+	// exist upstream and was done as a last-minute compatibility hack.
+	ironicHttpdEnvVar                = "IRONIC_HTTPD"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -87,12 +91,6 @@ var sharedVolumeMount = corev1.VolumeMount{
 var ironicCredentialsMount = corev1.VolumeMount{
 	Name:      ironicCredentialsVolume,
 	MountPath: metal3AuthRootDir + "/ironic",
-	ReadOnly:  true,
-}
-
-var rpcCredentialsMount = corev1.VolumeMount{
-	Name:      ironicrpcCredentialsVolume,
-	MountPath: metal3AuthRootDir + "/ironic-rpc",
 	ReadOnly:  true,
 }
 
@@ -176,19 +174,6 @@ var metal3Volumes = []corev1.Volume{
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: baremetalWebhookSecretName,
-			},
-		},
-	},
-	{
-		Name: ironicrpcCredentialsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: ironicrpcSecretName,
-				Items: []corev1.KeyToPath{
-					{Key: ironicUsernameKey, Path: ironicUsernameKey},
-					{Key: ironicPasswordKey, Path: ironicPasswordKey},
-					{Key: ironicConfigKey, Path: ironicConfigKey},
-				},
 			},
 		},
 	},
@@ -418,8 +403,7 @@ func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 		createContainerMetal3BaremetalOperator(info.Images, &info.ProvConfig.Spec, info.BaremetalWebhookEnabled),
 		createContainerMetal3Mariadb(info.Images),
 		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
-		createContainerMetal3IronicConductor(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
-		createContainerMetal3IronicApi(info.Images, &info.ProvConfig.Spec),
+		createContainerMetal3Ironic(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3RamdiskLogs(info.Images),
 		createContainerMetal3IronicInspector(info.Images, info, &info.ProvConfig.Spec),
 	}
@@ -613,11 +597,23 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 
 	volumes := []corev1.VolumeMount{
 		sharedVolumeMount,
+		ironicCredentialsMount,
+		inspectorCredentialsMount,
 		imageVolumeMount,
 		ironicTlsMount,
 		inspectorTlsMount,
 	}
 	ports := []corev1.ContainerPort{
+		{
+			Name:          "ironic",
+			ContainerPort: 6385,
+			HostPort:      6385,
+		},
+		{
+			Name:          "inspector",
+			ContainerPort: 5050,
+			HostPort:      5050,
+		},
 		{
 			Name:          httpPortName,
 			ContainerPort: int32(port),
@@ -650,6 +646,20 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 			buildSSHKeyEnvVar(sshKey),
 			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
+			setIronicHtpasswdHash(ironicHtpasswdEnvVar, ironicSecretName),
+			setIronicHtpasswdHash(inspectorHtpasswdEnvVar, inspectorSecretName),
+			{
+				Name:  ironicProxyEnvVar,
+				Value: "true",
+			},
+			{
+				Name:  inspectorProxyEnvVar,
+				Value: "true",
+			},
+			{
+				Name:  ironicHttpdEnvVar,
+				Value: "true",
+			},
 		},
 		Ports: ports,
 		Resources: corev1.ResourceRequirements{
@@ -663,12 +673,11 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	return container
 }
 
-func createContainerMetal3IronicConductor(images *Images, info *ProvisioningInfo, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
+func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
 	volumes := []corev1.VolumeMount{
 		sharedVolumeMount,
 		imageVolumeMount,
 		inspectorCredentialsMount,
-		rpcCredentialsMount,
 		ironicTlsMount,
 		inspectorTlsMount,
 	}
@@ -677,13 +686,13 @@ func createContainerMetal3IronicConductor(images *Images, info *ProvisioningInfo
 	}
 
 	container := corev1.Container{
-		Name:            "metal3-ironic-conductor",
+		Name:            "metal3-ironic",
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			Privileged: pointer.BoolPtr(true),
 		},
-		Command:      []string{"/bin/runironic-conductor"},
+		Command:      []string{"/bin/runironic"},
 		VolumeMounts: volumes,
 		Env: []corev1.EnvVar{
 			mariadbPassword,
@@ -699,61 +708,18 @@ func createContainerMetal3IronicConductor(images *Images, info *ProvisioningInfo
 				Name:  ironicKernelParamsEnvVar,
 				Value: ipOptionForProvisioning(info),
 			},
-			buildEnvVar(httpPort, config),
-			buildEnvVar(provisioningIP, config),
-			buildEnvVar(provisioningInterface, config),
-			buildSSHKeyEnvVar(sshKey),
-			setIronicHtpasswdHash(ironicHtpasswdEnvVar, ironicrpcSecretName),
-			setIronicExternalIp(externalIpEnvVar, config),
-			buildEnvVar(provisioningMacAddresses, config),
-			buildEnvVar(vmediaHttpsPort, config),
-		},
-		Ports: []corev1.ContainerPort{
 			{
-				Name:          "json-rpc",
-				ContainerPort: 8089,
-				HostPort:      8089,
+				Name:  ironicProxyEnvVar,
+				Value: "true",
 			},
-		},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("50m"),
-				corev1.ResourceMemory: resource.MustParse("500Mi"),
-			},
-		},
-	}
-
-	return container
-}
-
-func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
-	volumes := []corev1.VolumeMount{
-		sharedVolumeMount,
-		rpcCredentialsMount,
-		ironicTlsMount,
-	}
-	if !config.DisableVirtualMediaTLS {
-		volumes = append(volumes, vmediaTlsMount)
-	}
-
-	container := corev1.Container{
-		Name:            "metal3-ironic-api",
-		Image:           images.Ironic,
-		ImagePullPolicy: "IfNotPresent",
-		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
-		},
-		Command:      []string{"/bin/runironic-api"},
-		VolumeMounts: volumes,
-		Env: []corev1.EnvVar{
-			mariadbPassword,
 			{
-				Name:  ironicInsecureEnvVar,
+				Name:  ironicHttpdEnvVar,
 				Value: "true",
 			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
+			buildSSHKeyEnvVar(sshKey),
 			setIronicHtpasswdHash(ironicHtpasswdEnvVar, ironicSecretName),
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
@@ -761,15 +727,15 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 		},
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          "ironic",
-				ContainerPort: 6385,
-				HostPort:      6385,
+				Name:          "ironic-int",
+				ContainerPort: 6388,
+				HostPort:      6388,
 			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("150m"),
-				corev1.ResourceMemory: resource.MustParse("300Mi"),
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("500Mi"),
 			},
 		},
 	}
@@ -821,6 +787,10 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 				Name:  ironicKernelParamsEnvVar,
 				Value: ipOptionForProvisioning(info),
 			},
+			{
+				Name:  inspectorProxyEnvVar,
+				Value: "true",
+			},
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(inspectorHtpasswdEnvVar, inspectorSecretName),
@@ -828,9 +798,9 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 		},
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          "inspector",
-				ContainerPort: 5050,
-				HostPort:      5050,
+				Name:          "inspector-int",
+				ContainerPort: 5049,
+				HostPort:      5049,
 			},
 		},
 		Resources: corev1.ResourceRequirements{
