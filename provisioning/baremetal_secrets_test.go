@@ -60,7 +60,7 @@ func init() {
 	}
 }
 
-func TestCreateMariadbPasswordSecret(t *testing.T) {
+func TestCreatePasswordSecret(t *testing.T) {
 	baremetalCR := &metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Provisioning",
@@ -77,11 +77,6 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 		expectedError error
 		testRecreate  bool
 	}{
-		{
-			name:          "new-mariadb-secret",
-			expectedError: nil,
-			testRecreate:  true,
-		},
 		{
 			name:          "new-ironic-secret",
 			expectedError: nil,
@@ -116,24 +111,6 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 				EventRecorder: events.NewLoggingEventRecorder("tests"),
 			}
 			switch tc.name {
-			case "new-mariadb-secret":
-				err := createMariadbPasswordSecret(info)
-				assert.Equal(t, tc.expectedError, err)
-
-				if tc.expectedError == nil {
-					secret, _ := kubeClient.Tracker().Get(secretsResource, testNamespace, "metal3-mariadb-password")
-					assert.NotEmpty(t, secret.(*v1.Secret).Data[baremetalSecretKey])
-					// Test for making sure that when a secret already exists, a new one is not
-					// created and the old one returned.
-					if tc.testRecreate {
-						original := secret.(*v1.Secret).Data[baremetalSecretKey]
-						err := createMariadbPasswordSecret(info)
-						assert.Equal(t, tc.expectedError, err)
-						newSecret, _ := kubeClient.Tracker().Get(secretsResource, testNamespace, "metal3-mariadb-password")
-						recreated := newSecret.(*v1.Secret).Data[baremetalSecretKey]
-						assert.True(t, bytes.Compare(original, recreated) == 0, "re-created mariadb password is invalid")
-					}
-				}
 			case "new-ironic-secret":
 				err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic")
 				if err != nil {

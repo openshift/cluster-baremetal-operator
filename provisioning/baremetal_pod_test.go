@@ -214,12 +214,6 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "METAL3_AUTH_ROOT_DIR", Value: "/auth"},
 			},
 		},
-		"metal3-mariadb": {
-			Name: "metal3-mariadb",
-			Env: []corev1.EnvVar{
-				envWithSecret("MARIADB_PASSWORD", "metal3-mariadb-password", "password"),
-			},
-		},
 		"metal3-httpd": {
 			Name: "metal3-httpd",
 			Env: []corev1.EnvVar{
@@ -239,7 +233,6 @@ func TestNewMetal3Containers(t *testing.T) {
 		"metal3-ironic": {
 			Name: "metal3-ironic",
 			Env: []corev1.EnvVar{
-				envWithSecret("MARIADB_PASSWORD", "metal3-mariadb-password", "password"),
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "IRONIC_INSPECTOR_INSECURE", Value: "true"},
 				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp"},
@@ -324,7 +317,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: managedProvisioning().build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], sshkey),
 				withEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
@@ -339,7 +331,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], sshkey),
 				withEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
 				containers["metal3-ramdisk-logs"],
@@ -354,7 +345,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: unmanagedProvisioning().build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
 				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
 				containers["metal3-ramdisk-logs"],
@@ -369,7 +359,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: disabledProvisioning().build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "")),
 				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", ""), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
 				containers["metal3-ramdisk-logs"],
@@ -382,7 +371,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				containers["metal3-mariadb"],
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP")),
 				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP"), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
 				containers["metal3-ramdisk-logs"],

@@ -52,7 +52,6 @@ const (
 	vmediaTlsVolume            = "metal3-vmedia-tls"
 	ironicHtpasswdEnvVar       = "IRONIC_HTPASSWD"    // #nosec
 	inspectorHtpasswdEnvVar    = "INSPECTOR_HTPASSWD" // #nosec
-	mariadbPwdEnvVar           = "MARIADB_PASSWORD"   // #nosec
 	ironicInsecureEnvVar       = "IRONIC_INSECURE"
 	inspectorInsecureEnvVar    = "IRONIC_INSPECTOR_INSECURE"
 	ironicKernelParamsEnvVar   = "IRONIC_KERNEL_PARAMS"
@@ -122,18 +121,6 @@ var baremetalWebhookCertMount = corev1.VolumeMount{
 	Name:      baremetalWebhookCertVolume,
 	ReadOnly:  true,
 	MountPath: baremetalWebhookCertMountPath,
-}
-
-var mariadbPassword = corev1.EnvVar{
-	Name: mariadbPwdEnvVar,
-	ValueFrom: &corev1.EnvVarSource{
-		SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: baremetalSecretName,
-			},
-			Key: baremetalSecretKey,
-		},
-	},
 }
 
 var pullSecret = corev1.EnvVar{
@@ -401,7 +388,6 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 	containers := []corev1.Container{
 		createContainerMetal3BaremetalOperator(info.Images, &info.ProvConfig.Spec, info.BaremetalWebhookEnabled),
-		createContainerMetal3Mariadb(info.Images),
 		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3Ironic(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3RamdiskLogs(info.Images),
@@ -561,36 +547,6 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 	return container
 }
 
-func createContainerMetal3Mariadb(images *Images) corev1.Container {
-	container := corev1.Container{
-		Name:            "metal3-mariadb",
-		Image:           images.Ironic,
-		ImagePullPolicy: "IfNotPresent",
-		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
-		},
-		Command:      []string{"/bin/runmariadb"},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
-		Env: []corev1.EnvVar{
-			mariadbPassword,
-		},
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          "mysql",
-				ContainerPort: 3306,
-				HostPort:      3306,
-			},
-		},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("15m"),
-				corev1.ResourceMemory: resource.MustParse("80Mi"),
-			},
-		},
-	}
-	return container
-}
-
 func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
 	port, _ := strconv.Atoi(baremetalHttpPort)             // #nosec
 	httpsPort, _ := strconv.Atoi(baremetalVmediaHttpsPort) // #nosec
@@ -695,7 +651,6 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		Command:      []string{"/bin/runironic"},
 		VolumeMounts: volumes,
 		Env: []corev1.EnvVar{
-			mariadbPassword,
 			{
 				Name:  ironicInsecureEnvVar,
 				Value: "true",

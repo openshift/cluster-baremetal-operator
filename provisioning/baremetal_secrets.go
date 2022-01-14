@@ -20,8 +20,6 @@ import (
 )
 
 const (
-	baremetalSecretName      = "metal3-mariadb-password" // #nosec
-	baremetalSecretKey       = "password"
 	ironicUsernameKey        = "username"
 	ironicPasswordKey        = "password"
 	ironicHtpasswdKey        = "htpasswd"
@@ -37,6 +35,7 @@ const (
 	// NOTE(dtantsur): this is kept here to be able to remove the old
 	// secret when a Provisioning is removed.
 	ironicrpcSecretName = "metal3-ironic-rpc-password" // #nosec
+	baremetalSecretName = "metal3-mariadb-password"    // #nosec
 )
 
 type shouldUpdateDataFn func(existing *corev1.Secret) (bool, error)
@@ -67,30 +66,6 @@ func applySecret(client coreclientv1.SecretsGetter, recorder events.Recorder, re
 	}
 
 	return err
-}
-
-// createMariadbPasswordSecret creates a Secret for Mariadb password
-func createMariadbPasswordSecret(info *ProvisioningInfo) error {
-	password, err := generateRandomPassword()
-	if err != nil {
-		return err
-	}
-
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      baremetalSecretName,
-			Namespace: info.Namespace,
-		},
-		StringData: map[string]string{
-			baremetalSecretKey: password,
-		},
-	}
-
-	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
-		return err
-	}
-
-	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData)
 }
 
 func createIronicSecret(info *ProvisioningInfo, name string, username string, configSection string) error {
@@ -167,10 +142,6 @@ func createRegistryPullSecret(info *ProvisioningInfo) error {
 }
 
 func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
-	// Create a Secret for the Mariadb Password
-	if err := createMariadbPasswordSecret(info); err != nil {
-		return false, errors.Wrap(err, "failed to create Mariadb password")
-	}
 	// Create a Secret for the Ironic Password
 	if err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic"); err != nil {
 		return false, errors.Wrap(err, "failed to create Ironic password")
