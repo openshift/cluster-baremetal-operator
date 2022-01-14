@@ -51,8 +51,9 @@ const (
 	ironicTlsVolume                  = "metal3-ironic-tls"
 	inspectorTlsVolume               = "metal3-inspector-tls"
 	vmediaTlsVolume                  = "metal3-vmedia-tls"
-	htpasswdEnvVar                   = "HTTP_BASIC_HTPASSWD" // #nosec
-	mariadbPwdEnvVar                 = "MARIADB_PASSWORD"    // #nosec
+	ironicHtpasswdEnvVar             = "IRONIC_HTPASSWD"    // #nosec
+	inspectorHtpasswdEnvVar          = "INSPECTOR_HTPASSWD" // #nosec
+	mariadbPwdEnvVar                 = "MARIADB_PASSWORD"   // #nosec
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
 	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
 	ironicKernelParamsEnvVar         = "IRONIC_KERNEL_PARAMS"
@@ -702,7 +703,7 @@ func createContainerMetal3IronicConductor(images *Images, info *ProvisioningInfo
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			buildSSHKeyEnvVar(sshKey),
-			setIronicHtpasswdHash(htpasswdEnvVar, ironicrpcSecretName),
+			setIronicHtpasswdHash(ironicHtpasswdEnvVar, ironicrpcSecretName),
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
@@ -753,7 +754,7 @@ func createContainerMetal3IronicApi(images *Images, config *metal3iov1alpha1.Pro
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
-			setIronicHtpasswdHash(htpasswdEnvVar, ironicSecretName),
+			setIronicHtpasswdHash(ironicHtpasswdEnvVar, ironicSecretName),
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
@@ -822,7 +823,7 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 			},
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
-			setIronicHtpasswdHash(htpasswdEnvVar, inspectorSecretName),
+			setIronicHtpasswdHash(inspectorHtpasswdEnvVar, inspectorSecretName),
 			buildEnvVar(provisioningMacAddresses, config),
 		},
 		Ports: []corev1.ContainerPort{
