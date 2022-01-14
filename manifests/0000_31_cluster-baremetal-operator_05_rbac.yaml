@@ -173,14 +173,6 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
-  - bmceventsubscription/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - metal3.io
-  resources:
   - bmceventsubscriptions
   verbs:
   - create
@@ -190,6 +182,14 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - bmceventsubscriptions/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - metal3.io
   resources:
