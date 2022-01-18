@@ -60,6 +60,8 @@ const (
 	externalIpEnvVar           = "IRONIC_EXTERNAL_IP"
 	ironicProxyEnvVar          = "IRONIC_REVERSE_PROXY_SETUP"
 	inspectorProxyEnvVar       = "INSPECTOR_REVERSE_PROXY_SETUP"
+	ironicPrivatePortEnvVar    = "IRONIC_PRIVATE_PORT"
+	inspectorPrivatePortEnvVar = "IRONIC_INSPECTOR_PRIVATE_PORT"
 	// TODO(dtantsur): remove this variable from ironic-image, it does not
 	// exist upstream and was done as a last-minute compatibility hack.
 	ironicHttpdEnvVar                = "IRONIC_HTTPD"
@@ -616,6 +618,14 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 				Name:  ironicHttpdEnvVar,
 				Value: "true",
 			},
+			{
+				Name:  ironicPrivatePortEnvVar,
+				Value: fmt.Sprint(ironicPrivatePort),
+			},
+			{
+				Name:  inspectorPrivatePortEnvVar,
+				Value: fmt.Sprint(ironicInspectorPrivatePort),
+			},
 		},
 		Ports: ports,
 		Resources: corev1.ResourceRequirements{
@@ -671,6 +681,10 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 				Name:  ironicHttpdEnvVar,
 				Value: "true",
 			},
+			{
+				Name:  ironicPrivatePortEnvVar,
+				Value: fmt.Sprint(ironicPrivatePort),
+			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
@@ -683,8 +697,8 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "ironic-int",
-				ContainerPort: 6388,
-				HostPort:      6388,
+				ContainerPort: ironicPrivatePort,
+				HostPort:      ironicPrivatePort,
 			},
 		},
 		Resources: corev1.ResourceRequirements{
@@ -746,6 +760,10 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 				Name:  inspectorProxyEnvVar,
 				Value: "true",
 			},
+			{
+				Name:  inspectorPrivatePortEnvVar,
+				Value: fmt.Sprint(ironicInspectorPrivatePort),
+			},
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			setIronicHtpasswdHash(inspectorHtpasswdEnvVar, inspectorSecretName),
@@ -754,8 +772,8 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "inspector-int",
-				ContainerPort: 5049,
-				HostPort:      5049,
+				ContainerPort: ironicInspectorPrivatePort,
+				HostPort:      ironicInspectorPrivatePort,
 			},
 		},
 		Resources: corev1.ResourceRequirements{
