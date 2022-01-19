@@ -146,6 +146,33 @@ func newBaremetalOperatorWebhook(targetNamespace string) *admissionregistration.
 					},
 				},
 			},
+			{
+				ClientConfig: admissionregistration.WebhookClientConfig{
+					CABundle: []byte("Cg=="),
+					Service: &admissionregistration.ServiceReference{
+						Name:      validatingWebhookService,
+						Namespace: targetNamespace,
+						Path:      pointer.StringPtr("/validate-metal3-io-v1alpha1-bmceventsubscription"),
+					},
+				},
+				SideEffects:             &sideEffect,
+				FailurePolicy:           &failurePolicy,
+				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				Name:                    "bmceventsubscription.metal3.io",
+				Rules: []admissionregistration.RuleWithOperations{
+					{
+						Operations: []admissionregistration.OperationType{
+							admissionregistration.Create,
+							admissionregistration.Update,
+						},
+						Rule: admissionregistration.Rule{
+							Resources:   []string{"bmceventsubscriptions"},
+							APIGroups:   []string{"metal3.io"},
+							APIVersions: []string{"v1alpha1"},
+						},
+					},
+				},
+			},
 		},
 	}
 
