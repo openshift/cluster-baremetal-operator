@@ -336,11 +336,12 @@ func ipOptionForProvisioning(info *ProvisioningInfo) string {
 		// It ProvisioningNetworkDisabled or no valid IP to check, fallback to the external network
 		return ipOptionForExternal(info)
 	}
-	if ip.To4() != nil {
+	optionValue = "ip=dhcp,dhcp6"
+	/*if ip.To4() != nil {
 		optionValue = "ip=dhcp"
 	} else {
 		optionValue = "ip=dhcp6"
-	}
+	}*/
 	return optionValue
 }
 
