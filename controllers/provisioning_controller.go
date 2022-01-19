@@ -401,11 +401,12 @@ func networkStack(ips []net.IP) provisioning.NetworkStackType {
 		if ip.IsLoopback() {
 			continue
 		}
-		if ip.To4() != nil {
+		ns |= provisioning.NetworkStackDual
+		/*if ip.To4() != nil {
 			ns |= provisioning.NetworkStackV4
 		} else {
 			ns |= provisioning.NetworkStackV6
-		}
+		}*/
 	}
 	return ns
 }
