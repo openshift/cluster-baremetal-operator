@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"net"
 	"reflect"
 	"testing"
 
@@ -81,75 +80,104 @@ func TestProvisioning(t *testing.T) {
 	}
 }
 
-func TestNetworkStack(t *testing.T) {
-	tests := []struct {
-		name    string
-		ips     []net.IP
-		want    provisioning.NetworkStackType
-		wantErr bool
+func TestNetworkStackFromServiceNetwork(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		networkCR            *configv1.Network
+		expectedError        bool
+		expectedNetworkStack provisioning.NetworkStackType
 	}{
 		{
-			name: "v4 basic",
-			ips:  []net.IP{net.ParseIP("192.168.0.1")},
-			want: provisioning.NetworkStackV4,
+			name: "StatusIPv4",
+			networkCR: &configv1.Network{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Network",
+					APIVersion: "config.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Status: configv1.NetworkStatus{
+					ServiceNetwork: []string{"172.30.0.0/16"},
+				},
+			},
+			expectedError:        false,
+			expectedNetworkStack: provisioning.NetworkStackV4,
 		},
 		{
-			name: "v4 in v6 format: basic",
-			ips:  []net.IP{net.ParseIP("::FFFF:192.168.0.1")},
-			want: provisioning.NetworkStackV4,
+			name: "SpecIPv6",
+			networkCR: &configv1.Network{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Network",
+					APIVersion: "config.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: configv1.NetworkSpec{
+					ServiceNetwork: []string{"fd02::/112"},
+				},
+				Status: configv1.NetworkStatus{
+					ServiceNetwork: []string{},
+				},
+			},
+			expectedError:        false,
+			expectedNetworkStack: provisioning.NetworkStackV6,
 		},
 		{
-			name: "v6: basic",
-			ips:  []net.IP{net.ParseIP("2001:db8::68")},
-			want: provisioning.NetworkStackV6,
+			name: "StatusDualStack",
+			networkCR: &configv1.Network{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Network",
+					APIVersion: "config.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Status: configv1.NetworkStatus{
+					ServiceNetwork: []string{"172.30.0.0/16", "fd02::/112"},
+				},
+			},
+			expectedError:        false,
+			expectedNetworkStack: provisioning.NetworkStackDual,
 		},
 		{
-			name: "dual: basic",
-			ips:  []net.IP{net.ParseIP("2001:db8::68"), net.ParseIP("192.168.0.1")},
-			want: provisioning.NetworkStackDual,
-		},
-		{
-			name: "v6: with v4 local",
-			ips:  []net.IP{net.ParseIP("2001:db8::68"), net.ParseIP("127.0.0.1")},
-			want: provisioning.NetworkStackV6,
+			name: "SpecDualStack",
+			networkCR: &configv1.Network{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Network",
+					APIVersion: "config.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: configv1.NetworkSpec{
+					ServiceNetwork: []string{"172.30.0.0/16", "fd02::/112"},
+				},
+				Status: configv1.NetworkStatus{
+					ServiceNetwork: []string{},
+				},
+			},
+			expectedError:        false,
+			expectedNetworkStack: provisioning.NetworkStackDual,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := networkStack(tt.ips)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("networkStack() = %v, want %v", got, tt.want)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing tc : %s", tc.name)
+
+			r := &ProvisioningReconciler{
+				Scheme:   setUpSchemeForReconciler(),
+				OSClient: fakeconfigclientset.NewSimpleClientset(tc.networkCR),
 			}
+			ns, err := r.networkStackFromServiceNetwork(context.TODO())
+			if !tc.expectedError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			assert.Equal(t, tc.expectedNetworkStack, ns, "network stack results did not match")
+			return
 		})
-	}
-}
-
-func TestAPIServerInternalHost(t *testing.T) {
-	infra := &configv1.Infrastructure{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Infrastructure",
-			APIVersion: "config.openshift.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cluster",
-		},
-		Status: configv1.InfrastructureStatus{
-			APIServerInternalURL: "https://api-int.ostest.test.metalkube.org:6443",
-		},
-	}
-	want := "api-int.ostest.test.metalkube.org"
-
-	r := &ProvisioningReconciler{
-		Scheme:   setUpSchemeForReconciler(),
-		OSClient: fakeconfigclientset.NewSimpleClientset(infra),
-	}
-	got, err := r.apiServerInternalHost(context.TODO())
-	if err != nil {
-		t.Errorf("ProvisioningReconciler.apiServerInternalHost() error = %v", err)
-		return
-	}
-	if got != want {
-		t.Errorf("ProvisioningReconciler.apiServerInternalHost() = %v, want %v", got, want)
 	}
 }
 
