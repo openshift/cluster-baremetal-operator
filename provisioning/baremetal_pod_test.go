@@ -491,7 +491,7 @@ func TestIPOptionForExternal(t *testing.T) {
 		},
 		{
 			ns:   NetworkStackDual,
-			want: "",
+			want: "ip=dhcp,dhcp6",
 		},
 	}
 	for _, tt := range tests {

@@ -324,7 +324,7 @@ func ipOptionForExternal(info *ProvisioningInfo) string {
 	case NetworkStackV6:
 		optionValue = "ip=dhcp6"
 	case NetworkStackDual:
-		optionValue = ""
+		optionValue = "ip=dhcp,dhcp6"
 	}
 	return optionValue
 }
