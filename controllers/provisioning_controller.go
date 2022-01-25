@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -35,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -84,6 +84,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
+// +kubebuilder:rbac:groups=config.openshift.io,resources=networks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;infrastructures/status,verbs=get
@@ -395,42 +396,29 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	return nil
 }
 
-func networkStack(ips []net.IP) provisioning.NetworkStackType {
+func (r *ProvisioningReconciler) networkStackFromServiceNetwork(ctx context.Context) (provisioning.NetworkStackType, error) {
 	ns := provisioning.NetworkStackType(0)
-	for _, ip := range ips {
-		if ip.IsLoopback() {
-			continue
+	network, err := r.OSClient.ConfigV1().Networks().Get(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return ns, errors.Wrap(err, "unable to read Network CR")
+	}
+
+	serviceNetwork := network.Status.ServiceNetwork
+	if len(serviceNetwork) == 0 {
+		serviceNetwork = network.Spec.ServiceNetwork
+	}
+	for _, snet := range serviceNetwork {
+		_, cidr, err := net.ParseCIDR(snet)
+		if err != nil {
+			return ns, errors.Wrapf(err, "could not parse Service Network %s", snet)
 		}
-		if ip.To4() != nil {
-			ns |= provisioning.NetworkStackV4
-		} else {
+		if utilnet.IsIPv6CIDR(cidr) {
 			ns |= provisioning.NetworkStackV6
+		} else {
+			ns |= provisioning.NetworkStackV4
 		}
 	}
-	return ns
-}
-
-func (r *ProvisioningReconciler) apiServerInternalHost(ctx context.Context) (string, error) {
-	infra, err := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
-	if err != nil {
-		return "", errors.Wrap(err, "unable to read Infrastructure CR")
-	}
-
-	if infra.Status.APIServerInternalURL == "" {
-		return "", errors.Wrap(err, "invalid APIServerInternalURL in Infrastructure CR")
-	}
-
-	apiServerInternalURL, err := url.Parse(infra.Status.APIServerInternalURL)
-	if err != nil {
-		return "", errors.Wrap(err, "unable to parse API Server Internal URL")
-	}
-
-	host, _, err := net.SplitHostPort(apiServerInternalURL.Host)
-	if err != nil {
-		return "", err
-	}
-
-	return host, nil
+	return ns, nil
 }
 
 func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) error {
@@ -481,18 +469,13 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 		}
 	}
-	apiInt, err := r.apiServerInternalHost(ctx)
+
+	r.NetworkStack, err = r.networkStackFromServiceNetwork(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get internal APIServer")
+		return fmt.Errorf("unable to determine network stack from service network: %w", err)
 	}
 
-	ips, err := net.LookupIP(apiInt)
-	if err != nil {
-		return errors.Wrap(err, "could not lookupIP for internal APIServer: "+apiInt)
-	}
-
-	r.NetworkStack = networkStack(ips)
-	klog.InfoS("Network stack calculation", "APIServerInternalHost", apiInt, "NetworkStack", r.NetworkStack)
+	klog.InfoS("Network stack calculation", "NetworkStack", r.NetworkStack)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).

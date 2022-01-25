@@ -1115,6 +1115,8 @@ k8s.io/kube-openapi/pkg/util/proto
 ## explicit
 k8s.io/utils/buffer
 k8s.io/utils/integer
+k8s.io/utils/internal/third_party/forked/golang/net
+k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/trace
 # mvdan.cc/gofumpt v0.0.0-20200802201014-ab5a8192947d
@@ -1305,5 +1307,6 @@ sigs.k8s.io/structured-merge-diff/v4/schema
 sigs.k8s.io/structured-merge-diff/v4/typed
 sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0
+## explicit
 sigs.k8s.io/yaml
 # github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20210527161605-4e331bfd4b1d
