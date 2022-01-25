@@ -83,6 +83,7 @@ func getUrlFromIP(ipAddr string) string {
 }
 
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIP string) corev1.Container {
+	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{})
 	container := corev1.Container{
 		Name:  "image-customization-controller",
 		Image: images.ImageCustomizationController,
@@ -102,34 +103,32 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			imageVolumeMount,
 		},
 		ImagePullPolicy: "IfNotPresent",
-		Env: []corev1.EnvVar{
-			{
-				Name:  deployISOEnvVar,
-				Value: deployISOFile,
-			},
-			{
+		Env: append(envVars, corev1.EnvVar{
+			Name:  deployISOEnvVar,
+			Value: deployISOFile,
+		},
+			corev1.EnvVar{
 				Name:  deployInitrdEnvVar,
 				Value: deployInitrdFile,
 			},
-			{
+			corev1.EnvVar{
 				Name:  ironicBaseUrl,
 				Value: getUrlFromIP(ironicIP),
 			},
-			{
+			corev1.EnvVar{
 				Name:  ironicAgentImage,
 				Value: images.IronicAgent,
 			},
-			{
+			corev1.EnvVar{
 				Name:  containerRegistriesEnvVar,
 				Value: containerRegistriesConfPath,
 			},
-			{
+			corev1.EnvVar{
 				Name:  ipOptions,
 				Value: ipOptionForExternal(info),
 			},
 			buildSSHKeyEnvVar(info.SSHKey),
-			pullSecret,
-		},
+			pullSecret),
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "http",
