@@ -60,7 +60,7 @@ func init() {
 	}
 }
 
-func TestCreateMariadbPasswordSecret(t *testing.T) {
+func TestCreatePasswordSecret(t *testing.T) {
 	baremetalCR := &metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Provisioning",
@@ -78,20 +78,11 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 		testRecreate  bool
 	}{
 		{
-			name:          "new-mariadb-secret",
-			expectedError: nil,
-			testRecreate:  true,
-		},
-		{
 			name:          "new-ironic-secret",
 			expectedError: nil,
 		},
 		{
 			name:          "new-inspector-secret",
-			expectedError: nil,
-		},
-		{
-			name:          "new-ironic-rpc-secret",
 			expectedError: nil,
 		},
 		{
@@ -120,24 +111,6 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 				EventRecorder: events.NewLoggingEventRecorder("tests"),
 			}
 			switch tc.name {
-			case "new-mariadb-secret":
-				err := createMariadbPasswordSecret(info)
-				assert.Equal(t, tc.expectedError, err)
-
-				if tc.expectedError == nil {
-					secret, _ := kubeClient.Tracker().Get(secretsResource, testNamespace, "metal3-mariadb-password")
-					assert.NotEmpty(t, secret.(*v1.Secret).Data[baremetalSecretKey])
-					// Test for making sure that when a secret already exists, a new one is not
-					// created and the old one returned.
-					if tc.testRecreate {
-						original := secret.(*v1.Secret).Data[baremetalSecretKey]
-						err := createMariadbPasswordSecret(info)
-						assert.Equal(t, tc.expectedError, err)
-						newSecret, _ := kubeClient.Tracker().Get(secretsResource, testNamespace, "metal3-mariadb-password")
-						recreated := newSecret.(*v1.Secret).Data[baremetalSecretKey]
-						assert.True(t, bytes.Compare(original, recreated) == 0, "re-created mariadb password is invalid")
-					}
-				}
 			case "new-ironic-secret":
 				err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic")
 				if err != nil {
@@ -162,18 +135,6 @@ func TestCreateMariadbPasswordSecret(t *testing.T) {
 					t.Errorf("Error creating Ironic secret.")
 				}
 				assert.True(t, strings.Compare(string(secret.(*v1.Secret).Data[ironicUsernameKey]), inspectorUsername) == 0, "inspector password created incorrectly")
-			case "new-ironic-rpc-secret":
-				err := createIronicSecret(info, ironicrpcSecretName, ironicrpcUsername, "json_rpc")
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-					return
-				}
-				// Check if Ironic secret exits
-				secret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, ironicrpcSecretName)
-				if apierrors.IsNotFound(err) {
-					t.Errorf("Error creating Ironic secret.")
-				}
-				assert.True(t, strings.Compare(string(secret.(*v1.Secret).Data[ironicUsernameKey]), ironicrpcUsername) == 0, "rpc password created incorrectly")
 			}
 		})
 	}
