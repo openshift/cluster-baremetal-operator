@@ -108,3 +108,30 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		})
 	}
 }
+
+func TestGetUrlFromIP(t *testing.T) {
+	tests := []struct {
+		ipAddr string
+		want   string
+	}{
+		{
+			ipAddr: "0:0:0:0:0:0:0:1",
+			want:   "https://[0:0:0:0:0:0:0:1]",
+		},
+		{
+			ipAddr: "127.0.0.1",
+			want:   "https://127.0.0.1",
+		},
+		{
+			ipAddr: "",
+			want:   "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := getUrlFromIP(tt.ipAddr); got != tt.want {
+				t.Errorf("getUrlFromIP() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
