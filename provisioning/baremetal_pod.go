@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -1110,5 +1111,6 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 		err = fmt.Errorf("there should be only one pod listed for the given label")
 	}
 
+	klog.Infof("getPodHostIP: hostIP %s", hostIP)
 	return hostIP, err
 }
