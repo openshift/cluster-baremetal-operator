@@ -152,6 +152,7 @@ func TestEnsureClusterOperator(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterOperatorName,
 					Annotations: map[string]string{
+						"capability.openshift.io/name":                                "baremetal",
 						"exclude.release.openshift.io/internal-openshift-hosted":      "true",
 						"include.release.openshift.io/self-managed-high-availability": "true",
 						"include.release.openshift.io/single-node-developer":          "true",
