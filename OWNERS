@@ -3,9 +3,11 @@
 approvers:
  - andfasano
  - hardys
- - markmc
  - sadasu
  - zaneb
+ - dtantsur
+ - honza
+ - elfosardo
 
 # Bugzilla Information
 component: "Bare Metal Hardware Provisioning"
