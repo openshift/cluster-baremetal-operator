@@ -105,6 +105,21 @@ rules:
   - update
   - watch
 - apiGroups:
+  - agent-install.openshift.io
+  resources:
+  - infraenvs
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - agent-install.openshift.io
+  resources:
+  - infraenvs/status
+  verbs:
+  - get
+- apiGroups:
   - apps
   resources:
   - daemonsets
