@@ -12,3 +12,30 @@ status:
   versions:
   - name: operator
     version: "0.0.1-snapshot"
+  relatedObjects:
+  - group: ""
+    name: openshift-machine-api
+    resource: namespaces
+  - group: "metal3.io"
+    name: ""
+    resource: "baremetalhosts"
+    namespace: openshift-machine-api
+  - group: "metal3.io"
+    name: ""
+    resource: "provisioning"
+  - group: "metal3.io"
+    name: ""
+    resource: "hostfirmwaresettings"
+    namespace: openshift-machine-api
+  - group: "metal3.io"
+    name: ""
+    resource: "firmwareschemas"
+    namespace: openshift-machine-api
+  - group: "metal3.io"
+    name: ""
+    resource: "preprovisioningimages"
+    namespace: openshift-machine-api
+  - group: "metal3.io"
+    name: ""
+    resource: "bmceventsubscriptions"
+    namespace: openshift-machine-api

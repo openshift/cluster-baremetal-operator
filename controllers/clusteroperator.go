@@ -72,6 +72,8 @@ func defaultStatusConditions() []osconfigv1.ClusterOperatorStatusCondition {
 
 // relatedObjects returns the current list of ObjectReference's for the
 // ClusterOperator objects's status.
+// Also update the manifest directly so that must-gather will contain this information
+// even if cbo fails early.(See BZ 1961844 for the reasoning.)
 func relatedObjects() []osconfigv1.ObjectReference {
 	return []osconfigv1.ObjectReference{
 		{
