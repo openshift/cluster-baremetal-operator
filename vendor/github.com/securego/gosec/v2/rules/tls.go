@@ -20,18 +20,20 @@ import (
 	"crypto/tls"
 	"fmt"
 	"go/ast"
+	"go/types"
+	"strconv"
 
 	"github.com/securego/gosec/v2"
 )
 
 type insecureConfigTLS struct {
 	gosec.MetaData
-	MinVersion       int16
-	MaxVersion       int16
+	MinVersion       int64
+	MaxVersion       int64
 	requiredType     string
 	goodCiphers      []string
-	actualMinVersion int16
-	actualMaxVersion int16
+	actualMinVersion int64
+	actualMaxVersion int64
 }
 
 func (t *insecureConfigTLS) ID() string {
@@ -85,8 +87,39 @@ func (t *insecureConfigTLS) processTLSConfVal(n *ast.KeyValueExpr, c *gosec.Cont
 			}
 
 		case "MinVersion":
-			if ival, ierr := gosec.GetInt(n.Value); ierr == nil {
-				t.actualMinVersion = (int16)(ival)
+			if d, ok := n.Value.(*ast.Ident); ok {
+				obj := d.Obj
+				if obj == nil {
+					for _, f := range c.PkgFiles {
+						obj = f.Scope.Lookup(d.Name)
+						if obj != nil {
+							break
+						}
+					}
+				}
+				if vs, ok := obj.Decl.(*ast.ValueSpec); ok && len(vs.Values) > 0 {
+					if s, ok := vs.Values[0].(*ast.SelectorExpr); ok {
+						x := s.X.(*ast.Ident).Name
+						sel := s.Sel.Name
+
+						for _, imp := range c.Pkg.Imports() {
+							if imp.Name() == x {
+								tObj := imp.Scope().Lookup(sel)
+								if cst, ok := tObj.(*types.Const); ok {
+									// ..got the value check if this can be translated
+									if minVersion, err := strconv.ParseInt(cst.Val().String(), 10, 64); err == nil {
+										t.actualMinVersion = minVersion
+									}
+								}
+							}
+						}
+					}
+					if ival, ierr := gosec.GetInt(vs.Values[0]); ierr == nil {
+						t.actualMinVersion = ival
+					}
+				}
+			} else if ival, ierr := gosec.GetInt(n.Value); ierr == nil {
+				t.actualMinVersion = ival
 			} else {
 				if se, ok := n.Value.(*ast.SelectorExpr); ok {
 					if pkg, ok := se.X.(*ast.Ident); ok && pkg.Name == "tls" {
@@ -97,7 +130,7 @@ func (t *insecureConfigTLS) processTLSConfVal(n *ast.KeyValueExpr, c *gosec.Cont
 
 		case "MaxVersion":
 			if ival, ierr := gosec.GetInt(n.Value); ierr == nil {
-				t.actualMaxVersion = (int16)(ival)
+				t.actualMaxVersion = ival
 			} else {
 				if se, ok := n.Value.(*ast.SelectorExpr); ok {
 					if pkg, ok := se.X.(*ast.Ident); ok && pkg.Name == "tls" {
@@ -112,13 +145,12 @@ func (t *insecureConfigTLS) processTLSConfVal(n *ast.KeyValueExpr, c *gosec.Cont
 			}
 
 		}
-
 	}
 	return nil
 }
 
-func (t *insecureConfigTLS) mapVersion(version string) int16 {
-	var v int16
+func (t *insecureConfigTLS) mapVersion(version string) int64 {
+	var v int64
 	switch version {
 	case "VersionTLS13":
 		v = tls.VersionTLS13
@@ -134,7 +166,7 @@ func (t *insecureConfigTLS) mapVersion(version string) int16 {
 
 func (t *insecureConfigTLS) checkVersion(n ast.Node, c *gosec.Context) *gosec.Issue {
 	if t.actualMaxVersion == 0 && t.actualMinVersion >= t.MinVersion {
-		// no warning is generated since the min version is grater than the secure min version
+		// no warning is generated since the min version is greater than the secure min version
 		return nil
 	}
 	if t.actualMinVersion < t.MinVersion {
@@ -144,6 +176,11 @@ func (t *insecureConfigTLS) checkVersion(n ast.Node, c *gosec.Context) *gosec.Is
 		return gosec.NewIssue(c, n, t.ID(), "TLS MaxVersion too low.", gosec.High, gosec.High)
 	}
 	return nil
+}
+
+func (t *insecureConfigTLS) resetVersion() {
+	t.actualMaxVersion = 0
+	t.actualMinVersion = 0
 }
 
 func (t *insecureConfigTLS) Match(n ast.Node, c *gosec.Context) (*gosec.Issue, error) {
@@ -158,7 +195,9 @@ func (t *insecureConfigTLS) Match(n ast.Node, c *gosec.Context) (*gosec.Issue, e
 					}
 				}
 			}
-			return t.checkVersion(complit, c), nil
+			issue := t.checkVersion(complit, c)
+			t.resetVersion()
+			return issue, nil
 		}
 	}
 	return nil, nil

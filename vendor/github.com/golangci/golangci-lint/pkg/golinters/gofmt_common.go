@@ -176,7 +176,7 @@ func (p *hunkChangesParser) parse(h *diffpkg.Hunk) []Change {
 	for i := 0; i < len(p.lines); {
 		line := p.lines[i]
 		if line.typ == diffLineOriginal {
-			p.handleOriginalLine(line, &i) //nolint:scopelint
+			p.handleOriginalLine(line, &i)
 			continue
 		}
 
@@ -224,17 +224,6 @@ func getErrorTextForLinter(lintCtx *linter.Context, linterName string) string {
 		text = "File is not `goimports`-ed"
 		if lintCtx.Settings().Goimports.LocalPrefixes != "" {
 			text += " with -local " + lintCtx.Settings().Goimports.LocalPrefixes
-		}
-	case gciName:
-		text = "File is not `gci`-ed"
-		localPrefixes := lintCtx.Settings().Gci.LocalPrefixes
-		goimportsFlag := lintCtx.Settings().Goimports.LocalPrefixes
-		if localPrefixes == "" && goimportsFlag != "" {
-			localPrefixes = goimportsFlag
-		}
-
-		if localPrefixes != "" {
-			text += " with -local " + localPrefixes
 		}
 	}
 	return text

@@ -30,10 +30,10 @@ if cond1 {
 } else if x := cond2; x {
 }`
 
-	collection.AddChecker(&info, func(ctx *linter.CheckerContext) linter.FileWalker {
+	collection.AddChecker(&info, func(ctx *linter.CheckerContext) (linter.FileWalker, error) {
 		c := &elseifChecker{ctx: ctx}
 		c.skipBalanced = info.Params.Bool("skipBalanced")
-		return astwalk.WalkerForStmt(c)
+		return astwalk.WalkerForStmt(c), nil
 	})
 }
 
@@ -59,7 +59,7 @@ func (c *elseifChecker) VisitStmt(stmt ast.Stmt) {
 		if balanced && c.skipBalanced {
 			return // Configured to skip balanced statements
 		}
-		if innerIfStmt.Else != nil {
+		if innerIfStmt.Else != nil || innerIfStmt.Init != nil {
 			return
 		}
 		c.warn(stmt.Else)
