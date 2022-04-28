@@ -34,8 +34,8 @@ default:
 	return 0
 }`
 
-	collection.AddChecker(&info, func(ctx *linter.CheckerContext) linter.FileWalker {
-		return astwalk.WalkerForStmt(&typeSwitchVarChecker{ctx: ctx})
+	collection.AddChecker(&info, func(ctx *linter.CheckerContext) (linter.FileWalker, error) {
+		return astwalk.WalkerForStmt(&typeSwitchVarChecker{ctx: ctx}), nil
 	})
 }
 
@@ -74,7 +74,7 @@ func (c *typeSwitchVarChecker) checkTypeSwitch(root *ast.TypeSwitchStmt) {
 		// Create artificial node just for matching.
 		assert1 := ast.TypeAssertExpr{X: expr, Type: clause.List[0]}
 		for _, stmt := range clause.Body {
-			assert2 := lintutil.FindNode(stmt, func(x ast.Node) bool {
+			assert2 := lintutil.FindNode(stmt, nil, func(x ast.Node) bool {
 				return astequal.Node(&assert1, x)
 			})
 			if object == c.ctx.TypesInfo.ObjectOf(identOf(assert2)) {
