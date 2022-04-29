@@ -34,7 +34,7 @@ spec:
   - name: image-customization-controller
     from:
       kind: DockerImage
-      name: registry.ci.openshift.org/openshift:image-customization-controller
+      name: registry.ci.openshift.org/openshift:machine-image-customization-controller
   - name: machine-os-images
     from:
       kind: DockerImage
