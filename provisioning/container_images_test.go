@@ -11,7 +11,7 @@ var (
 	expectedMachineOsDownloader          = "registry.ci.openshift.org/openshift:ironic-machine-os-downloader"
 	expectedIronicStaticIpManager        = "registry.ci.openshift.org/openshift:ironic-static-ip-manager"
 	expectedIronicAgent                  = "registry.ci.openshift.org/openshift:ironic-agent"
-	expectedImageCustomizationController = "registry.ci.openshift.org/openshift:image-customization-controller"
+	expectedImageCustomizationController = "registry.ci.openshift.org/openshift:machine-image-customization-controller"
 	expectedMachineOSImages              = "registry.ci.openshift.org/openshift:machine-os-images"
 )
 

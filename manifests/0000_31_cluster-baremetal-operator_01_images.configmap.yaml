@@ -18,7 +18,7 @@ data:
       "baremetalMachineOsDownloader": "registry.ci.openshift.org/openshift:ironic-machine-os-downloader",
       "baremetalStaticIpManager": "registry.ci.openshift.org/openshift:ironic-static-ip-manager",
       "baremetalIronicAgent": "registry.ci.openshift.org/openshift:ironic-agent",
-      "imageCustomizationController": "registry.ci.openshift.org/openshift:image-customization-controller",
+      "imageCustomizationController": "registry.ci.openshift.org/openshift:machine-image-customization-controller",
       "machineOSImages": "registry.ci.openshift.org/openshift:machine-os-images"
     }
 
