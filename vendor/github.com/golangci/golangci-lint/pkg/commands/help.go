@@ -9,6 +9,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
+	"github.com/golangci/golangci-lint/pkg/exitcodes"
 	"github.com/golangci/golangci-lint/pkg/lint/linter"
 	"github.com/golangci/golangci-lint/pkg/logutils"
 )
@@ -45,8 +46,21 @@ func printLinterConfigs(lcs []*linter.Config) {
 		if len(lc.AlternativeNames) != 0 {
 			altNamesStr = fmt.Sprintf(" (%s)", strings.Join(lc.AlternativeNames, ", "))
 		}
-		fmt.Fprintf(logutils.StdOut, "%s%s: %s [fast: %t, auto-fix: %t]\n", color.YellowString(lc.Name()),
-			altNamesStr, lc.Linter.Desc(), !lc.IsSlowLinter(), lc.CanAutoFix)
+
+		// If the linter description spans multiple lines, truncate everything following the first newline
+		linterDescription := lc.Linter.Desc()
+		firstNewline := strings.IndexRune(linterDescription, '\n')
+		if firstNewline > 0 {
+			linterDescription = linterDescription[:firstNewline]
+		}
+
+		deprecatedMark := ""
+		if lc.IsDeprecated() {
+			deprecatedMark = " [" + color.RedString("deprecated") + "]"
+		}
+
+		fmt.Fprintf(logutils.StdOut, "%s%s%s: %s [fast: %t, auto-fix: %t]\n", color.YellowString(lc.Name()),
+			altNamesStr, deprecatedMark, linterDescription, !lc.IsSlowLinter(), lc.CanAutoFix)
 	}
 }
 
@@ -72,7 +86,7 @@ func (e *Executor) executeLintersHelp(_ *cobra.Command, args []string) {
 	color.Green("\nLinters presets:")
 	for _, p := range e.DBManager.AllPresets() {
 		linters := e.DBManager.GetAllLinterConfigsForPreset(p)
-		linterNames := []string{}
+		linterNames := make([]string, 0, len(linters))
 		for _, lc := range linters {
 			linterNames = append(linterNames, lc.Name())
 		}
@@ -80,5 +94,5 @@ func (e *Executor) executeLintersHelp(_ *cobra.Command, args []string) {
 		fmt.Fprintf(logutils.StdOut, "%s: %s\n", color.YellowString(p), strings.Join(linterNames, ", "))
 	}
 
-	os.Exit(0)
+	os.Exit(exitcodes.Success)
 }
