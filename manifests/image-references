@@ -31,7 +31,7 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:ironic-agent
-  - name: image-customization-controller
+  - name: machine-image-customization-controller
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:machine-image-customization-controller

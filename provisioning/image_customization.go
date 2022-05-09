@@ -85,9 +85,9 @@ func getUrlFromIP(ipAddr string) string {
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIP string) corev1.Container {
 	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{})
 	container := corev1.Container{
-		Name:  "image-customization-controller",
+		Name:  "machine-image-customization-controller",
 		Image: images.ImageCustomizationController,
-		Command: []string{"/image-customization-controller",
+		Command: []string{"/machine-image-customization-controller",
 			"-images-bind-addr", fmt.Sprintf(":%d", imageCustomizationPort),
 			"-images-publish-addr",
 			fmt.Sprintf("http://%s.%s.svc.cluster.local/",
@@ -237,14 +237,14 @@ func getIronicIP(info *ProvisioningInfo) (string, error) {
 func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, err error) {
 	ironicIP, err := getIronicIP(info)
 	if err != nil {
-		return false, fmt.Errorf("unable to determine Ironic's IP to pass to the image-customization-controller: %w", err)
+		return false, fmt.Errorf("unable to determine Ironic's IP to pass to the machine-image-customization-controller: %w", err)
 	}
 
 	imageCustomizationDeployment := newImageCustomizationDeployment(info, ironicIP)
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(imageCustomizationDeployment, info.ProvConfig.Status.Generations)
 	err = controllerutil.SetControllerReference(info.ProvConfig, imageCustomizationDeployment, info.Scheme)
 	if err != nil {
-		err = fmt.Errorf("unable to set controllerReference on image-customization deployment: %w", err)
+		err = fmt.Errorf("unable to set controllerReference on machine-image-customization deployment: %w", err)
 		return
 	}
 	deployment, updated, err := resourceapply.ApplyDeployment(info.Client.AppsV1(),
