@@ -17,6 +17,19 @@ const (
 	NetworkStackDual NetworkStackType = (NetworkStackV4 | NetworkStackV6)
 )
 
+func (ns NetworkStackType) IpOption() string {
+	switch ns {
+	case NetworkStackV4:
+		return "ip=dhcp"
+	case NetworkStackV6:
+		return "ip=dhcp6"
+	case NetworkStackDual:
+		return "ip=dhcp,dhcp6"
+	default:
+		return ""
+	}
+}
+
 type ProvisioningInfo struct {
 	Client                  kubernetes.Interface
 	EventRecorder           events.Recorder

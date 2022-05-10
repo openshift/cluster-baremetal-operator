@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 )
@@ -125,7 +124,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			},
 			corev1.EnvVar{
 				Name:  ipOptions,
-				Value: ipOptionForExternal(info),
+				Value: info.NetworkStack.IpOption(),
 			},
 			buildSSHKeyEnvVar(info.SSHKey),
 			pullSecret),
@@ -225,17 +224,8 @@ func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIP string) *a
 	}
 }
 
-func getIronicIP(info *ProvisioningInfo) (string, error) {
-	config := info.ProvConfig.Spec
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
-		return config.ProvisioningIP, nil
-	} else {
-		return getPodHostIP(info.Client.CoreV1(), info.Namespace)
-	}
-}
-
 func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, err error) {
-	ironicIP, err := getIronicIP(info)
+	ironicIP, err := GetIronicIP(info.Client, info.Namespace, &info.ProvConfig.Spec)
 	if err != nil {
 		return false, fmt.Errorf("unable to determine Ironic's IP to pass to the image-customization-controller: %w", err)
 	}
