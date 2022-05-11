@@ -456,30 +456,3 @@ func TestProxyAndCAInjection(t *testing.T) {
 		})
 	}
 }
-
-func TestIPOptionForExternal(t *testing.T) {
-	tests := []struct {
-		ns   NetworkStackType
-		want string
-	}{
-		{
-			ns:   NetworkStackV4,
-			want: "ip=dhcp",
-		},
-		{
-			ns:   NetworkStackV6,
-			want: "ip=dhcp6",
-		},
-		{
-			ns:   NetworkStackDual,
-			want: "ip=dhcp,dhcp6",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			if got := ipOptionForExternal(&ProvisioningInfo{NetworkStack: tt.ns}); got != tt.want {
-				t.Errorf("ipOptionForExternal() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}

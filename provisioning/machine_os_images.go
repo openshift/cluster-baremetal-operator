@@ -6,9 +6,9 @@ import (
 )
 
 func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages string, dest corev1.VolumeMount, destPath string) corev1.Container {
-	ipOptionValue := ipOptionForExternal(info)
+	ipOptionValue := info.NetworkStack.IpOption()
 	if !info.ProvConfig.Spec.VirtualMediaViaExternalNetwork {
-		ipOptionValue = ipOptionForProvisioning(info)
+		ipOptionValue = IpOptionForProvisioning(&info.ProvConfig.Spec, info.NetworkStack)
 	}
 
 	container := corev1.Container{

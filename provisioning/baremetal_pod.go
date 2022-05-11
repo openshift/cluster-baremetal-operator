@@ -18,7 +18,6 @@ package provisioning
 import (
 	"context"
 	"fmt"
-	"net"
 	"strconv"
 	"time"
 
@@ -28,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
-	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -291,34 +289,6 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	return injectProxyAndCA(initContainers, info.Proxy)
 }
 
-func ipOptionForExternal(info *ProvisioningInfo) string {
-	var optionValue string
-	switch info.NetworkStack {
-	case NetworkStackV4:
-		optionValue = "ip=dhcp"
-	case NetworkStackV6:
-		optionValue = "ip=dhcp6"
-	case NetworkStackDual:
-		optionValue = "ip=dhcp,dhcp6"
-	}
-	return optionValue
-}
-
-func ipOptionForProvisioning(info *ProvisioningInfo) string {
-	var optionValue string
-	ip := net.ParseIP(info.ProvConfig.Spec.ProvisioningIP)
-	if info.ProvConfig.Spec.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled || ip == nil {
-		// It ProvisioningNetworkDisabled or no valid IP to check, fallback to the external network
-		return ipOptionForExternal(info)
-	}
-	if ip.To4() != nil {
-		optionValue = "ip=dhcp"
-	} else {
-		optionValue = "ip=dhcp6"
-	}
-	return optionValue
-}
-
 func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs string, useLiveImages, setIpOptions bool) corev1.Container {
 	var command string
 	name := "metal3-machine-os-downloader"
@@ -339,7 +309,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 		env = append(env,
 			corev1.EnvVar{
 				Name:  ipOptions,
-				Value: ipOptionForExternal(info),
+				Value: info.NetworkStack.IpOption(),
 			})
 	}
 	initContainer := corev1.Container{
@@ -671,7 +641,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			},
 			{
 				Name:  ironicKernelParamsEnvVar,
-				Value: ipOptionForProvisioning(info),
+				Value: IpOptionForProvisioning(&info.ProvConfig.Spec, info.NetworkStack),
 			},
 			{
 				Name:  ironicProxyEnvVar,
@@ -754,7 +724,7 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 			},
 			{
 				Name:  ironicKernelParamsEnvVar,
-				Value: ipOptionForProvisioning(info),
+				Value: IpOptionForProvisioning(&info.ProvConfig.Spec, info.NetworkStack),
 			},
 			{
 				Name:  inspectorProxyEnvVar,
@@ -1020,39 +990,4 @@ func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace s
 
 func DeleteMetal3Deployment(info *ProvisioningInfo) error {
 	return client.IgnoreNotFound(info.Client.AppsV1().Deployments(info.Namespace).Delete(context.Background(), baremetalDeploymentName, metav1.DeleteOptions{}))
-}
-
-func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (string, error) {
-	labelSelector := &metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"k8s-app":    metal3AppName,
-			cboLabelName: stateService,
-		}}
-
-	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
-	if err != nil {
-		return "", err
-	}
-
-	listOptions := metav1.ListOptions{
-		LabelSelector: selector.String(),
-	}
-
-	podList, err := podClient.Pods(targetNamespace).List(context.Background(), listOptions)
-	if err != nil {
-		return "", err
-	}
-
-	var hostIP string
-	switch len(podList.Items) {
-	case 0:
-		// Ironic IP not available yet, just return an empty string
-	case 1:
-		hostIP = podList.Items[0].Status.HostIP
-	default:
-		// We expect only one pod with the above LabelSelector
-		err = fmt.Errorf("there should be only one pod listed for the given label")
-	}
-
-	return hostIP, err
 }
