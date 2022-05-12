@@ -9,7 +9,6 @@ set -e
 ARTIFACTS=${ARTIFACTS:-/tmp}
 
 eval "$(go env)"
-cd "${GOPATH}"/src/github.com/openshift/cluster-baremetal-operator
 export XDG_CACHE_HOME="/tmp/.cache"
 
 INPUT_FILES="manifests/*.yaml"
