@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Ignore the rule that says we should always quote variables, because
 # in this script we *do* want globbing.
