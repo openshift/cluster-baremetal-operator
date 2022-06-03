@@ -275,6 +275,7 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 	}
 	daemonSetRolloutStartTime = time.Now()
 	daemonSet, updated, err := resourceapply.ApplyDaemonSet(
+		context.TODO(),
 		info.Client.AppsV1(),
 		info.EventRecorder,
 		imageCacheDaemonSet, expectedGeneration)

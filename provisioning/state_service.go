@@ -60,7 +60,7 @@ func EnsureMetal3StateService(info *ProvisioningInfo) (updated bool, err error) 
 		return
 	}
 
-	_, updated, err = resourceapply.ApplyService(info.Client.CoreV1(),
+	_, updated, err = resourceapply.ApplyService(context.TODO(), info.Client.CoreV1(),
 		info.EventRecorder, metal3StateService)
 	if err != nil {
 		err = fmt.Errorf("unable to apply Metal3-state service: %w", err)

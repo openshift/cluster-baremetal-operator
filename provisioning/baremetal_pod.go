@@ -940,7 +940,7 @@ func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 	}
 
 	deploymentRolloutStartTime = time.Now()
-	deployment, updated, err := resourceapply.ApplyDeployment(info.Client.AppsV1(),
+	deployment, updated, err := resourceapply.ApplyDeployment(context.TODO(), info.Client.AppsV1(),
 		info.EventRecorder, metal3Deployment, expectedGeneration)
 	if err != nil {
 		err = fmt.Errorf("unable to apply Metal3 deployment: %w", err)

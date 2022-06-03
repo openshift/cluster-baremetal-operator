@@ -76,8 +76,8 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager, enable
 	}
 	// we might not have a baremetalCR (when disabled), so we have no where to store
 	// the expectedGeneration, so just fake it.
-	expectedGeneration := int64(0)
-	_, _, err := resourceapply.ApplyValidatingWebhookConfiguration(info.Client.AdmissionregistrationV1(), info.EventRecorder, instance, expectedGeneration)
+	cache := resourceapply.NewResourceCache()
+	_, _, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(context.TODO(), info.Client.AdmissionregistrationV1(), info.EventRecorder, instance, cache)
 	if err != nil {
 		return err
 	}

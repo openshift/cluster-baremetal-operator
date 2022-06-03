@@ -49,7 +49,7 @@ func EnsureImageCustomizationService(info *ProvisioningInfo) (updated bool, err 
 		return
 	}
 
-	_, updated, err = resourceapply.ApplyService(info.Client.CoreV1(),
+	_, updated, err = resourceapply.ApplyService(context.TODO(), info.Client.CoreV1(),
 		info.EventRecorder, imageCustomizationService)
 	if err != nil {
 		err = fmt.Errorf("unable to apply %s service: %w", imageCustomizationService, err)

@@ -237,7 +237,7 @@ func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, e
 		err = fmt.Errorf("unable to set controllerReference on machine-image-customization deployment: %w", err)
 		return
 	}
-	deployment, updated, err := resourceapply.ApplyDeployment(info.Client.AppsV1(),
+	deployment, updated, err := resourceapply.ApplyDeployment(context.TODO(), info.Client.AppsV1(),
 		info.EventRecorder, imageCustomizationDeployment, expectedGeneration)
 	if err != nil {
 		return updated, err
