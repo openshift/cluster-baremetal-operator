@@ -913,12 +913,26 @@ func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 }
 
 func getDeploymentCondition(deployment *appsv1.Deployment) appsv1.DeploymentConditionType {
+	var progressing, available, replicaFailure bool
 	for _, cond := range deployment.Status.Conditions {
-		if cond.Status == corev1.ConditionTrue {
-			return cond.Type
+		if cond.Type == appsv1.DeploymentProgressing && cond.Status == corev1.ConditionTrue {
+			progressing = true
+		}
+		if cond.Type == appsv1.DeploymentAvailable && cond.Status == corev1.ConditionTrue {
+			available = true
+		}
+		if cond.Type == appsv1.DeploymentReplicaFailure && cond.Status == corev1.ConditionTrue {
+			replicaFailure = true
 		}
 	}
-	return appsv1.DeploymentProgressing
+	switch {
+	case replicaFailure && !progressing:
+		return appsv1.DeploymentReplicaFailure
+	case available && !replicaFailure:
+		return appsv1.DeploymentAvailable
+	default:
+		return appsv1.DeploymentProgressing
+	}
 }
 
 // Provide the current state of metal3 deployment
