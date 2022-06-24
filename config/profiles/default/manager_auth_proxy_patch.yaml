@@ -20,14 +20,14 @@ spec:
         k8s-app: cluster-baremetal-operator
     spec:
       containers:
-      - name: kube-rbac-proxy
+      - name: baremetal-kube-rbac-proxy
         image: registry.ci.openshift.org/openshift:kube-rbac-proxy
         args:
         - "--secure-listen-address=0.0.0.0:8443"
         - "--upstream=http://localhost:8080/"
         - "--tls-cert-file=/etc/tls/private/tls.crt"
         - "--tls-private-key-file=/etc/tls/private/tls.key"
-        - "--config-file=/etc/kube-rbac-proxy/config-file.yaml"
+        - "--config-file=/etc/baremetal-kube-rbac-proxy/config-file.yaml"
         - "--logtostderr=true"
         - "--v=10"
         ports:
@@ -40,13 +40,13 @@ spec:
             cpu: 10m
         volumeMounts:
         - name: config
-          mountPath: /etc/kube-rbac-proxy
+          mountPath: /etc/baremetal-kube-rbac-proxy
         - name: cluster-baremetal-operator-tls
           mountPath: /etc/tls/private
       volumes:
         - name: config
           configMap:
-            name: kube-rbac-proxy
+            name: baremetal-kube-rbac-proxy
             defaultMode: 420
         - name: cluster-baremetal-operator-tls
           secret:

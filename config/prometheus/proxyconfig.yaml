@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: kube-rbac-proxy
+  name: baremetal-kube-rbac-proxy
   namespace: openshift-machine-api
   annotations:
     include.release.openshift.io/self-managed-high-availability: "true"
