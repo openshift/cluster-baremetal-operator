@@ -38,31 +38,28 @@ import (
 )
 
 const (
-	metal3AppName              = "metal3"
-	baremetalDeploymentName    = "metal3"
-	baremetalSharedVolume      = "metal3-shared"
-	metal3AuthRootDir          = "/auth"
-	metal3TlsRootDir           = "/certs"
-	ironicCredentialsVolume    = "metal3-ironic-basic-auth"
-	inspectorCredentialsVolume = "metal3-inspector-basic-auth"
-	ironicTlsVolume            = "metal3-ironic-tls"
-	inspectorTlsVolume         = "metal3-inspector-tls"
-	vmediaTlsVolume            = "metal3-vmedia-tls"
-	ironicHtpasswdEnvVar       = "IRONIC_HTPASSWD"    // #nosec
-	inspectorHtpasswdEnvVar    = "INSPECTOR_HTPASSWD" // #nosec
-	ironicInsecureEnvVar       = "IRONIC_INSECURE"
-	inspectorInsecureEnvVar    = "IRONIC_INSPECTOR_INSECURE"
-	ironicKernelParamsEnvVar   = "IRONIC_KERNEL_PARAMS"
-	ironicCertEnvVar           = "IRONIC_CACERT_FILE"
-	sshKeyEnvVar               = "IRONIC_RAMDISK_SSH_KEY"
-	externalIpEnvVar           = "IRONIC_EXTERNAL_IP"
-	ironicProxyEnvVar          = "IRONIC_REVERSE_PROXY_SETUP"
-	inspectorProxyEnvVar       = "INSPECTOR_REVERSE_PROXY_SETUP"
-	ironicPrivatePortEnvVar    = "IRONIC_PRIVATE_PORT"
-	inspectorPrivatePortEnvVar = "IRONIC_INSPECTOR_PRIVATE_PORT"
-	// TODO(dtantsur): remove this variable from ironic-image, it does not
-	// exist upstream and was done as a last-minute compatibility hack.
-	ironicHttpdEnvVar                = "IRONIC_HTTPD"
+	metal3AppName                    = "metal3"
+	baremetalDeploymentName          = "metal3"
+	baremetalSharedVolume            = "metal3-shared"
+	metal3AuthRootDir                = "/auth"
+	metal3TlsRootDir                 = "/certs"
+	ironicCredentialsVolume          = "metal3-ironic-basic-auth"
+	inspectorCredentialsVolume       = "metal3-inspector-basic-auth"
+	ironicTlsVolume                  = "metal3-ironic-tls"
+	inspectorTlsVolume               = "metal3-inspector-tls"
+	vmediaTlsVolume                  = "metal3-vmedia-tls"
+	ironicHtpasswdEnvVar             = "IRONIC_HTPASSWD"    // #nosec
+	inspectorHtpasswdEnvVar          = "INSPECTOR_HTPASSWD" // #nosec
+	ironicInsecureEnvVar             = "IRONIC_INSECURE"
+	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
+	ironicKernelParamsEnvVar         = "IRONIC_KERNEL_PARAMS"
+	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
+	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
+	externalIpEnvVar                 = "IRONIC_EXTERNAL_IP"
+	ironicProxyEnvVar                = "IRONIC_REVERSE_PROXY_SETUP"
+	inspectorProxyEnvVar             = "INSPECTOR_REVERSE_PROXY_SETUP"
+	ironicPrivatePortEnvVar          = "IRONIC_PRIVATE_PORT"
+	inspectorPrivatePortEnvVar       = "IRONIC_INSPECTOR_PRIVATE_PORT"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -585,10 +582,6 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 				Value: "true",
 			},
 			{
-				Name:  ironicHttpdEnvVar,
-				Value: "true",
-			},
-			{
 				Name:  ironicPrivatePortEnvVar,
 				Value: fmt.Sprint(ironicPrivatePort),
 			},
@@ -645,10 +638,6 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			},
 			{
 				Name:  ironicProxyEnvVar,
-				Value: "true",
-			},
-			{
-				Name:  ironicHttpdEnvVar,
 				Value: "true",
 			},
 			{
