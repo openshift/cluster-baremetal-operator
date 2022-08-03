@@ -3,6 +3,7 @@ package provisioning
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/pointer"
 )
 
 func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages string, dest corev1.VolumeMount, destPath string) corev1.Container {
@@ -30,6 +31,9 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 				corev1.ResourceCPU:    resource.MustParse("5m"),
 				corev1.ResourceMemory: resource.MustParse("50Mi"),
 			},
+		},
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
 		},
 	}
 	return container

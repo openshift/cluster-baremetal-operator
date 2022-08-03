@@ -297,8 +297,13 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 	}
-	if deploymentState == appsv1.DeploymentAvailable && daemonSetState == provisioning.DaemonSetAvailable {
-		err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
+	if deploymentState == appsv1.DeploymentAvailable {
+		if daemonSetState == provisioning.DaemonSetAvailable {
+			err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
+		} else if daemonSetState == provisioning.DaemonSetDisabled {
+			err = r.updateCOStatus(ReasonComplete, "metal3 pod is running", "")
+		}
+
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
 		}
