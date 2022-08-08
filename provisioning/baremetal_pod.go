@@ -648,7 +648,6 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			buildSSHKeyEnvVar(sshKey),
-			setIronicHtpasswdHash(ironicHtpasswdEnvVar, ironicSecretName),
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
@@ -725,7 +724,6 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 			},
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
-			setIronicHtpasswdHash(inspectorHtpasswdEnvVar, inspectorSecretName),
 			buildEnvVar(provisioningMacAddresses, config),
 		},
 		Ports: []corev1.ContainerPort{
