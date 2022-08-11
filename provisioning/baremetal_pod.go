@@ -60,6 +60,7 @@ const (
 	inspectorProxyEnvVar             = "INSPECTOR_REVERSE_PROXY_SETUP"
 	ironicPrivatePortEnvVar          = "IRONIC_PRIVATE_PORT"
 	inspectorPrivatePortEnvVar       = "IRONIC_INSPECTOR_PRIVATE_PORT"
+	ironicListenPortEnvVar           = "IRONIC_LISTEN_PORT"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -524,6 +525,14 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	port, _ := strconv.Atoi(baremetalHttpPort)             // #nosec
 	httpsPort, _ := strconv.Atoi(baremetalVmediaHttpsPort) // #nosec
 
+	ironicPort := baremetalIronicPort
+	// In the proxy mode, the ironic API is served on the private port,
+	// while ironic-proxy, running as a DeamonSet on all nodes, serves on
+	// 6385 and proxies the traffic.
+	if UseIronicProxy(config) {
+		ironicPort = ironicPrivatePort
+	}
+
 	volumes := []corev1.VolumeMount{
 		sharedVolumeMount,
 		ironicCredentialsMount,
@@ -535,8 +544,8 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	ports := []corev1.ContainerPort{
 		{
 			Name:          "ironic",
-			ContainerPort: 6385,
-			HostPort:      6385,
+			ContainerPort: int32(ironicPort),
+			HostPort:      int32(ironicPort),
 		},
 		{
 			Name:          "inspector",
@@ -592,6 +601,10 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 			{
 				Name:  inspectorPrivatePortEnvVar,
 				Value: useUnixSocket,
+			},
+			{
+				Name:  ironicListenPortEnvVar,
+				Value: fmt.Sprint(ironicPort),
 			},
 		},
 		Ports: ports,

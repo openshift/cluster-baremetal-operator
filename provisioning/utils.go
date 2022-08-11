@@ -48,6 +48,9 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 }
 
 func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec) (string, error) {
+	// if UseIronicProxy(config) {
+	// TODO: API VIP ???
+	// } else
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		return config.ProvisioningIP, nil
 	} else {

@@ -29,8 +29,8 @@ var (
 	baremetalHttpPort              = "6180"
 	baremetalVmediaHttpsPort       = "6183"
 	baremetalWebhookPort           = "9447"
-	baremetalIronicPort            = "6385"
-	baremetalIronicInspectorPort   = "5050"
+	baremetalIronicPort            = 6385
+	baremetalIronicInspectorPort   = 5050
 	baremetalKernelUrlSubPath      = "images/ironic-python-agent.kernel"
 	baremetalIronicEndpointSubpath = "v1/"
 	provisioningIP                 = "PROVISIONING_IP"
@@ -79,12 +79,12 @@ func getDeployKernelUrl() *string {
 }
 
 func getIronicEndpoint() *string {
-	ironicEndpoint := fmt.Sprintf("https://localhost:%s/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
+	ironicEndpoint := fmt.Sprintf("https://localhost:%d/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
 	return &ironicEndpoint
 }
 
 func getIronicInspectorEndpoint() *string {
-	ironicInspectorEndpoint := fmt.Sprintf("https://localhost:%s/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
+	ironicInspectorEndpoint := fmt.Sprintf("https://localhost:%d/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
 	return &ironicInspectorEndpoint
 }
 

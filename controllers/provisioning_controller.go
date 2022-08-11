@@ -249,6 +249,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureBaremetalOperatorWebhook,
 		provisioning.EnsureImageCustomizationService,
 		provisioning.EnsureImageCustomizationDeployment,
+		provisioning.EnsureIronicProxy,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -309,6 +310,8 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
 		}
 	}
+
+	// TODO: ironic proxy
 
 	return result, nil
 }
@@ -398,6 +401,9 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteImageCustomizationDeployment(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 image customization deployment")
+	}
+	if err := provisioning.DeleteIronicProxy(info); err != nil {
+		return errors.Wrap(err, "failed to delete ironic proxy")
 	}
 	return nil
 }

@@ -229,6 +229,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "INSPECTOR_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "IRONIC_PRIVATE_PORT", Value: "unix"},
 				{Name: "IRONIC_INSPECTOR_PRIVATE_PORT", Value: "unix"},
+				{Name: "IRONIC_LISTEN_PORT", Value: "6385"},
 			},
 		},
 		"metal3-ironic": {
@@ -331,7 +332,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				withEnv(containers["metal3-httpd"], sshkey),
+				withEnv(containers["metal3-httpd"], sshkey, envWithValue("IRONIC_LISTEN_PORT", "6388")),
 				withEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
 				containers["metal3-ramdisk-logs"],
 				containers["metal3-ironic-inspector"],
@@ -359,7 +360,11 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: disabledProvisioning().build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "")),
+				withEnv(
+					containers["metal3-httpd"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithValue("IRONIC_LISTEN_PORT", "6388"),
+				),
 				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", ""), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
 				containers["metal3-ramdisk-logs"],
 				withEnv(containers["metal3-ironic-inspector"], envWithValue("PROVISIONING_INTERFACE", ""), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
@@ -371,7 +376,12 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP")),
+				withEnv(
+					containers["metal3-httpd"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
+					envWithValue("IRONIC_LISTEN_PORT", "6388"),
+				),
 				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP"), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
 				containers["metal3-ramdisk-logs"],
 				withEnv(containers["metal3-ironic-inspector"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP"), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
