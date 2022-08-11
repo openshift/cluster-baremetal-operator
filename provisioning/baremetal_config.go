@@ -45,11 +45,7 @@ var (
 	machineImageUrl                = "RHCOS_IMAGE_URL"
 	ipOptions                      = "IP_OPTIONS"
 	bootIsoSource                  = "IRONIC_BOOT_ISO_SOURCE"
-)
-
-const (
-	ironicPrivatePort          = 6388
-	ironicInspectorPrivatePort = 5049
+	useUnixSocket                  = "unix"
 )
 
 func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
