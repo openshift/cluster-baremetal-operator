@@ -77,7 +77,8 @@ func getProvisioningIPCIDR(config *metal3iov1alpha1.ProvisioningSpec) *string {
 }
 
 func getDeployKernelUrl() *string {
-	deployKernelUrl := fmt.Sprintf("http://localhost:%d/%s", imageCachePort, baremetalKernelUrlSubPath)
+	// TODO(dtantsur): it's a share file system, we should look into using a file:// URL
+	deployKernelUrl := fmt.Sprintf("http://localhost:%s/%s", baremetalHttpPort, baremetalKernelUrlSubPath)
 	return &deployKernelUrl
 }
 

@@ -35,6 +35,7 @@ const (
 	DaemonSetProgressing    appsv1.DaemonSetConditionType = "Progressing"
 	DaemonSetReplicaFailure appsv1.DaemonSetConditionType = "ReplicaFailure"
 	DaemonSetAvailable      appsv1.DaemonSetConditionType = "Available"
+	DaemonSetDisabled       appsv1.DaemonSetConditionType = "Disabled"
 )
 
 var (
@@ -43,7 +44,7 @@ var (
 	fileCompressionSuffix     = regexp.MustCompile(`\.[gx]z$`)
 	imageVolumeMount          = corev1.VolumeMount{
 		Name:      imageCacheSharedVolume,
-		MountPath: "/shared/html/images",
+		MountPath: imageSharedDir,
 	}
 )
 
@@ -133,21 +134,14 @@ func createContainerImageCache(images *Images) corev1.Container {
 }
 
 func newImageCacheInitContainers(info *ProvisioningInfo) ([]corev1.Container, error) {
-	initContainers := []corev1.Container{}
-
-	// Extract the pre-provisioning images from a container in the payload
-	initContainers = append(initContainers, createInitContainerMachineOSImages(info, "--all", imageVolumeMount, "/shared/html/images"))
-
-	// Download the transformed URL containing qcow2
-	if info.ProvConfig.Spec.ProvisioningOSDownloadURL != "" {
-		newURL, err := transformURL(info.Namespace, info.ProvConfig.Spec.ProvisioningOSDownloadURL)
-		if err != nil {
-			return nil, err
-		}
-		initContainers = append(initContainers, createInitContainerMachineOsDownloader(info, newURL, false, false))
+	newURL, err := transformURL(info.Namespace, info.ProvConfig.Spec.ProvisioningOSDownloadURL)
+	if err != nil {
+		return nil, err
 	}
 
-	return initContainers, nil
+	return []corev1.Container{
+		createInitContainerMachineOsDownloader(info, newURL, false, false),
+	}, nil
 }
 
 func newImageCacheContainers(images *Images, proxy *osconfigv1.Proxy) []corev1.Container {
@@ -202,18 +196,7 @@ func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSp
 			},
 			Volumes: []corev1.Volume{
 				imageVolume(),
-				{
-					Name: "trusted-ca",
-					VolumeSource: corev1.VolumeSource{
-						ConfigMap: &corev1.ConfigMapVolumeSource{
-							Items: []corev1.KeyToPath{{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}},
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: externalTrustBundleConfigMapName,
-							},
-							Optional: pointer.BoolPtr(true),
-						},
-					},
-				},
+				trustedCAVolume(),
 			},
 			InitContainers:    injectProxyAndCA(initContainers, info.Proxy),
 			Containers:        containers,
@@ -262,6 +245,11 @@ func newImageCacheDaemonSet(info *ProvisioningInfo) (*appsv1.DaemonSet, error) {
 }
 
 func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
+	if info.ProvConfig.Spec.ProvisioningOSDownloadURL == "" {
+		err = DeleteImageCache(info)
+		return
+	}
+
 	imageCacheDaemonSet, err := newImageCacheDaemonSet(info)
 	if err != nil {
 		return
@@ -289,6 +277,11 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 
 // Provide the current state of metal3 image-cache daemonset
 func GetDaemonSetState(client appsclientv1.DaemonSetsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DaemonSetConditionType, error) {
+	if config.Spec.ProvisioningOSDownloadURL == "" {
+		// TODO(dtantsur): do we need to check it's really deleted?
+		return DaemonSetDisabled, nil
+	}
+
 	existing, err := client.DaemonSets(targetNamespace).Get(context.Background(), imageCacheService, metav1.GetOptions{})
 	if err != nil || existing == nil {
 		// There were errors accessing the deployment.

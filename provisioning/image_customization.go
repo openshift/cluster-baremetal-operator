@@ -40,10 +40,11 @@ const (
 	imageCustomizationPort           = 8084
 	containerRegistriesConfPath      = "/etc/containers/registries.conf"
 	containerRegistriesEnvVar        = "REGISTRIES_CONF_PATH"
+	imageSharedDir                   = "/shared/html/images"
 	deployISOEnvVar                  = "DEPLOY_ISO"
-	deployISOFile                    = "/shared/html/images/ironic-python-agent.iso"
+	deployISOFile                    = imageSharedDir + "/ironic-python-agent.iso"
 	deployInitrdEnvVar               = "DEPLOY_INITRD"
-	deployInitrdFile                 = "/shared/html/images/ironic-python-agent.initramfs"
+	deployInitrdFile                 = imageSharedDir + "/ironic-python-agent.initramfs"
 )
 
 var (
@@ -83,6 +84,7 @@ func getUrlFromIP(ipAddr string) string {
 
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIP string) corev1.Container {
 	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{})
+
 	container := corev1.Container{
 		Name:  "machine-image-customization-controller",
 		Image: images.ImageCustomizationController,
@@ -149,6 +151,12 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 		createImageCustomizationContainer(info.Images, info, ironicIP),
 	}
 
+	// Extract the pre-provisioning images from a container in the payload
+	initContainers := []corev1.Container{
+		// TODO(dtantsur): use --image-build instead of --all once ICC has its own isolated volume
+		createInitContainerMachineOSImages(info, "--all", imageVolumeMount, imageSharedDir),
+	}
+
 	tolerations := []corev1.Toleration{
 		{
 			Key:      "node-role.kubernetes.io/master",
@@ -180,6 +188,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 		},
 		Spec: corev1.PodSpec{
 			Containers:         containers,
+			InitContainers:     injectProxyAndCA(initContainers, info.Proxy),
 			HostNetwork:        false,
 			DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName:  "system-node-critical",
@@ -189,6 +198,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			Volumes: []corev1.Volume{
 				imageRegistriesVolume(),
 				imageVolume(),
+				trustedCAVolume(),
 			},
 		},
 	}

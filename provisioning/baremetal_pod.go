@@ -132,6 +132,21 @@ var pullSecret = corev1.EnvVar{
 	},
 }
 
+func trustedCAVolume() corev1.Volume {
+	return corev1.Volume{
+		Name: "trusted-ca",
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				Items: []corev1.KeyToPath{{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}},
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: externalTrustBundleConfigMapName,
+				},
+				Optional: pointer.BoolPtr(true),
+			},
+		},
+	}
+}
+
 var metal3Volumes = []corev1.Volume{
 	{
 		Name: baremetalSharedVolume,
@@ -174,18 +189,7 @@ var metal3Volumes = []corev1.Volume{
 			},
 		},
 	},
-	{
-		Name: "trusted-ca",
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				Items: []corev1.KeyToPath{{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}},
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: externalTrustBundleConfigMapName,
-				},
-				Optional: pointer.BoolPtr(true),
-			},
-		},
-	},
+	trustedCAVolume(),
 	{
 		Name: ironicTlsVolume,
 		VolumeSource: corev1.VolumeSource{
@@ -276,7 +280,7 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	}
 
 	// Extract the pre-provisioning images from a container in the payload
-	initContainers = append(initContainers, createInitContainerMachineOSImages(info, "--all", imageVolumeMount, "/shared/html/images"))
+	initContainers = append(initContainers, createInitContainerMachineOSImages(info, "--all", imageVolumeMount, imageSharedDir))
 
 	// If the ProvisioningOSDownloadURL is set, we download the URL specified in it
 	if info.ProvConfig.Spec.ProvisioningOSDownloadURL != "" {
