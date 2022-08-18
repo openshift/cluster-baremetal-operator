@@ -21,12 +21,14 @@ func TestIsEnabled(t *testing.T) {
 			Name: "cluster",
 		},
 		Status: configv1.InfrastructureStatus{
-			Platform: configv1.NonePlatformType,
+			PlatformStatus: &configv1.PlatformStatus{
+				Type: configv1.NonePlatformType,
+			},
 		},
 	}
 	withPlatformType := func(in configv1.Infrastructure, pt configv1.PlatformType) *configv1.Infrastructure {
 		out := in.DeepCopy()
-		out.Status.Platform = pt
+		out.Status.PlatformStatus.Type = pt
 		return out
 	}
 	withExternalControlPlane := func(in configv1.Infrastructure) *configv1.Infrastructure {

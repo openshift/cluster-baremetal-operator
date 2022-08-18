@@ -40,7 +40,7 @@ func EnabledFeatures(ctx context.Context, osClient osclientset.Interface) (v1alp
 		return features, nil
 	}
 
-	switch infra.Status.Platform {
+	switch infra.Status.PlatformStatus.Type {
 	case osconfigv1.BareMetalPlatformType:
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkDisabled] = true
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkUnmanaged] = true
