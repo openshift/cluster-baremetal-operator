@@ -72,12 +72,6 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 					},
 				},
 			},
-			// TODO(dtantsur): certificates are currently generated for "localhost"
-			// and do not pass validation.
-			{
-				Name:  ironicInsecureEnvVar,
-				Value: "true",
-			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
