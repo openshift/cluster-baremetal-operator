@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
@@ -47,11 +48,21 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 	return hostIP, err
 }
 
-func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec) (string, error) {
-	// if UseIronicProxy(config) {
-	// TODO: API VIP ???
-	// } else
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
+func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec, osclient osclientset.Interface) (string, error) {
+	if UseIronicProxy(config) {
+		ctx := context.Background()
+		infra, err := osclient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
+		if err != nil {
+			err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
+			return "", err
+		}
+		if infra.Status.PlatformStatus.BareMetal != nil {
+			return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
+		} else {
+			err = fmt.Errorf("Cannot detect bare metal API VIP: not a baremetal platform")
+			return "", err
+		}
+	} else if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		return config.ProvisioningIP, nil
 	} else {
 		return getPodHostIP(client.CoreV1(), targetNamespace)

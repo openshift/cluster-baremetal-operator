@@ -119,6 +119,7 @@ func main() {
 			Client:        kubeClient,
 			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
 			Namespace:     controllers.ComponentNamespace,
+			OSClient:      osClient,
 		}
 		if err = provisioning.EnableValidatingWebhook(info, mgr, enabledFeatures); err != nil {
 			klog.ErrorS(err, "problem enabling validating webhook")

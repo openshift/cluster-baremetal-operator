@@ -5,6 +5,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	configv1 "github.com/openshift/api/config/v1"
+	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/events"
 )
@@ -42,4 +43,5 @@ type ProvisioningInfo struct {
 	MasterMacAddresses      []string
 	SSHKey                  string
 	BaremetalWebhookEnabled bool
+	OSClient                osclientset.Interface
 }
