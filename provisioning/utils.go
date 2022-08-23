@@ -65,14 +65,24 @@ func GetServerInternalIP(osclient osclientset.Interface) (string, error) {
 	return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
 }
 
-func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec, osclient osclientset.Interface) (string, error) {
-	if UseIronicProxy(config) {
-		return GetServerInternalIP(osclient)
-	} else if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
-		return config.ProvisioningIP, nil
+func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec, osclient osclientset.Interface) (ironicIP string, inspectorIP string, err error) {
+	// Inspector does not support proxy
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
+		inspectorIP = config.ProvisioningIP
 	} else {
-		return getPodHostIP(client.CoreV1(), targetNamespace)
+		inspectorIP, err = getPodHostIP(client.CoreV1(), targetNamespace)
+		if err != nil {
+			return
+		}
 	}
+
+	if UseIronicProxy(config) {
+		ironicIP, err = GetServerInternalIP(osclient)
+	} else {
+		ironicIP = inspectorIP
+	}
+
+	return
 }
 
 func IpOptionForProvisioning(config *metal3iov1alpha1.ProvisioningSpec, networkStack NetworkStackType) string {
