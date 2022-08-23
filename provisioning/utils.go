@@ -48,20 +48,26 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 	return hostIP, err
 }
 
+func GetServerInternalIP(osclient osclientset.Interface) (string, error) {
+	infra, err := osclient.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
+		return "", err
+	}
+
+	// NOTE(dtantsur): do we need to handle non-BareMetal platforms here?
+	if infra.Status.PlatformStatus.BareMetal == nil {
+		err = fmt.Errorf("Cannot detect server API VIP: not a baremetal platform")
+		return "", err
+	}
+
+	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
+	return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
+}
+
 func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec, osclient osclientset.Interface) (string, error) {
 	if UseIronicProxy(config) {
-		ctx := context.Background()
-		infra, err := osclient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
-		if err != nil {
-			err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
-			return "", err
-		}
-		if infra.Status.PlatformStatus.BareMetal != nil {
-			return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
-		} else {
-			err = fmt.Errorf("Cannot detect bare metal API VIP: not a baremetal platform")
-			return "", err
-		}
+		return GetServerInternalIP(osclient)
 	} else if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		return config.ProvisioningIP, nil
 	} else {

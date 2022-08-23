@@ -378,7 +378,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		NetworkStack:            r.NetworkStack,
 		SSHKey:                  sshkey,
 		BaremetalWebhookEnabled: enableBaremetalWebhook,
-		OSClient:		 r.OSClient,
+		OSClient:                r.OSClient,
 	}, nil
 }
 
