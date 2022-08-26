@@ -55,6 +55,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2"},
+			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: "https://192.168.0.2"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
@@ -69,6 +70,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2"},
+			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: "https://192.168.0.3"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
@@ -79,16 +81,19 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 
 	tCases := []struct {
 		name              string
+		inspectorIP       string
 		proxy             *v1.Proxy
 		expectedContainer corev1.Container
 	}{
 		{
-			name:              "image customization containe whith proxy",
+			name:              "image customization containe with proxy",
+			inspectorIP:       ironicIP,
 			proxy:             testProxy,
 			expectedContainer: container1,
 		},
 		{
-			name:              "image customization containe whthout proxy",
+			name:              "image customization containe without proxy",
+			inspectorIP:       "192.168.0.3",
 			proxy:             nil,
 			expectedContainer: container2,
 		},
@@ -101,7 +106,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 				NetworkStack: NetworkStackV4,
 				Proxy:        tc.proxy,
 			}
-			actualContainer := createImageCustomizationContainer(&images, info, ironicIP)
+			actualContainer := createImageCustomizationContainer(&images, info, ironicIP, tc.inspectorIP)
 			for e := range actualContainer.Env {
 				assert.EqualValues(t, tc.expectedContainer.Env[e], actualContainer.Env[e])
 			}

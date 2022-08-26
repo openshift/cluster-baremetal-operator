@@ -60,6 +60,7 @@ const (
 	inspectorProxyEnvVar             = "INSPECTOR_REVERSE_PROXY_SETUP"
 	ironicPrivatePortEnvVar          = "IRONIC_PRIVATE_PORT"
 	inspectorPrivatePortEnvVar       = "IRONIC_INSPECTOR_PRIVATE_PORT"
+	ironicListenPortEnvVar           = "IRONIC_LISTEN_PORT"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -524,6 +525,14 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	port, _ := strconv.Atoi(baremetalHttpPort)             // #nosec
 	httpsPort, _ := strconv.Atoi(baremetalVmediaHttpsPort) // #nosec
 
+	ironicPort := baremetalIronicPort
+	// In the proxy mode, the ironic API is served on the private port,
+	// while ironic-proxy, running as a DeamonSet on all nodes, serves on
+	// 6385 and proxies the traffic.
+	if UseIronicProxy(config) {
+		ironicPort = ironicPrivatePort
+	}
+
 	volumes := []corev1.VolumeMount{
 		sharedVolumeMount,
 		ironicCredentialsMount,
@@ -535,8 +544,8 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	ports := []corev1.ContainerPort{
 		{
 			Name:          "ironic",
-			ContainerPort: 6385,
-			HostPort:      6385,
+			ContainerPort: int32(ironicPort),
+			HostPort:      int32(ironicPort),
 		},
 		{
 			Name:          "inspector",
@@ -587,11 +596,15 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 			},
 			{
 				Name:  ironicPrivatePortEnvVar,
-				Value: fmt.Sprint(ironicPrivatePort),
+				Value: useUnixSocket,
 			},
 			{
 				Name:  inspectorPrivatePortEnvVar,
-				Value: fmt.Sprint(ironicInspectorPrivatePort),
+				Value: useUnixSocket,
+			},
+			{
+				Name:  ironicListenPortEnvVar,
+				Value: fmt.Sprint(ironicPort),
 			},
 		},
 		Ports: ports,
@@ -646,7 +659,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			},
 			{
 				Name:  ironicPrivatePortEnvVar,
-				Value: fmt.Sprint(ironicPrivatePort),
+				Value: useUnixSocket,
 			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
@@ -655,13 +668,6 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
-		},
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          "ironic-int",
-				ContainerPort: ironicPrivatePort,
-				HostPort:      ironicPrivatePort,
-			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -724,18 +730,11 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 			},
 			{
 				Name:  inspectorPrivatePortEnvVar,
-				Value: fmt.Sprint(ironicInspectorPrivatePort),
+				Value: useUnixSocket,
 			},
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			buildEnvVar(provisioningMacAddresses, config),
-		},
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          "inspector-int",
-				ContainerPort: ironicInspectorPrivatePort,
-				HostPort:      ironicInspectorPrivatePort,
-			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{

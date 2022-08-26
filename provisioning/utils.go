@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
@@ -47,12 +48,41 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 	return hostIP, err
 }
 
-func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec) (string, error) {
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
-		return config.ProvisioningIP, nil
-	} else {
-		return getPodHostIP(client.CoreV1(), targetNamespace)
+func GetServerInternalIP(osclient osclientset.Interface) (string, error) {
+	infra, err := osclient.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
+		return "", err
 	}
+
+	// NOTE(dtantsur): do we need to handle non-BareMetal platforms here?
+	if infra.Status.PlatformStatus.BareMetal == nil {
+		err = fmt.Errorf("Cannot detect server API VIP: not a baremetal platform")
+		return "", err
+	}
+
+	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
+	return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
+}
+
+func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec, osclient osclientset.Interface) (ironicIP string, inspectorIP string, err error) {
+	// Inspector does not support proxy
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
+		inspectorIP = config.ProvisioningIP
+	} else {
+		inspectorIP, err = getPodHostIP(client.CoreV1(), targetNamespace)
+		if err != nil {
+			return
+		}
+	}
+
+	if UseIronicProxy(config) {
+		ironicIP, err = GetServerInternalIP(osclient)
+	} else {
+		ironicIP = inspectorIP
+	}
+
+	return
 }
 
 func IpOptionForProvisioning(config *metal3iov1alpha1.ProvisioningSpec, networkStack NetworkStackType) string {

@@ -137,6 +137,51 @@ func (r *ProvisioningReconciler) readSSHKey() string {
 	return strings.TrimSpace(installConfigData.SSHKey)
 }
 
+func (r *ProvisioningReconciler) checkDaemonSet(state appsv1.DaemonSetConditionType, stateError error, name string) error {
+	if stateError != nil {
+		msg := fmt.Sprintf("%s daemonset inaccessible", name)
+		err := r.updateCOStatus(ReasonResourceNotFound, msg, "")
+		if err != nil {
+			return fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+		}
+
+		return errors.Wrapf(stateError, "failed to determine state of %s daemonset", name)
+	}
+
+	if state == provisioning.DaemonSetReplicaFailure {
+		msg := fmt.Sprintf("%s rollout taking too long", name)
+		err := r.updateCOStatus(ReasonDeployTimedOut, msg, "")
+		if err != nil {
+			return fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+		}
+
+		return errors.New(msg)
+	}
+
+	return nil
+}
+
+func getSuccessStatus(imageCacheState appsv1.DaemonSetConditionType, ironicProxyState appsv1.DaemonSetConditionType) string {
+	parts := []string{"metal3 pod"}
+	if imageCacheState == provisioning.DaemonSetAvailable {
+		parts = append(parts, "image cache")
+	} else if imageCacheState != provisioning.DaemonSetDisabled {
+		return ""
+	}
+
+	if ironicProxyState == provisioning.DaemonSetAvailable {
+		parts = append(parts, "ironic proxy")
+	} else if ironicProxyState != provisioning.DaemonSetDisabled {
+		return ""
+	}
+
+	if len(parts) > 1 {
+		return fmt.Sprintf("%s are running", strings.Join(parts, ", "))
+	} else {
+		return fmt.Sprintf("%s is running", parts[0])
+	}
+}
+
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -249,6 +294,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureBaremetalOperatorWebhook,
 		provisioning.EnsureImageCustomizationService,
 		provisioning.EnsureImageCustomizationDeployment,
+		provisioning.EnsureIronicProxy,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -283,30 +329,26 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	// Determine the status of the DaemonSet
-	daemonSetState, err := provisioning.GetDaemonSetState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	// Determine the status of the image cache DaemonSet
+	imageCacheState, err := provisioning.GetImageCacheState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	err = r.checkDaemonSet(imageCacheState, err, "metal3 image cache")
 	if err != nil {
-		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 image cache daemonset inaccessible", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
-		}
-		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 image cache daemonset")
+		return ctrl.Result{}, err
 	}
-	if daemonSetState == provisioning.DaemonSetReplicaFailure {
-		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 image cache rollout taking too long", "")
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
-		}
-	}
-	if deploymentState == appsv1.DeploymentAvailable {
-		if daemonSetState == provisioning.DaemonSetAvailable {
-			err = r.updateCOStatus(ReasonComplete, "metal3 pod and image cache are running", "")
-		} else if daemonSetState == provisioning.DaemonSetDisabled {
-			err = r.updateCOStatus(ReasonComplete, "metal3 pod is running", "")
-		}
 
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
+	ironicProxyState, err := provisioning.GetIronicProxyState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	err = r.checkDaemonSet(ironicProxyState, err, "ironic proxy")
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if deploymentState == appsv1.DeploymentAvailable {
+		msg := getSuccessStatus(imageCacheState, ironicProxyState)
+		if msg != "" {
+			err = r.updateCOStatus(ReasonComplete, msg, "")
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
+			}
 		}
 	}
 
@@ -336,6 +378,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		NetworkStack:            r.NetworkStack,
 		SSHKey:                  sshkey,
 		BaremetalWebhookEnabled: enableBaremetalWebhook,
+		OSClient:                r.OSClient,
 	}, nil
 }
 
@@ -398,6 +441,9 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteImageCustomizationDeployment(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 image customization deployment")
+	}
+	if err := provisioning.DeleteIronicProxy(info); err != nil {
+		return errors.Wrap(err, "failed to delete ironic proxy")
 	}
 	return nil
 }

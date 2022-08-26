@@ -29,8 +29,8 @@ var (
 	baremetalHttpPort              = "6180"
 	baremetalVmediaHttpsPort       = "6183"
 	baremetalWebhookPort           = "9447"
-	baremetalIronicPort            = "6385"
-	baremetalIronicInspectorPort   = "5050"
+	baremetalIronicPort            = 6385
+	baremetalIronicInspectorPort   = 5050
 	baremetalKernelUrlSubPath      = "images/ironic-python-agent.kernel"
 	baremetalIronicEndpointSubpath = "v1/"
 	provisioningIP                 = "PROVISIONING_IP"
@@ -45,11 +45,7 @@ var (
 	machineImageUrl                = "RHCOS_IMAGE_URL"
 	ipOptions                      = "IP_OPTIONS"
 	bootIsoSource                  = "IRONIC_BOOT_ISO_SOURCE"
-)
-
-const (
-	ironicPrivatePort          = 6388
-	ironicInspectorPrivatePort = 5049
+	useUnixSocket                  = "unix"
 )
 
 func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
@@ -83,12 +79,12 @@ func getDeployKernelUrl() *string {
 }
 
 func getIronicEndpoint() *string {
-	ironicEndpoint := fmt.Sprintf("https://localhost:%s/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
+	ironicEndpoint := fmt.Sprintf("https://localhost:%d/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
 	return &ironicEndpoint
 }
 
 func getIronicInspectorEndpoint() *string {
-	ironicInspectorEndpoint := fmt.Sprintf("https://localhost:%s/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
+	ironicInspectorEndpoint := fmt.Sprintf("https://localhost:%d/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
 	return &ironicInspectorEndpoint
 }
 
