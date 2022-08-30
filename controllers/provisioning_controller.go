@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -30,7 +31,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -90,6 +93,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;infrastructures/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;watch;list;patch
 // +kubebuilder:rbac:groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings;provisionings/finalizers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
@@ -473,9 +477,40 @@ func (r *ProvisioningReconciler) networkStackFromServiceNetwork(ctx context.Cont
 	return ns, nil
 }
 
+func getHostByProviderId(provId string) string {
+	if provId == "" {
+		return ""
+	}
+
+	provider, err := url.Parse(provId)
+	if err != nil || provider.Scheme != "baremetalhost" {
+		return ""
+	}
+
+	path := strings.Split(strings.Trim(provider.Path, "/"), "/")
+	if len(path) < 2 || path[0] != ComponentNamespace {
+		return ""
+	}
+
+	return path[1]
+}
+
 func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) error {
 	if len(provConfig.Spec.ProvisioningMacAddresses) != 0 {
 		return nil
+	}
+
+	nodes := corev1.NodeList{}
+	bmhNames := []string{}
+	labelReq, _ := labels.NewRequirement("node-role.kubernetes.io/master", selection.Exists, nil)
+	if err := r.Client.List(ctx, &nodes, &client.ListOptions{LabelSelector: labels.NewSelector().Add(*labelReq)}); err != nil {
+		return errors.Wrap(err, "cannot list master nodes")
+	}
+	for _, node := range nodes.Items {
+		bmhName := getHostByProviderId(node.Spec.ProviderID)
+		if bmhName != "" {
+			bmhNames = append(bmhNames, bmhName)
+		}
 	}
 
 	macs := []string{}
@@ -484,7 +519,7 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 		return err
 	}
 	for _, bmh := range bmhl.Items {
-		if strings.Contains(bmh.Name, "master") && len(bmh.Spec.BootMACAddress) > 0 {
+		if slice.Contains(bmhNames, bmh.Name) && len(bmh.Spec.BootMACAddress) > 0 {
 			macs = append(macs, bmh.Spec.BootMACAddress)
 		}
 	}
