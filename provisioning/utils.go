@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -34,15 +35,24 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 		return "", err
 	}
 
+	// On fail-over, two copies of the pod will be present: the old
+	// Terminating one and the new Running one. Ignore terminating pods.
+	var pods []corev1.Pod
+	for _, pod := range podList.Items {
+		if pod.DeletionTimestamp == nil {
+			pods = append(pods, pod)
+		}
+	}
+
 	var hostIP string
-	switch len(podList.Items) {
+	switch len(pods) {
 	case 0:
 		// Ironic IP not available yet, just return an empty string
 	case 1:
-		hostIP = podList.Items[0].Status.HostIP
+		hostIP = pods[0].Status.HostIP
 	default:
 		// We expect only one pod with the above LabelSelector
-		err = fmt.Errorf("there should be only one pod listed for the given label")
+		err = fmt.Errorf("there should be only one running pod listed for the given label")
 	}
 
 	return hostIP, err
