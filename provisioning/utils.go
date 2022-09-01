@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
@@ -48,21 +49,26 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 	return hostIP, err
 }
 
-func GetServerInternalIP(osclient osclientset.Interface) (string, error) {
+func getServerInternalIP(osclient osclientset.Interface) (string, error) {
 	infra, err := osclient.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if err != nil {
 		err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
 		return "", err
 	}
-
-	// NOTE(dtantsur): do we need to handle non-BareMetal platforms here?
-	if infra.Status.PlatformStatus.BareMetal == nil {
-		err = fmt.Errorf("Cannot detect server API VIP: not a baremetal platform")
+	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
+	switch infra.Status.PlatformStatus.Type {
+	case osconfigv1.BareMetalPlatformType:
+		return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
+	case osconfigv1.OpenStackPlatformType:
+		return infra.Status.PlatformStatus.OpenStack.APIServerInternalIP, nil
+	case osconfigv1.VSpherePlatformType:
+		return infra.Status.PlatformStatus.VSphere.APIServerInternalIP, nil
+	case osconfigv1.NonePlatformType:
+		return "", nil
+	default:
+		err = fmt.Errorf("Cannot detect server API VIP: Attribute not supported on platform: %v", infra.Status.PlatformStatus.Type)
 		return "", err
 	}
-
-	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
-	return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
 }
 
 func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec, osclient osclientset.Interface) (ironicIP string, inspectorIP string, err error) {
@@ -77,7 +83,11 @@ func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *me
 	}
 
 	if UseIronicProxy(config) {
-		ironicIP, err = GetServerInternalIP(osclient)
+		ironicIP, err = getServerInternalIP(osclient)
+		// NOTE(janders) if ironicIP is an empty string (e.g. for NonePlatformType) fall back to Pod IP (which is what Inspector uses)
+		if ironicIP == "" {
+			ironicIP = inspectorIP
+		}
 	} else {
 		ironicIP = inspectorIP
 	}
