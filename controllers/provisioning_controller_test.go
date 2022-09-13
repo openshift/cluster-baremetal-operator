@@ -2,10 +2,10 @@ package controllers
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -20,6 +20,7 @@ import (
 
 func setUpSchemeForReconciler() *runtime.Scheme {
 	scheme := runtime.NewScheme()
+	utilruntime.Must(corev1.AddToScheme(scheme))
 	// we need to add the openshift/api to the scheme to be able to read
 	// the infrastructure CR
 	utilruntime.Must(configv1.AddToScheme(scheme))
@@ -191,7 +192,7 @@ func TestUpdateProvisioningMacAddresses(t *testing.T) {
 			},
 		},
 		&baremetalv1alpha1.BareMetalHost{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-master-1", Namespace: ComponentNamespace},
+			ObjectMeta: metav1.ObjectMeta{Name: "test-controlplane-1", Namespace: ComponentNamespace},
 			Spec: baremetalv1alpha1.BareMetalHostSpec{
 				BootMACAddress: "00:3d:25:45:bf:e6",
 			},
@@ -214,6 +215,67 @@ func TestUpdateProvisioningMacAddresses(t *testing.T) {
 				BootMACAddress: "00:3d:25:45:bf:e9",
 			},
 		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node-0",
+				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "baremetalhost:///openshift-machine-api/test-master-0/something",
+			},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node-1",
+				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "provider:///openshift-machine-api/test-worker-0/something",
+			},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node-2",
+				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "baremetalhost:///broken",
+			},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node-3",
+				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "baremetalhost:///openshift-machine-api/test-controlplane-1/something",
+			},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node-4",
+				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
+			},
+			Spec: corev1.NodeSpec{},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node-5",
+				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "baremetalhost:///openshift-machine-api/test-master-2/something",
+			},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node-6",
+				Labels: map[string]string{"node-role.kubernetes.io/worker": ""},
+			},
+			Spec: corev1.NodeSpec{
+				ProviderID: "baremetalhost:///openshift-machine-api/test-worker-1/something",
+			},
+		},
 	}
 	baremetalCR := metal3iov1alpha1.Provisioning{
 		TypeMeta: metav1.TypeMeta{
@@ -233,11 +295,6 @@ func TestUpdateProvisioningMacAddresses(t *testing.T) {
 
 	want := []string{"00:3d:25:45:bf:e5", "00:3d:25:45:bf:e6", "00:3d:25:45:bf:e7"}
 	err := r.updateProvisioningMacAddresses(context.TODO(), &baremetalCR)
-	if err != nil {
-		t.Errorf("ProvisioningReconciler.updateProvisioningMacAddresses() error = %v", err)
-		return
-	}
-	if !reflect.DeepEqual(baremetalCR.Spec.ProvisioningMacAddresses, want) {
-		t.Errorf("ProvisioningReconciler.updateProvisioningMacAddresses() = %v, want %v", baremetalCR.Spec.ProvisioningMacAddresses, want)
-	}
+	assert.NoError(t, err, "ProvisioningReconciler.updateProvisioningMacAddresses()")
+	assert.ElementsMatch(t, baremetalCR.Spec.ProvisioningMacAddresses, want)
 }
