@@ -18,6 +18,8 @@ package provisioning
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -56,6 +58,7 @@ const (
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
 	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
 	externalIpEnvVar                 = "IRONIC_EXTERNAL_IP"
+	externalUrlEnvVar                = "IRONIC_EXTERNAL_URL_V6"
 	ironicProxyEnvVar                = "IRONIC_REVERSE_PROXY_SETUP"
 	inspectorProxyEnvVar             = "INSPECTOR_REVERSE_PROXY_SETUP"
 	ironicPrivatePortEnvVar          = "IRONIC_PRIVATE_PORT"
@@ -270,6 +273,42 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 	}
 }
 
+func isIronicVmediaTLSConfigured() bool {
+	vmediaTlsCert := filepath.Join(metal3TlsRootDir, "vmedia/tls.cert")
+	_, err := os.Stat(vmediaTlsCert)
+
+	if err == nil {
+		return true
+	}
+
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	return false
+}
+
+// This envvar is dependent on IRONIC_EXTERNAL_IP
+func setIronicExternalUrl(name string, config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
+		if isIronicVmediaTLSConfigured() {
+			return corev1.EnvVar{
+				Name:  name,
+				Value: "https://$(IRONIC_EXTERNAL_IP):$(VMEDIA_TLS_PORT)",
+			}
+		} else {
+			return corev1.EnvVar{
+				Name:  name,
+				Value: "http://$(IRONIC_EXTERNAL_IP):$(HTTP_PORT)",
+			}
+		}
+	}
+
+	return corev1.EnvVar{
+		Name: name,
+	}
+}
+
 func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	initContainers := []corev1.Container{}
 
@@ -471,6 +510,8 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 				Name:  "METAL3_AUTH_ROOT_DIR",
 				Value: metal3AuthRootDir,
 			},
+			setIronicExternalIp(externalIpEnvVar, config),
+			setIronicExternalUrl(externalUrlEnvVar, config),
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
