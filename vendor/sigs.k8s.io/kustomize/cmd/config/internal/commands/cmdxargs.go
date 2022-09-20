@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/kustomize/cmd/config/runner"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -59,6 +60,7 @@ $ kyaml cat pkg/ --function-config config.yaml --wrap-kind ResourceList | kyaml 
 
 `,
 		RunE:               r.runE,
+		PreRunE:            r.preRunE,
 		SilenceUsage:       true,
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		Args:               cobra.MinimumNArgs(1),
@@ -81,6 +83,12 @@ type XArgsRunner struct {
 
 func XArgsCommand() *cobra.Command {
 	return GetXArgsRunner().Command
+}
+
+func (r *XArgsRunner) preRunE(_ *cobra.Command, _ []string) error {
+	_, err := fmt.Fprintln(os.Stderr, `Command "xargs" is deprecated, this will no longer be available in kustomize v5.
+See discussion in https://github.com/kubernetes-sigs/kustomize/issues/3953.`)
+	return err
 }
 
 func (r *XArgsRunner) runE(c *cobra.Command, _ []string) error {
@@ -211,7 +219,7 @@ func (r *XArgsRunner) runE(c *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return handleError(c, run.Run())
+	return runner.HandleError(c, run.Run())
 }
 
 func parseYNode(node *yaml.Node) string {

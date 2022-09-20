@@ -10,7 +10,7 @@ IMG ?= controller:latest
 CONTROLLER_GEN ?= go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go
 CRD_OPTIONS="crd:trivialVersions=true,crdVersions=v1"
 GOLANGCI_LINT ?= GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) go run vendor/github.com/golangci/golangci-lint/cmd/golangci-lint/main.go
-KUSTOMIZE ?= go run sigs.k8s.io/kustomize/kustomize/v3
+KUSTOMIZE ?= go run sigs.k8s.io/kustomize/kustomize/v4
 MANIFEST_PROFILE ?= default
 TMP_DIR := $(shell mktemp -d -t manifests-$(date +%Y-%m-%d-%H-%M-%S)-XXXXXXXXXX)
 

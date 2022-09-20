@@ -6,13 +6,15 @@ package resmap
 import (
 	"bytes"
 	"fmt"
-	"regexp"
+	"reflect"
 
 	"github.com/pkg/errors"
-	"sigs.k8s.io/kustomize/api/resid"
+	"sigs.k8s.io/kustomize/api/filters/annotations"
 	"sigs.k8s.io/kustomize/api/resource"
 	"sigs.k8s.io/kustomize/api/types"
-	"sigs.k8s.io/yaml"
+	"sigs.k8s.io/kustomize/kyaml/kio"
+	"sigs.k8s.io/kustomize/kyaml/resid"
+	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 // resWrangler implements ResMap.
@@ -35,6 +37,18 @@ func newOne() *resWrangler {
 // Clear implements ResMap.
 func (m *resWrangler) Clear() {
 	m.rList = nil
+}
+
+// DropEmpties quickly drops empty resources.
+// It doesn't use Append, which checks for Id collisions.
+func (m *resWrangler) DropEmpties() {
+	var rList []*resource.Resource
+	for _, r := range m.rList {
+		if !r.IsNilOrEmpty() {
+			rList = append(rList, r)
+		}
+	}
+	m.rList = rList
 }
 
 // Size implements ResMap.
@@ -65,22 +79,27 @@ func (m *resWrangler) Append(res *resource.Resource) error {
 		return fmt.Errorf(
 			"may not add resource with an already registered id: %s", id)
 	}
-	m.rList = append(m.rList, res)
+	m.append(res)
 	return nil
+}
+
+// append appends without performing an Id check
+func (m *resWrangler) append(res *resource.Resource) {
+	m.rList = append(m.rList, res)
 }
 
 // Remove implements ResMap.
 func (m *resWrangler) Remove(adios resid.ResId) error {
-	tmp := newOne()
+	var rList []*resource.Resource
 	for _, r := range m.rList {
 		if r.CurId() != adios {
-			tmp.Append(r)
+			rList = append(rList, r)
 		}
 	}
-	if tmp.Size() != m.Size()-1 {
+	if len(rList) != m.Size()-1 {
 		return fmt.Errorf("id %s not found in removal", adios)
 	}
-	m.rList = tmp.rList
+	m.rList = rList
 	return nil
 }
 
@@ -117,12 +136,7 @@ func (m *resWrangler) Debug(title string) {
 		} else {
 			fmt.Println("---")
 		}
-		fmt.Printf("# %d  %s\n", i, r.OrgId())
-		blob, err := yaml.Marshal(r.Map())
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(string(blob))
+		fmt.Printf("# %d  %s\n%s\n", i, r.OrgId(), r.String())
 	}
 }
 
@@ -154,8 +168,7 @@ func (m *resWrangler) GetIndexOfCurrentId(id resid.ResId) (int, error) {
 
 type IdFromResource func(r *resource.Resource) resid.ResId
 
-func GetOriginalId(r *resource.Resource) resid.ResId { return r.OrgId() }
-func GetCurrentId(r *resource.Resource) resid.ResId  { return r.CurId() }
+func GetCurrentId(r *resource.Resource) resid.ResId { return r.CurId() }
 
 // GetMatchingResourcesByCurrentId implements ResMap.
 func (m *resWrangler) GetMatchingResourcesByCurrentId(
@@ -163,10 +176,19 @@ func (m *resWrangler) GetMatchingResourcesByCurrentId(
 	return m.filteredById(matches, GetCurrentId)
 }
 
-// GetMatchingResourcesByOriginalId implements ResMap.
-func (m *resWrangler) GetMatchingResourcesByOriginalId(
+// GetMatchingResourcesByAnyId implements ResMap.
+func (m *resWrangler) GetMatchingResourcesByAnyId(
 	matches IdMatcher) []*resource.Resource {
-	return m.filteredById(matches, GetOriginalId)
+	var result []*resource.Resource
+	for _, r := range m.rList {
+		for _, id := range append(r.PrevIds(), r.CurId()) {
+			if matches(id) {
+				result = append(result, r)
+				break
+			}
+		}
+	}
+	return result
 }
 
 func (m *resWrangler) filteredById(
@@ -186,26 +208,16 @@ func (m *resWrangler) GetByCurrentId(
 	return demandOneMatch(m.GetMatchingResourcesByCurrentId, id, "Current")
 }
 
-// GetByOriginalId implements ResMap.
-func (m *resWrangler) GetByOriginalId(
-	id resid.ResId) (*resource.Resource, error) {
-	return demandOneMatch(m.GetMatchingResourcesByOriginalId, id, "Original")
-}
-
 // GetById implements ResMap.
 func (m *resWrangler) GetById(
 	id resid.ResId) (*resource.Resource, error) {
-	match, err1 := m.GetByOriginalId(id)
-	if err1 == nil {
-		return match, nil
+	r, err := demandOneMatch(m.GetMatchingResourcesByAnyId, id, "Id")
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%s; failed to find unique target for patch %s",
+			err.Error(), id.String())
 	}
-	match, err2 := m.GetByCurrentId(id)
-	if err2 == nil {
-		return match, nil
-	}
-	return nil, fmt.Errorf(
-		"%s; %s; failed to find unique target for patch %s",
-		err1.Error(), err2.Error(), id.GvknString())
+	return r, nil
 }
 
 type resFinder func(IdMatcher) []*resource.Resource
@@ -217,20 +229,20 @@ func demandOneMatch(
 		return r[0], nil
 	}
 	if len(r) > 1 {
-		return nil, fmt.Errorf("multiple matches for %sId %s", s, id)
+		return nil, fmt.Errorf("multiple matches for %s %s", s, id)
 	}
-	return nil, fmt.Errorf("no matches for %sId %s", s, id)
+	return nil, fmt.Errorf("no matches for %s %s", s, id)
 }
 
-// GroupedByCurrentNamespace implements ResMap.GroupByCurrentNamespace
+// GroupedByCurrentNamespace implements ResMap.
 func (m *resWrangler) GroupedByCurrentNamespace() map[string][]*resource.Resource {
 	items := m.groupedByCurrentNamespace()
 	delete(items, resid.TotallyNotANamespace)
 	return items
 }
 
-// NonNamespaceable implements ResMap.NonNamespaceable
-func (m *resWrangler) NonNamespaceable() []*resource.Resource {
+// ClusterScoped implements ResMap.
+func (m *resWrangler) ClusterScoped() []*resource.Resource {
 	return m.groupedByCurrentNamespace()[resid.TotallyNotANamespace]
 }
 
@@ -246,7 +258,7 @@ func (m *resWrangler) groupedByCurrentNamespace() map[string][]*resource.Resourc
 	return byNamespace
 }
 
-// GroupedByNamespace implements ResMap.GroupByOrginalNamespace
+// GroupedByOriginalNamespace implements ResMap.
 func (m *resWrangler) GroupedByOriginalNamespace() map[string][]*resource.Resource {
 	items := m.groupedByOriginalNamespace()
 	delete(items, resid.TotallyNotANamespace)
@@ -270,10 +282,11 @@ func (m *resWrangler) AsYaml() ([]byte, error) {
 	firstObj := true
 	var b []byte
 	buf := bytes.NewBuffer(b)
-	for _, res := range m.Resources() {
-		out, err := yaml.Marshal(res.Map())
+	for _, res := range m.rList {
+		out, err := res.AsYAML()
 		if err != nil {
-			return nil, err
+			m, _ := res.Map()
+			return nil, errors.Wrapf(err, "%#v", m)
 		}
 		if firstObj {
 			firstObj = false
@@ -293,7 +306,7 @@ func (m *resWrangler) AsYaml() ([]byte, error) {
 func (m *resWrangler) ErrorIfNotEqualSets(other ResMap) error {
 	m2, ok := other.(*resWrangler)
 	if !ok {
-		panic("bad cast")
+		return fmt.Errorf("bad cast to resWrangler 1")
 	}
 	if m.Size() != m2.Size() {
 		return fmt.Errorf(
@@ -313,9 +326,9 @@ func (m *resWrangler) ErrorIfNotEqualSets(other ResMap) error {
 				"id in self matches %d in other; id: %s", len(others), id)
 		}
 		r2 := others[0]
-		if !r1.KunstructEqual(r2) {
+		if !reflect.DeepEqual(r1.RNode, r2.RNode) {
 			return fmt.Errorf(
-				"kunstruct not equal: \n -- %s,\n -- %s\n\n--\n%#v\n------\n%#v\n",
+				"nodes unequal: \n -- %s,\n -- %s\n\n--\n%#v\n------\n%#v\n",
 				r1, r2, r1, r2)
 		}
 		seen[m2.indexOfResource(r2)] = true
@@ -326,11 +339,11 @@ func (m *resWrangler) ErrorIfNotEqualSets(other ResMap) error {
 	return nil
 }
 
-// ErrorIfNotEqualList implements ResMap.
+// ErrorIfNotEqualLists implements ResMap.
 func (m *resWrangler) ErrorIfNotEqualLists(other ResMap) error {
 	m2, ok := other.(*resWrangler)
 	if !ok {
-		panic("bad cast")
+		return fmt.Errorf("bad cast to resWrangler 2")
 	}
 	if m.Size() != m2.Size() {
 		return fmt.Errorf(
@@ -339,10 +352,8 @@ func (m *resWrangler) ErrorIfNotEqualLists(other ResMap) error {
 	}
 	for i, r1 := range m.rList {
 		r2 := m2.rList[i]
-		if !r1.Equals(r2) {
-			return fmt.Errorf(
-				"Item i=%d differs:\n  n1 = %s\n  n2 = %s\n  o1 = %s\n  o2 = %s\n",
-				i, r1.OrgId(), r2.OrgId(), r1, r2)
+		if err := r1.ErrIfNotEquals(r2); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -378,56 +389,66 @@ func (m *resWrangler) makeCopy(copier resCopier) ResMap {
 
 // SubsetThatCouldBeReferencedByResource implements ResMap.
 func (m *resWrangler) SubsetThatCouldBeReferencedByResource(
-	inputRes *resource.Resource) ResMap {
+	referrer *resource.Resource) (ResMap, error) {
+	referrerId := referrer.CurId()
+	if referrerId.IsClusterScoped() {
+		// A cluster scoped resource can refer to anything.
+		return m, nil
+	}
 	result := newOne()
-	inputId := inputRes.CurId()
-	isInputIdNamespaceable := inputId.IsNamespaceableKind()
-	subjectNamespaces := getNamespacesForRoleBinding(inputRes)
-	for _, r := range m.Resources() {
-		// Need to match more accuratly both at the time of selection and transformation.
-		// OutmostPrefixSuffixEquals is not accurate enough since it is only using
-		// the outer most suffix and the last prefix. Use PrefixedSuffixesEquals instead.
-		resId := r.CurId()
-		if !isInputIdNamespaceable || !resId.IsNamespaceableKind() || resId.IsNsEquals(inputId) ||
-			isRoleBindingNamespace(&subjectNamespaces, r.GetNamespace()) {
-			result.append(r)
-		}
+	roleBindingNamespaces, err := getNamespacesForRoleBinding(referrer)
+	if err != nil {
+		return nil, err
 	}
-	return result
-}
-
-// isRoleBindingNamespace returns true is the namespace `ns` is in role binding
-// namespaces `m`
-func isRoleBindingNamespace(m *map[string]bool, ns string) bool {
-	return (*m)[ns]
-}
-
-// getNamespacesForRoleBinding returns referenced ServiceAccount namespaces if the inputRes is
-// a RoleBinding
-func getNamespacesForRoleBinding(inputRes *resource.Resource) map[string]bool {
-	res := make(map[string]bool)
-	if inputRes.GetKind() != "RoleBinding" {
-		return res
-	}
-	subjects, err := inputRes.GetSlice("subjects")
-	if err != nil || subjects == nil {
-		return res
-	}
-
-	for _, s := range subjects {
-		subject := s.(map[string]interface{})
-		if subject["namespace"] == nil || subject["kind"] == nil ||
-			subject["kind"].(string) != "ServiceAccount" {
+	for _, possibleTarget := range m.rList {
+		id := possibleTarget.CurId()
+		if id.IsClusterScoped() {
+			// A cluster-scoped resource can be referred to by anything.
+			result.append(possibleTarget)
 			continue
 		}
-		res[subject["namespace"].(string)] = true
+		if id.IsNsEquals(referrerId) {
+			// The two objects are in the same namespace.
+			result.append(possibleTarget)
+			continue
+		}
+		// The two objects are namespaced (not cluster-scoped), AND
+		// are in different namespaces.
+		// There's still a chance they can refer to each other.
+		if roleBindingNamespaces[possibleTarget.GetNamespace()] {
+			result.append(possibleTarget)
+		}
 	}
-
-	return res
+	return result, nil
 }
 
-func (m *resWrangler) append(res *resource.Resource) {
-	m.rList = append(m.rList, res)
+// getNamespacesForRoleBinding returns referenced ServiceAccount namespaces
+// if the resource is a RoleBinding
+func getNamespacesForRoleBinding(r *resource.Resource) (map[string]bool, error) {
+	result := make(map[string]bool)
+	if r.GetKind() != "RoleBinding" {
+		return result, nil
+	}
+	//nolint staticcheck
+	subjects, err := r.GetSlice("subjects")
+	if err != nil || subjects == nil {
+		return result, nil
+	}
+	for _, s := range subjects {
+		subject := s.(map[string]interface{})
+		if ns, ok1 := subject["namespace"]; ok1 {
+			if kind, ok2 := subject["kind"]; ok2 {
+				if kind.(string) == "ServiceAccount" {
+					if n, ok3 := ns.(string); ok3 {
+						result[n] = true
+					} else {
+						return nil, errors.New(fmt.Sprintf("Invalid Input: namespace is blank for resource %q\n", r.CurId()))
+					}
+				}
+			}
+		}
+	}
+	return result, nil
 }
 
 // AppendAll implements ResMap.
@@ -435,7 +456,16 @@ func (m *resWrangler) AppendAll(other ResMap) error {
 	if other == nil {
 		return nil
 	}
-	for _, res := range other.Resources() {
+	m2, ok := other.(*resWrangler)
+	if !ok {
+		return fmt.Errorf("bad cast to resWrangler 3")
+	}
+	return m.appendAll(m2.rList)
+}
+
+// appendAll appends all the resources, error on Id collision.
+func (m *resWrangler) appendAll(list []*resource.Resource) error {
+	for _, res := range list {
 		if err := m.Append(res); err != nil {
 			return err
 		}
@@ -448,7 +478,11 @@ func (m *resWrangler) AbsorbAll(other ResMap) error {
 	if other == nil {
 		return nil
 	}
-	for _, r := range other.Resources() {
+	m2, ok := other.(*resWrangler)
+	if !ok {
+		return fmt.Errorf("bad cast to resWrangler 4")
+	}
+	for _, r := range m2.rList {
 		err := m.appendReplaceOrMerge(r)
 		if err != nil {
 			return err
@@ -457,13 +491,72 @@ func (m *resWrangler) AbsorbAll(other ResMap) error {
 	return nil
 }
 
-func (m *resWrangler) appendReplaceOrMerge(
-	res *resource.Resource) error {
-	id := res.CurId()
-	matches := m.GetMatchingResourcesByOriginalId(id.Equals)
-	if len(matches) == 0 {
-		matches = m.GetMatchingResourcesByCurrentId(id.Equals)
+// AddOriginAnnotation implements ResMap.
+func (m *resWrangler) AddOriginAnnotation(origin *resource.Origin) error {
+	if origin == nil {
+		return nil
 	}
+	for _, res := range m.rList {
+		or, err := res.GetOrigin()
+		if or != nil || err != nil {
+			// if any resources already have an origin annotation,
+			// skip it
+			continue
+		}
+		if err := res.SetOrigin(origin); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RemoveOriginAnnotation implements ResMap
+func (m *resWrangler) RemoveOriginAnnotations() error {
+	for _, res := range m.rList {
+		if err := res.SetOrigin(nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AddTransformerAnnotation implements ResMap
+func (m *resWrangler) AddTransformerAnnotation(origin *resource.Origin) error {
+	for _, res := range m.rList {
+		or, err := res.GetOrigin()
+		if err != nil {
+			return err
+		}
+		if or == nil {
+			// the resource does not have an origin annotation, so
+			// we assume that the transformer generated the resource
+			// rather than modifying it
+			err = res.SetOrigin(origin)
+		} else {
+			// the resource already has an origin annotation, so we
+			// record the provided origin as a transformation
+			err = res.AddTransformation(origin)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RemoveTransformerAnnotations implements ResMap
+func (m *resWrangler) RemoveTransformerAnnotations() error {
+	for _, res := range m.rList {
+		if err := res.ClearTransformations(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *resWrangler) appendReplaceOrMerge(res *resource.Resource) error {
+	id := res.CurId()
+	matches := m.GetMatchingResourcesByAnyId(id.Equals)
 	switch len(matches) {
 	case 0:
 		switch res.Behavior() {
@@ -472,10 +565,7 @@ func (m *resWrangler) appendReplaceOrMerge(
 				"id %#v does not exist; cannot merge or replace", id)
 		default:
 			// presumably types.BehaviorCreate
-			err := m.Append(res)
-			if err != nil {
-				return err
-			}
+			return m.Append(res)
 		}
 	case 1:
 		old := matches[0]
@@ -488,9 +578,20 @@ func (m *resWrangler) appendReplaceOrMerge(
 		}
 		switch res.Behavior() {
 		case types.BehaviorReplace:
-			res.Replace(old)
+			res.CopyMergeMetaDataFieldsFrom(old)
 		case types.BehaviorMerge:
-			res.Merge(old)
+			// ensure the origin annotation doesn't get overwritten
+			orig, err := old.GetOrigin()
+			if err != nil {
+				return err
+			}
+			res.CopyMergeMetaDataFieldsFrom(old)
+			res.MergeDataMapFrom(old)
+			res.MergeBinaryDataMapFrom(old)
+			if orig != nil {
+				res.SetOrigin(orig)
+			}
+
 		default:
 			return fmt.Errorf(
 				"id %#v exists; behavior must be merge or replace", id)
@@ -500,61 +601,57 @@ func (m *resWrangler) appendReplaceOrMerge(
 			return err
 		}
 		if i != index {
-			return fmt.Errorf("unexpected index in replacement")
+			return fmt.Errorf("unexpected target index in replacement")
 		}
+		return nil
 	default:
 		return fmt.Errorf(
 			"found multiple objects %v that could accept merge of %v",
 			matches, id)
 	}
-	return nil
 }
 
-func anchorRegex(pattern string) string {
-	if pattern == "" {
-		return pattern
-	}
-	return "^" + pattern + "$"
+// AnnotateAll implements ResMap
+func (m *resWrangler) AnnotateAll(key string, value string) error {
+	return m.ApplyFilter(annotations.Filter{
+		Annotations: map[string]string{
+			key: value,
+		},
+		FsSlice: []types.FieldSpec{{
+			Path:               "metadata/annotations",
+			CreateIfNotPresent: true,
+		}},
+	})
 }
 
 // Select returns a list of resources that
 // are selected by a Selector
 func (m *resWrangler) Select(s types.Selector) ([]*resource.Resource, error) {
-	ns := regexp.MustCompile(anchorRegex(s.Namespace))
-	nm := regexp.MustCompile(anchorRegex(s.Name))
 	var result []*resource.Resource
-	for _, r := range m.Resources() {
+	sr, err := types.NewSelectorRegex(&s)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range m.rList {
 		curId := r.CurId()
 		orgId := r.OrgId()
 
-		// matches the namespace when namespace is not empty in the selector
 		// It first tries to match with the original namespace
 		// then matches with the current namespace
-		if s.Namespace != "" {
-			matched := ns.MatchString(orgId.EffectiveNamespace())
-			if !matched {
-				matched = ns.MatchString(curId.EffectiveNamespace())
-				if !matched {
-					continue
-				}
-			}
+		if !sr.MatchNamespace(orgId.EffectiveNamespace()) &&
+			!sr.MatchNamespace(curId.EffectiveNamespace()) {
+			continue
 		}
 
-		// matches the name when name is not empty in the selector
 		// It first tries to match with the original name
 		// then matches with the current name
-		if s.Name != "" {
-			matched := nm.MatchString(orgId.Name)
-			if !matched {
-				matched = nm.MatchString(curId.Name)
-				if !matched {
-					continue
-				}
-			}
+		if !sr.MatchName(orgId.Name) &&
+			!sr.MatchName(curId.Name) {
+			continue
 		}
 
 		// matches the GVK
-		if !r.GetGvk().IsSelected(&s.Gvk) {
+		if !sr.MatchGvk(r.GetGvk()) {
 			continue
 		}
 
@@ -578,4 +675,91 @@ func (m *resWrangler) Select(s types.Selector) ([]*resource.Resource, error) {
 		result = append(result, r)
 	}
 	return result, nil
+}
+
+// ToRNodeSlice returns a copy of the resources as RNodes.
+func (m *resWrangler) ToRNodeSlice() []*kyaml.RNode {
+	result := make([]*kyaml.RNode, len(m.rList))
+	for i := range m.rList {
+		result[i] = m.rList[i].Copy()
+	}
+	return result
+}
+
+// DeAnchor implements ResMap.
+func (m *resWrangler) DeAnchor() (err error) {
+	for i := range m.rList {
+		if err = m.rList[i].DeAnchor(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ApplySmPatch applies the patch, and errors on Id collisions.
+func (m *resWrangler) ApplySmPatch(
+	selectedSet *resource.IdSet, patch *resource.Resource) error {
+	var list []*resource.Resource
+	for _, res := range m.rList {
+		if selectedSet.Contains(res.CurId()) {
+			patchCopy := patch.DeepCopy()
+			patchCopy.CopyMergeMetaDataFieldsFrom(patch)
+			patchCopy.SetGvk(res.GetGvk())
+			patchCopy.SetKind(patch.GetKind())
+			if err := res.ApplySmPatch(patchCopy); err != nil {
+				return err
+			}
+		}
+		if !res.IsNilOrEmpty() {
+			list = append(list, res)
+		}
+	}
+	m.Clear()
+	return m.appendAll(list)
+}
+
+func (m *resWrangler) RemoveBuildAnnotations() {
+	for _, r := range m.rList {
+		r.RemoveBuildAnnotations()
+	}
+}
+
+// ApplyFilter implements ResMap.
+func (m *resWrangler) ApplyFilter(f kio.Filter) error {
+	reverseLookup := make(map[*kyaml.RNode]*resource.Resource, len(m.rList))
+	nodes := make([]*kyaml.RNode, len(m.rList))
+	for i, r := range m.rList {
+		ptr := &(r.RNode)
+		nodes[i] = ptr
+		reverseLookup[ptr] = r
+	}
+	// The filter can modify nodes, but also delete and create them.
+	// The filtered list might be smaller or larger than the nodes list.
+	filtered, err := f.Filter(nodes)
+	if err != nil {
+		return err
+	}
+	// Rebuild the resmap from the filtered RNodes.
+	var nRList []*resource.Resource
+	for _, rn := range filtered {
+		if rn.IsNilOrEmpty() {
+			// A node might make it through the filter as an object,
+			// but still be empty.  Drop such entries.
+			continue
+		}
+		res, ok := reverseLookup[rn]
+		if !ok {
+			// A node was created; make a Resource to wrap it.
+			res = &resource.Resource{
+				RNode: *rn,
+				// Leave remaining fields empty.
+				// At at time of writing, seeking to eliminate those fields.
+				// Alternatively, could just return error on creation attempt
+				// until remaining fields eliminated.
+			}
+		}
+		nRList = append(nRList, res)
+	}
+	m.rList = nRList
+	return nil
 }

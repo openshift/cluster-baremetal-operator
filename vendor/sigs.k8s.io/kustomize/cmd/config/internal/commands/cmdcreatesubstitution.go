@@ -10,6 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kustomize/cmd/config/ext"
+	"sigs.k8s.io/kustomize/cmd/config/runner"
+	"sigs.k8s.io/kustomize/kyaml/openapi"
 	"sigs.k8s.io/kustomize/kyaml/setters2/settersutil"
 )
 
@@ -21,6 +23,8 @@ func NewCreateSubstitutionRunner(parent string) *CreateSubstitutionRunner {
 		Args:   cobra.ExactArgs(2),
 		PreRun: r.preRun,
 		RunE:   r.runE,
+		Deprecated: "imperative substitutions will no longer be available in kustomize v5.\n" +
+			"See discussion in https://github.com/kubernetes-sigs/kustomize/issues/3953.",
 	}
 	cs.Flags().StringVar(&r.CreateSubstitution.FieldName, "field", "",
 		"name of the field to set -- e.g. --field image")
@@ -32,7 +36,7 @@ func NewCreateSubstitutionRunner(parent string) *CreateSubstitutionRunner {
 		"creates substitution recursively in all the nested subpackages")
 	_ = cs.MarkFlagRequired("pattern")
 	_ = cs.MarkFlagRequired("field-value")
-	fixDocs(parent, cs)
+	runner.FixDocs(parent, cs)
 	r.Command = cs
 	return r
 }
@@ -49,22 +53,26 @@ type CreateSubstitutionRunner struct {
 }
 
 func (r *CreateSubstitutionRunner) runE(c *cobra.Command, args []string) error {
-	e := executeCmdOnPkgs{
-		needOpenAPI:        true,
-		writer:             c.OutOrStdout(),
-		rootPkgPath:        args[0],
-		recurseSubPackages: r.CreateSubstitution.RecurseSubPackages,
-		cmdRunner:          r,
+	e := runner.ExecuteCmdOnPkgs{
+		NeedOpenAPI:        true,
+		Writer:             c.OutOrStdout(),
+		RootPkgPath:        args[0],
+		RecurseSubPackages: r.CreateSubstitution.RecurseSubPackages,
+		CmdRunner:          r,
 	}
-	err := e.execute()
+	err := e.Execute()
 	if err != nil {
-		return handleError(c, err)
+		return runner.HandleError(c, err)
 	}
 
 	return nil
 }
 
-func (r *CreateSubstitutionRunner) executeCmd(w io.Writer, pkgPath string) error {
+func (r *CreateSubstitutionRunner) ExecuteCmd(w io.Writer, pkgPath string) error {
+	sc, err := openapi.SchemaFromFile(filepath.Join(pkgPath, ext.KRMFileName()))
+	if err != nil {
+		return err
+	}
 	r.CreateSubstitution = settersutil.SubstitutionCreator{
 		Name:               r.CreateSubstitution.Name,
 		FieldName:          r.CreateSubstitution.FieldName,
@@ -74,17 +82,17 @@ func (r *CreateSubstitutionRunner) executeCmd(w io.Writer, pkgPath string) error
 		OpenAPIFileName:    ext.KRMFileName(),
 		OpenAPIPath:        filepath.Join(pkgPath, ext.KRMFileName()),
 		ResourcesPath:      pkgPath,
+		SettersSchema:      sc,
 	}
 
-	err := r.CreateSubstitution.Create()
+	err = r.CreateSubstitution.Create()
 	if err != nil {
 		// return err if RecurseSubPackages is false
 		if !r.CreateSubstitution.RecurseSubPackages {
 			return err
-		} else {
-			// print error message and continue if RecurseSubPackages is true
-			fmt.Fprintf(w, "%s\n", err.Error())
 		}
+		// print error message and continue if RecurseSubPackages is true
+		fmt.Fprintf(w, "%s\n", err.Error())
 	} else {
 		fmt.Fprintf(w, "created substitution %q\n", r.CreateSubstitution.Name)
 	}

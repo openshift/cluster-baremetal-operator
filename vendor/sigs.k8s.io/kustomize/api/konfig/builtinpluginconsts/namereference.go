@@ -3,6 +3,7 @@
 
 package builtinpluginconsts
 
+// LINT.IfChange
 const (
 	nameReferenceFieldSpecs = `
 nameReference:
@@ -47,6 +48,18 @@ nameReference:
   - path: spec/volumes/projected/sources/configMap/name
     version: v1
     kind: Pod
+  - path: template/spec/volumes/configMap/name
+    kind: PodTemplate
+  - path: template/spec/containers/env/valueFrom/configMapKeyRef/name
+    kind: PodTemplate
+  - path: template/spec/initContainers/env/valueFrom/configMapKeyRef/name
+    kind: PodTemplate
+  - path: template/spec/containers/envFrom/configMapRef/name
+    kind: PodTemplate
+  - path: template/spec/initContainers/envFrom/configMapRef/name
+    kind: PodTemplate
+  - path: template/spec/volumes/projected/sources/configMap/name
+    kind: PodTemplate
   - path: spec/template/spec/volumes/configMap/name
     kind: Deployment
   - path: spec/template/spec/containers/env/valueFrom/configMapKeyRef/name
@@ -121,6 +134,12 @@ nameReference:
     kind: CronJob
   - path: spec/configSource/configMap
     kind: Node
+  - path: rules/resourceNames
+    kind: Role
+  - path: rules/resourceNames
+    kind: ClusterRole
+  - path: metadata/annotations/nginx.ingress.kubernetes.io\/fastcgi-params-configmap
+    kind: Ingress
 
 - kind: Secret
   version: v1
@@ -146,6 +165,20 @@ nameReference:
   - path: spec/volumes/projected/sources/secret/name
     version: v1
     kind: Pod
+  - path: template/spec/volumes/secret/secretName
+    kind: PodTemplate
+  - path: template/spec/containers/env/valueFrom/secretKeyRef/name
+    kind: PodTemplate
+  - path: template/spec/initContainers/env/valueFrom/secretKeyRef/name
+    kind: PodTemplate
+  - path: template/spec/containers/envFrom/secretRef/name
+    kind: PodTemplate
+  - path: template/spec/initContainers/envFrom/secretRef/name
+    kind: PodTemplate
+  - path: template/spec/imagePullSecrets/name
+    kind: PodTemplate
+  - path: template/spec/volumes/projected/sources/secret/name
+    kind: PodTemplate
   - path: spec/template/spec/volumes/secret/secretName
     kind: Deployment
   - path: spec/template/spec/containers/env/valueFrom/secretKeyRef/name
@@ -238,6 +271,8 @@ nameReference:
     kind: Ingress
   - path: metadata/annotations/nginx.ingress.kubernetes.io\/auth-tls-secret
     kind: Ingress
+  - path: spec/tls/secretName
+    kind: Ingress
   - path: imagePullSecrets/name
     kind: ServiceAccount
   - path: parameters/secretName
@@ -256,6 +291,8 @@ nameReference:
     kind: Service
     group: serving.knative.dev
     version: v1
+  - path: spec/azureFile/secretName
+    kind: PersistentVolume
 
 - kind: Service
   version: v1
@@ -266,6 +303,10 @@ nameReference:
   - path: spec/rules/http/paths/backend/serviceName
     kind: Ingress
   - path: spec/backend/serviceName
+    kind: Ingress
+  - path: spec/rules/http/paths/backend/service/name
+    kind: Ingress
+  - path: spec/defaultBackend/service/name
     kind: Ingress
   - path: spec/service/name
     kind: APIService
@@ -373,5 +414,14 @@ nameReference:
     kind: Job
   - path: spec/template/spec/priorityClassName
     kind: DaemonSet
+
+- kind: IngressClass
+  version: v1
+  group: networking.k8s.io/v1
+  fieldSpecs:
+  - path: spec/ingressClassName
+    kind: Ingress
 `
 )
+
+// LINT.ThenChange(/examples/transformerconfigs/README.md)

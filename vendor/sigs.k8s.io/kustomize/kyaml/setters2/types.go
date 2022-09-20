@@ -6,7 +6,7 @@ package setters2
 import (
 	"encoding/json"
 
-	"github.com/go-openapi/spec"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 	"sigs.k8s.io/kustomize/kyaml/errors"
 	"sigs.k8s.io/kustomize/kyaml/openapi"
 )
@@ -36,7 +36,7 @@ type substitutionSetterReference struct {
 	Marker string `yaml:"marker,omitempty" json:"marker,omitempty"`
 }
 
-//K8sCliExtensionKey is the name of the OpenAPI field containing the setter extensions
+// K8sCliExtensionKey is the name of the OpenAPI field containing the setter extensions
 const K8sCliExtensionKey = "x-k8s-cli"
 
 // GetExtFromSchema returns the cliExtension openAPI extension if it is present in schema

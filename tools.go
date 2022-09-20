@@ -1,3 +1,4 @@
+//go:build tools
 // +build tools
 
 // Official workaround to track tool dependencies with go modules:
@@ -10,5 +11,5 @@ import (
 	// Need these for code generation
 	_ "github.com/go-bindata/go-bindata/go-bindata"
 	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
-	_ "sigs.k8s.io/kustomize/kustomize/v3"
+	_ "sigs.k8s.io/kustomize/kustomize/v4"
 )

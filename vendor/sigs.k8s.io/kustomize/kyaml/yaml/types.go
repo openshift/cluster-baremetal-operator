@@ -7,8 +7,8 @@ import (
 	"bytes"
 	"strings"
 
-	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/kustomize/kyaml/errors"
+	"sigs.k8s.io/kustomize/kyaml/internal/forked/github.com/go-yaml/yaml"
 	"sigs.k8s.io/kustomize/kyaml/sets"
 )
 
@@ -51,7 +51,20 @@ func IsYNodeEmptyDoc(n *yaml.Node) bool {
 }
 
 func IsYNodeString(n *yaml.Node) bool {
-	return n.Kind == yaml.ScalarNode && n.Tag == NodeTagString
+	return n.Kind == yaml.ScalarNode &&
+		(n.Tag == NodeTagString || n.Tag == NodeTagEmpty)
+}
+
+// IsYNodeZero is true if all the public fields in the Node are empty.
+// Which means it's not initialized and should be omitted when marshal.
+// The Node itself has a method IsZero but it is not released
+// in yaml.v3. https://pkg.go.dev/gopkg.in/yaml.v3#Node.IsZero
+func IsYNodeZero(n *yaml.Node) bool {
+	// TODO: Change this to use IsZero when it's avaialable.
+	return n != nil && n.Kind == 0 && n.Style == 0 && n.Tag == "" && n.Value == "" &&
+		n.Anchor == "" && n.Alias == nil && n.Content == nil &&
+		n.HeadComment == "" && n.LineComment == "" && n.FootComment == "" &&
+		n.Line == 0 && n.Column == 0
 }
 
 // Parser parses values into configuration.
@@ -114,46 +127,6 @@ type TypeMeta struct {
 	Kind string `json:"kind,omitempty" yaml:"kind,omitempty"`
 }
 
-// Hardcoded list.
-// TODO(#2861): replace this with data acquired from openapi.
-var notNamespaceableKinds = []string{
-	"APIService",
-	"CSIDriver",
-	"CSINode",
-	"CertificateSigningRequest",
-	"Cluster",
-	"ClusterRole",
-	"ClusterRoleBinding",
-	"ComponentStatus",
-	"CustomResourceDefinition",
-	"MutatingWebhookConfiguration",
-	"Namespace",
-	"Node",
-	"PersistentVolume",
-	"PodSecurityPolicy",
-	"PriorityClass",
-	"RuntimeClass",
-	"SelfSubjectAccessReview",
-	"SelfSubjectRulesReview",
-	"StorageClass",
-	"SubjectAccessReview",
-	"TokenReview",
-	"ValidatingWebhookConfiguration",
-	"VolumeAttachment",
-}
-
-// IsNamespaceable returns true if this TypeMeta is for an object
-// that can be placed in a namespace.
-// Implements https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#not-all-objects-are-in-a-namespace
-func (tm TypeMeta) IsNamespaceable() bool {
-	for _, k := range notNamespaceableKinds {
-		if k == tm.Kind {
-			return false
-		}
-	}
-	return true
-}
-
 // NameMeta contains name information.
 type NameMeta struct {
 	// Name is the metadata.name field of a Resource
@@ -166,16 +139,16 @@ type NameMeta struct {
 type ResourceMeta struct {
 	TypeMeta `json:",inline" yaml:",inline"`
 	// ObjectMeta is the metadata field of a Resource
-	ObjectMeta `yaml:"metadata,omitempty"`
+	ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
 // ObjectMeta contains metadata about a Resource
 type ObjectMeta struct {
 	NameMeta `json:",inline" yaml:",inline"`
 	// Labels is the metadata.labels field of a Resource
-	Labels map[string]string `yaml:"labels,omitempty"`
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 	// Annotations is the metadata.annotations field of a Resource.
-	Annotations map[string]string `yaml:"annotations,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty" yaml:"annotations,omitempty"`
 }
 
 // GetIdentifier returns a ResourceIdentifier that includes
@@ -240,7 +213,10 @@ func String(node *yaml.Node, opts ...string) (string, error) {
 	b := &bytes.Buffer{}
 	e := NewEncoder(b)
 	err := e.Encode(node)
-	e.Close()
+	errClose := e.Close()
+	if err == nil {
+		err = errClose
+	}
 	val := b.String()
 	if optsSet.Has(Trim) {
 		val = strings.TrimSpace(val)
