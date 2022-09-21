@@ -64,31 +64,25 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 	return pod.Status.HostIP, nil
 }
 
-func getServerInternalIP(osclient osclientset.Interface) (string, error) {
+func getServerInternalIP(osclient osclientset.Interface) ([]string, error) {
 	infra, err := osclient.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if err != nil {
 		err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
-		return "", err
+		return []string{""}, err
 	}
 	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
 	switch infra.Status.PlatformStatus.Type {
 	case osconfigv1.BareMetalPlatformType:
-		return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
+		return infra.Status.PlatformStatus.BareMetal.APIServerInternalIPs, nil
 	case osconfigv1.OpenStackPlatformType:
-		return infra.Status.PlatformStatus.OpenStack.APIServerInternalIP, nil
+		return infra.Status.PlatformStatus.OpenStack.APIServerInternalIPs, nil
 	case osconfigv1.VSpherePlatformType:
-		return infra.Status.PlatformStatus.VSphere.APIServerInternalIP, nil
-	case osconfigv1.AWSPlatformType:
-		return "", nil
-	case osconfigv1.AzurePlatformType:
-		return "", nil
-	case osconfigv1.GCPPlatformType:
-		return "", nil
+		return infra.Status.PlatformStatus.VSphere.APIServerInternalIPs, nil
 	case osconfigv1.NonePlatformType:
-		return "", nil
+		return nil, nil
 	default:
 		err = fmt.Errorf("Cannot detect server API VIP: Attribute not supported on platform: %v", infra.Status.PlatformStatus.Type)
-		return "", err
+		return nil, err
 	}
 }
 
@@ -104,7 +98,8 @@ func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *me
 	}
 
 	if UseIronicProxy(config) {
-		ironicIP, err = getServerInternalIP(osclient)
+		internalIPs, _ := getServerInternalIP(osclient)
+		ironicIP = internalIPs[0]
 		// NOTE(janders) if ironicIP is an empty string (e.g. for NonePlatformType) fall back to Pod IP (which is what Inspector uses)
 		if ironicIP == "" {
 			ironicIP = inspectorIP
