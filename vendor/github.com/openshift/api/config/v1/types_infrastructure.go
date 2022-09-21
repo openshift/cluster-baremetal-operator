@@ -467,7 +467,7 @@ type BareMetalPlatformStatus struct {
 	// by components inside the cluster, like kubelets using the infrastructure rather
 	// than Kubernetes networking. It is the IP that the Infrastructure.status.apiServerInternalURI
 	// points to. It is the IP for a self-hosted load balancer in front of the API servers.
-	APIServerInternalIP string `json:"apiServerInternalIP,omitempty"`
+	APIServerInternalIPs []string `json:"apiServerInternalIPs,omitempty"`
 
 	// ingressIP is an external IP which routes to the default ingress controller.
 	// The IP is a suitable target of a wildcard DNS record used to resolve default route host names.
@@ -492,7 +492,7 @@ type OpenStackPlatformStatus struct {
 	// by components inside the cluster, like kubelets using the infrastructure rather
 	// than Kubernetes networking. It is the IP that the Infrastructure.status.apiServerInternalURI
 	// points to. It is the IP for a self-hosted load balancer in front of the API servers.
-	APIServerInternalIP string `json:"apiServerInternalIP,omitempty"`
+	APIServerInternalIPs []string `json:"apiServerInternalIPs,omitempty"`
 
 	// cloudName is the name of the desired OpenStack cloud in the
 	// client configuration file (`clouds.yaml`).
@@ -521,7 +521,7 @@ type OvirtPlatformStatus struct {
 	// by components inside the cluster, like kubelets using the infrastructure rather
 	// than Kubernetes networking. It is the IP that the Infrastructure.status.apiServerInternalURI
 	// points to. It is the IP for a self-hosted load balancer in front of the API servers.
-	APIServerInternalIP string `json:"apiServerInternalIP,omitempty"`
+	APIServerInternalIPs []string `json:"apiServerInternalIPs,omitempty"`
 
 	// ingressIP is an external IP which routes to the default ingress controller.
 	// The IP is a suitable target of a wildcard DNS record used to resolve default route host names.
@@ -541,7 +541,7 @@ type VSpherePlatformStatus struct {
 	// by components inside the cluster, like kubelets using the infrastructure rather
 	// than Kubernetes networking. It is the IP that the Infrastructure.status.apiServerInternalURI
 	// points to. It is the IP for a self-hosted load balancer in front of the API servers.
-	APIServerInternalIP string `json:"apiServerInternalIP,omitempty"`
+	APIServerInternalIPs []string `json:"apiServerInternalIPs,omitempty"`
 
 	// ingressIP is an external IP which routes to the default ingress controller.
 	// The IP is a suitable target of a wildcard DNS record used to resolve default route host names.
@@ -586,7 +586,7 @@ type KubevirtPlatformStatus struct {
 	// by components inside the cluster, like kubelets using the infrastructure rather
 	// than Kubernetes networking. It is the IP that the Infrastructure.status.apiServerInternalURI
 	// points to. It is the IP for a self-hosted load balancer in front of the API servers.
-	APIServerInternalIP string `json:"apiServerInternalIP,omitempty"`
+	APIServerInternalIPs []string `json:"apiServerInternalIPs,omitempty"`
 
 	// ingressIP is an external IP which routes to the default ingress controller.
 	// The IP is a suitable target of a wildcard DNS record used to resolve default route host names.
@@ -603,7 +603,7 @@ type EquinixMetalPlatformStatus struct {
 	// by components inside the cluster, like kubelets using the infrastructure rather
 	// than Kubernetes networking. It is the IP that the Infrastructure.status.apiServerInternalURI
 	// points to. It is the IP for a self-hosted load balancer in front of the API servers.
-	APIServerInternalIP string `json:"apiServerInternalIP,omitempty"`
+	APIServerInternalIPs []string `json:"apiServerInternalIPs,omitempty"`
 
 	// ingressIP is an external IP which routes to the default ingress controller.
 	// The IP is a suitable target of a wildcard DNS record used to resolve default route host names.
