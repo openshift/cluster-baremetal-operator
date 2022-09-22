@@ -2,13 +2,11 @@
 
 approvers:
  - andfasano
- - asalkeld
- - dhellmann
+ - dtantsur
+ - elfosardo
  - hardys
- - markmc
- - kirankt
+ - honza
  - sadasu
- - stbenjam
  - zaneb
 
 # Bugzilla Information
