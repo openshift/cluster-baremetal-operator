@@ -243,6 +243,12 @@ func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.Prov
 	}
 }
 
+func getKernelParams(config *metal3iov1alpha1.ProvisioningSpec, networkStack NetworkStackType) string {
+	// OCPBUGS-872: workaround for https://bugzilla.redhat.com/show_bug.cgi?id=2111675
+	return fmt.Sprintf("rd.net.timeout.carrier=30 %s",
+		IpOptionForProvisioning(config, networkStack))
+}
+
 func setIronicHtpasswdHash(name string, secretName string) corev1.EnvVar {
 	return corev1.EnvVar{
 		Name: name,
@@ -692,7 +698,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			},
 			{
 				Name:  ironicKernelParamsEnvVar,
-				Value: IpOptionForProvisioning(&info.ProvConfig.Spec, info.NetworkStack),
+				Value: getKernelParams(&info.ProvConfig.Spec, info.NetworkStack),
 			},
 			{
 				Name:  ironicProxyEnvVar,
@@ -763,7 +769,7 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 			},
 			{
 				Name:  ironicKernelParamsEnvVar,
-				Value: IpOptionForProvisioning(&info.ProvConfig.Spec, info.NetworkStack),
+				Value: getKernelParams(&info.ProvConfig.Spec, info.NetworkStack),
 			},
 			{
 				Name:  inspectorProxyEnvVar,
