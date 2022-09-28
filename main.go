@@ -34,6 +34,7 @@ import (
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/controllers"
@@ -49,6 +50,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(metal3iov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(osconfigv1.AddToScheme(scheme))
+	utilruntime.Must(machinev1beta1.AddToScheme(scheme))
 	utilruntime.Must(baremetalv1alpha1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
