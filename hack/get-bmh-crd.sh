@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..

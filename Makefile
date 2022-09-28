@@ -123,7 +123,7 @@ docker-build: test
 docker-push:
 	docker push ${IMG}
 
-vendor: lint
+vendor:
 	go mod tidy
 	go mod vendor
 	go mod verify
