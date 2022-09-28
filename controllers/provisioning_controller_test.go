@@ -13,6 +13,7 @@ import (
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
@@ -24,6 +25,7 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 	// we need to add the openshift/api to the scheme to be able to read
 	// the infrastructure CR
 	utilruntime.Must(configv1.AddToScheme(scheme))
+	utilruntime.Must(machinev1beta1.AddToScheme(scheme))
 	utilruntime.Must(metal3iov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(baremetalv1alpha1.AddToScheme(scheme))
 	return scheme
@@ -215,65 +217,52 @@ func TestUpdateProvisioningMacAddresses(t *testing.T) {
 				BootMACAddress: "00:3d:25:45:bf:e9",
 			},
 		},
-		&corev1.Node{
+		&machinev1beta1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   "node-0",
-				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
-			},
-			Spec: corev1.NodeSpec{
-				ProviderID: "baremetalhost:///openshift-machine-api/test-master-0/something",
+				Name:        "node-0",
+				Labels:      map[string]string{"machine.openshift.io/cluster-api-machine-role": "master"},
+				Annotations: map[string]string{"metal3.io/BareMetalHost": "openshift-machine-api/test-master-0"},
 			},
 		},
-		&corev1.Node{
+		&machinev1beta1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   "node-1",
-				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
-			},
-			Spec: corev1.NodeSpec{
-				ProviderID: "provider:///openshift-machine-api/test-worker-0/something",
+				Name:        "node-1",
+				Labels:      map[string]string{"machine.openshift.io/cluster-api-machine-role": "master"},
+				Annotations: map[string]string{"metal3.io/BareMetalHost": "another-ns/host"},
 			},
 		},
-		&corev1.Node{
+		&machinev1beta1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   "node-2",
-				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
-			},
-			Spec: corev1.NodeSpec{
-				ProviderID: "baremetalhost:///broken",
+				Name:        "node-2",
+				Labels:      map[string]string{"machine.openshift.io/cluster-api-machine-role": "master"},
+				Annotations: map[string]string{"metal3.io/BareMetalHost": "invalid"},
 			},
 		},
-		&corev1.Node{
+		&machinev1beta1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   "node-3",
-				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
-			},
-			Spec: corev1.NodeSpec{
-				ProviderID: "baremetalhost:///openshift-machine-api/test-controlplane-1/something",
+				Name:        "node-3",
+				Labels:      map[string]string{"machine.openshift.io/cluster-api-machine-role": "master"},
+				Annotations: map[string]string{"metal3.io/BareMetalHost": "openshift-machine-api/test-controlplane-1"},
 			},
 		},
-		&corev1.Node{
+		&machinev1beta1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "node-4",
-				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
-			},
-			Spec: corev1.NodeSpec{},
-		},
-		&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   "node-5",
-				Labels: map[string]string{"node-role.kubernetes.io/master": ""},
-			},
-			Spec: corev1.NodeSpec{
-				ProviderID: "baremetalhost:///openshift-machine-api/test-master-2/something",
+				Labels: map[string]string{"machine.openshift.io/cluster-api-machine-role": "master"},
 			},
 		},
-		&corev1.Node{
+		&machinev1beta1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   "node-6",
-				Labels: map[string]string{"node-role.kubernetes.io/worker": ""},
+				Name:        "node-5",
+				Labels:      map[string]string{"machine.openshift.io/cluster-api-machine-role": "master"},
+				Annotations: map[string]string{"metal3.io/BareMetalHost": "openshift-machine-api/test-master-2"},
 			},
-			Spec: corev1.NodeSpec{
-				ProviderID: "baremetalhost:///openshift-machine-api/test-worker-1/something",
+		},
+		&machinev1beta1.Machine{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "node-6",
+				Labels:      map[string]string{"machine.openshift.io/cluster-api-machine-role": "worker"},
+				Annotations: map[string]string{"metal3.io/BareMetalHost": "openshift-machine-api/test-worker-0"},
 			},
 		},
 	}
