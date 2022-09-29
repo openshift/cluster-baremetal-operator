@@ -5,9 +5,11 @@ package commands
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kustomize/cmd/config/internal/generateddocs/commands"
+	"sigs.k8s.io/kustomize/cmd/config/runner"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -21,8 +23,9 @@ func GetSourceRunner(name string) *SourceRunner {
 		Long:    commands.SourceLong,
 		Example: commands.SourceExamples,
 		RunE:    r.runE,
+		PreRunE: r.preRunE,
 	}
-	fixDocs(name, c)
+	runner.FixDocs(name, c)
 	c.Flags().StringVar(&r.WrapKind, "wrap-kind", kio.ResourceListKind,
 		"output using this format.")
 	c.Flags().StringVar(&r.WrapApiVersion, "wrap-version", kio.ResourceListAPIVersion,
@@ -44,6 +47,12 @@ type SourceRunner struct {
 	WrapApiVersion string
 	FunctionConfig string
 	Command        *cobra.Command
+}
+
+func (r *SourceRunner) preRunE(c *cobra.Command, args []string) error {
+	_, err := fmt.Fprintln(os.Stderr, `Command "source" is deprecated, this will no longer be available in kustomize v5.
+See discussion in https://github.com/kubernetes-sigs/kustomize/issues/3953.`)
+	return err
 }
 
 func (r *SourceRunner) runE(c *cobra.Command, args []string) error {
@@ -78,5 +87,5 @@ func (r *SourceRunner) runE(c *cobra.Command, args []string) error {
 	}
 
 	err := kio.Pipeline{Inputs: inputs, Outputs: outputs}.Execute()
-	return handleError(c, err)
+	return runner.HandleError(c, err)
 }

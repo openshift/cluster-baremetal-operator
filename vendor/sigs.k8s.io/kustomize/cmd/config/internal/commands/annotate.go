@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/kustomize/cmd/config/ext"
 	"sigs.k8s.io/kustomize/cmd/config/internal/generateddocs/commands"
+	"sigs.k8s.io/kustomize/cmd/config/runner"
 	"sigs.k8s.io/kustomize/kyaml/errors"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
@@ -20,14 +21,15 @@ import (
 func NewAnnotateRunner(parent string) *AnnotateRunner {
 	r := &AnnotateRunner{}
 	c := &cobra.Command{
-		Use:     "annotate [DIR]",
-		Args:    cobra.MaximumNArgs(1),
-		Short:   commands.AnnotateShort,
-		Long:    commands.AnnotateLong,
-		Example: commands.AnnotateExamples,
-		RunE:    r.runE,
+		Use:        "annotate [DIR]",
+		Args:       cobra.MaximumNArgs(1),
+		Short:      commands.AnnotateShort,
+		Long:       commands.AnnotateLong,
+		Example:    commands.AnnotateExamples,
+		RunE:       r.runE,
+		Deprecated: "use the `commonAnnotations` field in your kustomization file.",
 	}
-	fixDocs(parent, c)
+	runner.FixDocs(parent, c)
 	r.Command = c
 	c.Flags().StringVar(&r.Kind, "kind", "", "Resource kind to annotate")
 	c.Flags().StringVar(&r.ApiVersion, "apiVersion", "", "Resource apiVersion to annotate")
@@ -62,29 +64,29 @@ func (r *AnnotateRunner) runE(c *cobra.Command, args []string) error {
 		input = []kio.Reader{rw}
 		output = []kio.Writer{rw}
 
-		return handleError(c, kio.Pipeline{
+		return runner.HandleError(c, kio.Pipeline{
 			Inputs:  input,
 			Filters: []kio.Filter{r},
 			Outputs: output,
 		}.Execute())
 	}
 
-	e := executeCmdOnPkgs{
-		writer:             c.OutOrStdout(),
-		needOpenAPI:        false,
-		recurseSubPackages: r.RecurseSubPackages,
-		cmdRunner:          r,
-		rootPkgPath:        args[0],
+	e := runner.ExecuteCmdOnPkgs{
+		Writer:             c.OutOrStdout(),
+		NeedOpenAPI:        false,
+		RecurseSubPackages: r.RecurseSubPackages,
+		CmdRunner:          r,
+		RootPkgPath:        args[0],
 	}
 
-	err := e.execute()
+	err := e.Execute()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *AnnotateRunner) executeCmd(w io.Writer, pkgPath string) error {
+func (r *AnnotateRunner) ExecuteCmd(w io.Writer, pkgPath string) error {
 	rw := &kio.LocalPackageReadWriter{
 		PackagePath:     pkgPath,
 		NoDeleteFiles:   true,
@@ -101,12 +103,11 @@ func (r *AnnotateRunner) executeCmd(w io.Writer, pkgPath string) error {
 		// return err if there is only package
 		if !r.RecurseSubPackages {
 			return err
-		} else {
-			// print error message and continue if there are multiple packages to annotate
-			fmt.Fprintf(w, "%s\n", err.Error())
 		}
+		// print error message and continue if there are multiple packages to annotate
+		_, _ = fmt.Fprintf(w, "%s\n", err.Error())
 	} else {
-		fmt.Fprint(w, "added annotations in the package\n")
+		_, _ = fmt.Fprint(w, "added annotations in the package\n")
 	}
 	return nil
 }

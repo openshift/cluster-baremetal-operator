@@ -5,11 +5,13 @@ package commands
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/kustomize/cmd/config/runner"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/kio/filters"
 )
@@ -46,6 +48,7 @@ Environment Variables:
 
 `,
 		RunE:               r.runE,
+		PreRunE:            r.preRunE,
 		SilenceUsage:       true,
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		Args:               cobra.MinimumNArgs(1),
@@ -75,6 +78,12 @@ const (
 
 func WrapCommand() *cobra.Command {
 	return GetWrapRunner().Command
+}
+
+func (r *WrapRunner) preRunE(_ *cobra.Command, _ []string) error {
+	_, err := fmt.Fprintln(os.Stderr, `Command "wrap" is deprecated, this will no longer be available in kustomize v5.
+See discussion in https://github.com/kubernetes-sigs/kustomize/issues/3953.`)
+	return err
 }
 
 func (r *WrapRunner) runE(c *cobra.Command, args []string) error {
@@ -135,5 +144,5 @@ func (r *WrapRunner) runE(c *cobra.Command, args []string) error {
 			Writer:                c.OutOrStdout(),
 			WrappingKind:          kio.ResourceListKind,
 			WrappingAPIVersion:    kio.ResourceListAPIVersion}}}.Execute()
-	return handleError(c, err)
+	return runner.HandleError(c, err)
 }
