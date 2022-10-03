@@ -59,7 +59,7 @@ func TestIsEnabled(t *testing.T) {
 			name:          "aws",
 			infra:         withPlatformType(infra, configv1.AWSPlatformType),
 			expectedError: false,
-			isEnabled:     false,
+			isEnabled:     true,
 		},
 		{
 			name:          "NoPlatform",
