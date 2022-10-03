@@ -333,7 +333,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with virtualmedia",
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-baremetal-operator"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"), envWithValue("IRONIC_EXTERNAL_URL_V6", "http://$(IRONIC_EXTERNAL_IP):$(HTTP_PORT)")),
+				withEnv(containers["metal3-baremetal-operator"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"), envWithValue("IRONIC_EXTERNAL_URL_V6", "https://$(IRONIC_EXTERNAL_IP):6183")),
 				withEnv(containers["metal3-httpd"], sshkey, envWithValue("IRONIC_LISTEN_PORT", "6388")),
 				withEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
 				containers["metal3-ramdisk-logs"],
