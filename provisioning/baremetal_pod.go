@@ -18,8 +18,6 @@ package provisioning
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -279,39 +277,39 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 	}
 }
 
-func isIronicVmediaTLSConfigured() bool {
-	vmediaTlsCert := filepath.Join(metal3TlsRootDir, "vmedia/tls.cert")
-	_, err := os.Stat(vmediaTlsCert)
-
-	if err == nil {
-		return true
-	}
-
-	if os.IsNotExist(err) {
-		return false
-	}
-
-	return false
-}
-
-// This envvar is dependent on IRONIC_EXTERNAL_IP
-func setIronicExternalUrl(name string, config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
+func setIronicExternalUrl(config *metal3iov1alpha1.ProvisioningSpec) []corev1.EnvVar {
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
-		if isIronicVmediaTLSConfigured() {
-			return corev1.EnvVar{
-				Name:  name,
-				Value: "https://$(IRONIC_EXTERNAL_IP):$(VMEDIA_TLS_PORT)",
-			}
-		} else {
-			return corev1.EnvVar{
-				Name:  name,
-				Value: "http://$(IRONIC_EXTERNAL_IP):$(HTTP_PORT)",
-			}
+		envVars := []corev1.EnvVar{
+			setIronicExternalIp(externalIpEnvVar, config),
 		}
+
+		// protocol, host, port
+		urlTemplate := "%s://$(%s):%s"
+
+		if config.DisableVirtualMediaTLS {
+			envVars = append(envVars,
+				corev1.EnvVar{
+					Name:  externalUrlEnvVar,
+					Value: fmt.Sprintf(urlTemplate, "http", externalIpEnvVar, baremetalHttpPort),
+				})
+		} else {
+			envVars = append(envVars,
+				corev1.EnvVar{
+					Name:  externalUrlEnvVar,
+					Value: fmt.Sprintf(urlTemplate, "https", externalIpEnvVar, baremetalVmediaHttpsPort),
+				})
+		}
+
+		return envVars
 	}
 
-	return corev1.EnvVar{
-		Name: name,
+	return []corev1.EnvVar{
+		{
+			Name: externalIpEnvVar,
+		},
+		{
+			Name: externalUrlEnvVar,
+		},
 	}
 }
 
@@ -516,8 +514,6 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 				Name:  "METAL3_AUTH_ROOT_DIR",
 				Value: metal3AuthRootDir,
 			},
-			setIronicExternalIp(externalIpEnvVar, config),
-			setIronicExternalUrl(externalUrlEnvVar, config),
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -526,6 +522,8 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 			},
 		},
 	}
+
+	container.Env = append(container.Env, setIronicExternalUrl(config)...)
 
 	if !enableWebhook {
 		// Webhook dependencies are not ready, thus we disable webhook explicitly,
