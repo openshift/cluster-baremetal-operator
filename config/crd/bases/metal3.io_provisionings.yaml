@@ -102,6 +102,12 @@ spec:
                   where the 1st address represents the start of the range and the
                   2nd address represents the last usable address in the  range.
                 type: string
+              provisioningDNS:
+                description: ProvisioningDNS allows sending the DNS information via
+                  DHCP on the provisionig network. It is off by default since the
+                  Provisioning service itself (Ironic) does not require DNS, but it
+                  may be useful for layered products (e.g. ZTP).
+                type: boolean
               provisioningIP:
                 description: ProvisioningIP is the IP address assigned to the provisioningInterface
                   of the baremetal server. This IP address should be within the provisioning

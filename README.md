@@ -115,6 +115,11 @@ installation. If using metal3 for power management, BMCs must be
 accessible from the machine networks. User should provide two IPs on
 the external network that would be used for provisioning services.
 
+- ProvisioningDNS allows sending the DNS information via DHCP on the
+provisionig network. It is off by default since the Provisioning
+service itself (Ironic) does not require DNS, but it may be useful
+for layered products (e.g. ZTP).
+
 - WatchAllNamespaces provides a way to explicitly allow use of this
 Provisioning configuration across all Namespaces. It is an
 optional configuration which defaults to false and in that state

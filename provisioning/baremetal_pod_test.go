@@ -336,6 +336,23 @@ func TestNewMetal3Containers(t *testing.T) {
 			sshkey: "sshkey",
 		},
 		{
+			name:   "ManagedSpec with DNS",
+			config: managedProvisioning().ProvisioningDNS(true).build(),
+			expectedContainers: []corev1.Container{
+				containers["metal3-baremetal-operator"],
+				withEnv(containers["metal3-httpd"], sshkey),
+				withEnv(containers["metal3-ironic"], sshkey),
+				containers["metal3-ramdisk-logs"],
+				containers["metal3-ironic-inspector"],
+				containers["metal3-static-ip-manager"],
+				withEnv(
+					containers["metal3-dnsmasq"],
+					envWithValue("DNS_IP", "provisioning"),
+				),
+			},
+			sshkey: "sshkey",
+		},
+		{
 			name:   "ManagedSpec with virtualmedia",
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
