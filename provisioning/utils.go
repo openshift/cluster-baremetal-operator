@@ -73,6 +73,8 @@ func getServerInternalIP(osclient osclientset.Interface) (string, error) {
 		return infra.Status.PlatformStatus.OpenStack.APIServerInternalIP, nil
 	case osconfigv1.VSpherePlatformType:
 		return infra.Status.PlatformStatus.VSphere.APIServerInternalIP, nil
+	case osconfigv1.AWSPlatformType:
+		return "", nil
 	case osconfigv1.NonePlatformType:
 		return "", nil
 	default:
