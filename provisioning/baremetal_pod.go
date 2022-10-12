@@ -982,8 +982,8 @@ func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 	}
 
 	deploymentRolloutStartTime = time.Now()
-	deployment, updated, err := resourceapply.ApplyDeployment(info.Client.AppsV1(),
-		info.EventRecorder, metal3Deployment, expectedGeneration)
+	deployment, updated, err := resourceapply.ApplyDeployment(context.Background(),
+		info.Client.AppsV1(), info.EventRecorder, metal3Deployment, expectedGeneration)
 	if err != nil {
 		err = fmt.Errorf("unable to apply Metal3 deployment: %w", err)
 		// Check if ApplyDeployment failed because the existing Pod had an outdated

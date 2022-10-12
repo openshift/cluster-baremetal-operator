@@ -31,15 +31,14 @@ func EnsureBaremetalOperatorWebhook(info *ProvisioningInfo) (bool, error) {
 	}
 
 	webhookService := newBaremetalOperatorWebhookService(info.Namespace)
-	_, _, err := resourceapply.ApplyService(info.Client.CoreV1(), info.EventRecorder, webhookService)
+	_, _, err := resourceapply.ApplyService(context.Background(), info.Client.CoreV1(), info.EventRecorder, webhookService)
 	if err != nil {
 		err = errors.Wrap(err, "unable to create validatingwebhook service")
 		return false, err
 	}
 
 	vw := newBaremetalOperatorWebhook(info.Namespace)
-	expectedGeneration := resourcemerge.ExpectedValidatingWebhooksConfiguration(validatingWebhookConfigurationName, info.ProvConfig.Status.Generations)
-	validatingWebhook, updated, err := resourceapply.ApplyValidatingWebhookConfiguration(info.Client.AdmissionregistrationV1(), info.EventRecorder, vw, expectedGeneration)
+	validatingWebhook, updated, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(context.Background(), info.Client.AdmissionregistrationV1(), info.EventRecorder, vw, resourceapply.NewResourceCache())
 	if err != nil {
 		err = errors.Wrap(err, "unable to create validatingwebhook configuration")
 		return false, err
