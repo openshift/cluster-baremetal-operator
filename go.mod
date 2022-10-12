@@ -15,15 +15,15 @@ require (
 	github.com/stretchr/stew v0.0.0-20130812190256-80ef0842b48b
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
-	k8s.io/api v0.24.0
-	k8s.io/apimachinery v0.24.0
-	k8s.io/client-go v0.24.0
+	k8s.io/api v0.24.2
+	k8s.io/apimachinery v0.24.2
+	k8s.io/client-go v0.24.2
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
-	sigs.k8s.io/controller-runtime v0.10.2
+	sigs.k8s.io/controller-runtime v0.12.3
 	sigs.k8s.io/controller-tools v0.4.1
 	sigs.k8s.io/kustomize/kustomize/v4 v4.5.4
-	sigs.k8s.io/yaml v1.2.0
+	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
@@ -140,7 +140,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/mbilski/exhaustivestruct v1.2.0 // indirect
-	github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.0.0 // indirect
+	github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.1.0 // indirect
 	github.com/mgechev/revive v1.2.4 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -206,7 +206,7 @@ require (
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	go.uber.org/zap v1.19.0 // indirect
+	go.uber.org/zap v1.19.1 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/exp/typeparams v0.0.0-20220827204233-334a2380cb91 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
@@ -226,9 +226,9 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.3.3 // indirect
-	k8s.io/apiextensions-apiserver v0.24.0 // indirect
-	k8s.io/apiserver v0.24.0 // indirect
-	k8s.io/component-base v0.24.0 // indirect
+	k8s.io/apiextensions-apiserver v0.24.2 // indirect
+	k8s.io/apiserver v0.24.2 // indirect
+	k8s.io/component-base v0.24.2 // indirect
 	k8s.io/kube-aggregator v0.24.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
 	mvdan.cc/gofumpt v0.4.0 // indirect
@@ -243,8 +243,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 )
 
-replace github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20220510135004-05f60709e46d
+replace github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20221021112927-c457e46aec1e
 
-replace github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20220510135004-05f60709e46d
+replace github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20221021112927-c457e46aec1e
 
-replace github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20220510135004-05f60709e46d
+replace github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20221021112927-c457e46aec1e
