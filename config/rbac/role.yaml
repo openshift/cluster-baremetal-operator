@@ -30,14 +30,6 @@ rules:
   - patch
   - watch
 - apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - admissionregistration.k8s.io
   resources:
   - validatingwebhookconfigurations
@@ -102,6 +94,14 @@ rules:
   - config.openshift.io
   resources:
   - proxies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - machines
   verbs:
   - get
   - list
