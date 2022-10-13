@@ -7,12 +7,14 @@ import (
 	"go/types"
 	"path/filepath"
 
+	"github.com/quasilyte/gogrep"
+	"github.com/quasilyte/gogrep/nodetag"
+	"golang.org/x/tools/go/ast/astutil"
+
 	"github.com/quasilyte/go-ruleguard/internal/xtypes"
 	"github.com/quasilyte/go-ruleguard/ruleguard/quasigo"
 	"github.com/quasilyte/go-ruleguard/ruleguard/textmatch"
 	"github.com/quasilyte/go-ruleguard/ruleguard/typematch"
-	"github.com/quasilyte/gogrep"
-	"github.com/quasilyte/gogrep/nodetag"
 )
 
 const filterSuccess = matchFilterResult("")
@@ -159,13 +161,48 @@ func makeAddressableFilter(src, varname string) filterFunc {
 	}
 }
 
+func makeComparableFilter(src, varname string) filterFunc {
+	return func(params *filterParams) matchFilterResult {
+		if list, ok := params.subNode(varname).(gogrep.ExprSlice); ok {
+			return exprListFilterApply(src, list, func(x ast.Expr) bool {
+				return types.Comparable(params.typeofNode(x))
+			})
+		}
+
+		if types.Comparable(params.typeofNode(params.subNode(varname))) {
+			return filterSuccess
+		}
+		return filterFailure(src)
+	}
+}
+
+func makeVarContainsFilter(src, varname string, pat *gogrep.Pattern) filterFunc {
+	return func(params *filterParams) matchFilterResult {
+		params.gogrepSubState.CapturePreset = params.match.CaptureList()
+		matched := false
+		gogrep.Walk(params.subNode(varname), func(n ast.Node) bool {
+			if matched {
+				return false
+			}
+			pat.MatchNode(params.gogrepSubState, n, func(m gogrep.MatchData) {
+				matched = true
+			})
+			return true
+		})
+		if matched {
+			return filterSuccess
+		}
+		return filterFailure(src)
+	}
+}
+
 func makeCustomVarFilter(src, varname string, fn *quasigo.Func) filterFunc {
 	return func(params *filterParams) matchFilterResult {
 		// TODO(quasilyte): what if bytecode function panics due to the programming error?
 		// We should probably catch the panic here, print trace and return "false"
 		// from the filter (or even propagate that panic to let it crash).
 		params.varname = varname
-		result := quasigo.Call(params.env, fn, params)
+		result := quasigo.Call(params.env, fn)
 		if result.Value().(bool) {
 			return filterSuccess
 		}
@@ -183,6 +220,16 @@ func makeTypeImplementsFilter(src, varname string, iface *types.Interface) filte
 
 		typ := params.typeofNode(params.subExpr(varname))
 		if xtypes.Implements(typ, iface) {
+			return filterSuccess
+		}
+		return filterFailure(src)
+	}
+}
+
+func makeTypeHasMethodFilter(src, varname string, fn *types.Func) filterFunc {
+	return func(params *filterParams) matchFilterResult {
+		typ := params.typeofNode(params.subNode(varname))
+		if typeHasMethod(typ, fn) {
 			return filterSuccess
 		}
 		return filterFailure(src)
@@ -246,16 +293,42 @@ func makeTypeOfKindFilter(src, varname string, underlying bool, kind types.Basic
 	}
 }
 
+func makeTypesIdenticalFilter(src, lhsVarname, rhsVarname string) filterFunc {
+	return func(params *filterParams) matchFilterResult {
+		lhsType := params.typeofNode(params.subNode(lhsVarname))
+		rhsType := params.typeofNode(params.subNode(rhsVarname))
+		if xtypes.Identical(lhsType, rhsType) {
+			return filterSuccess
+		}
+		return filterFailure(src)
+	}
+}
+
+func makeRootSinkTypeIsFilter(src string, pat *typematch.Pattern) filterFunc {
+	return func(params *filterParams) matchFilterResult {
+		// TODO(quasilyte): add variadic support?
+		e, ok := params.match.Node().(ast.Expr)
+		if ok {
+			parent, kv := findSinkRoot(params)
+			typ := findSinkType(params, parent, kv, e)
+			if pat.MatchIdentical(params.typematchState, typ) {
+				return filterSuccess
+			}
+		}
+		return filterFailure(src)
+	}
+}
+
 func makeTypeIsFilter(src, varname string, underlying bool, pat *typematch.Pattern) filterFunc {
 	if underlying {
 		return func(params *filterParams) matchFilterResult {
 			if list, ok := params.subNode(varname).(gogrep.ExprSlice); ok {
 				return exprListFilterApply(src, list, func(x ast.Expr) bool {
-					return pat.MatchIdentical(params.typeofNode(x).Underlying())
+					return pat.MatchIdentical(params.typematchState, params.typeofNode(x).Underlying())
 				})
 			}
 			typ := params.typeofNode(params.subNode(varname)).Underlying()
-			if pat.MatchIdentical(typ) {
+			if pat.MatchIdentical(params.typematchState, typ) {
 				return filterSuccess
 			}
 			return filterFailure(src)
@@ -265,11 +338,11 @@ func makeTypeIsFilter(src, varname string, underlying bool, pat *typematch.Patte
 	return func(params *filterParams) matchFilterResult {
 		if list, ok := params.subNode(varname).(gogrep.ExprSlice); ok {
 			return exprListFilterApply(src, list, func(x ast.Expr) bool {
-				return pat.MatchIdentical(params.typeofNode(x))
+				return pat.MatchIdentical(params.typematchState, params.typeofNode(x))
 			})
 		}
 		typ := params.typeofNode(params.subNode(varname))
-		if pat.MatchIdentical(typ) {
+		if pat.MatchIdentical(params.typematchState, typ) {
 			return filterSuccess
 		}
 		return filterFailure(src)
@@ -322,6 +395,18 @@ func makeLineFilter(src, varname string, op token.Token, rhsVarname string) filt
 	}
 }
 
+func makeObjectIsGlobalFilter(src, varname string) filterFunc {
+	return func(params *filterParams) matchFilterResult {
+		obj := params.ctx.Types.ObjectOf(identOf(params.subExpr(varname)))
+		globalScope := params.ctx.Pkg.Scope()
+		if obj.Parent() == globalScope {
+			return filterSuccess
+		}
+
+		return filterFailure(src)
+	}
+}
+
 func makeGoVersionFilter(src string, op token.Token, version GoVersion) filterFunc {
 	return func(params *filterParams) matchFilterResult {
 		if params.ctx.GoVersion.IsAny() {
@@ -358,6 +443,19 @@ func makeTypeSizeConstFilter(src, varname string, op token.Token, rhsValue const
 
 		typ := params.typeofNode(params.subExpr(varname))
 		lhsValue := constant.MakeInt64(params.ctx.Sizes.Sizeof(typ))
+		if constant.Compare(lhsValue, op, rhsValue) {
+			return filterSuccess
+		}
+		return filterFailure(src)
+	}
+}
+
+func makeTypeSizeFilter(src, varname string, op token.Token, rhsVarname string) filterFunc {
+	return func(params *filterParams) matchFilterResult {
+		lhsTyp := params.typeofNode(params.subExpr(varname))
+		lhsValue := constant.MakeInt64(params.ctx.Sizes.Sizeof(lhsTyp))
+		rhsTyp := params.typeofNode(params.subExpr(rhsVarname))
+		rhsValue := constant.MakeInt64(params.ctx.Sizes.Sizeof(rhsTyp))
 		if constant.Compare(lhsValue, op, rhsValue) {
 			return filterSuccess
 		}
@@ -542,6 +640,15 @@ func nodeIs(n ast.Node, tag nodetag.Value) bool {
 	return matched
 }
 
+func typeHasMethod(typ types.Type, fn *types.Func) bool {
+	obj, _, _ := types.LookupFieldOrMethod(typ, true, fn.Pkg(), fn.Name())
+	fn2, ok := obj.(*types.Func)
+	if !ok {
+		return false
+	}
+	return xtypes.Identical(fn.Type(), fn2.Type())
+}
+
 func typeHasPointers(typ types.Type) bool {
 	switch typ := typ.(type) {
 	case *types.Basic:
@@ -568,4 +675,124 @@ func typeHasPointers(typ types.Type) bool {
 	default:
 		return true
 	}
+}
+
+func findSinkRoot(params *filterParams) (ast.Node, *ast.KeyValueExpr) {
+	for i := 1; i < params.nodePath.Len(); i++ {
+		switch n := params.nodePath.NthParent(i).(type) {
+		case *ast.ParenExpr:
+			// Skip and continue.
+			continue
+		case *ast.KeyValueExpr:
+			return params.nodePath.NthParent(i + 1).(ast.Expr), n
+		default:
+			return n, nil
+		}
+	}
+	return nil, nil
+}
+
+func findContainingFunc(params *filterParams) *types.Signature {
+	for i := 2; i < params.nodePath.Len(); i++ {
+		switch n := params.nodePath.NthParent(i).(type) {
+		case *ast.FuncDecl:
+			fn, ok := params.ctx.Types.TypeOf(n.Name).(*types.Signature)
+			if ok {
+				return fn
+			}
+		case *ast.FuncLit:
+			fn, ok := params.ctx.Types.TypeOf(n.Type).(*types.Signature)
+			if ok {
+				return fn
+			}
+		}
+	}
+	return nil
+}
+
+func findSinkType(params *filterParams, parent ast.Node, kv *ast.KeyValueExpr, e ast.Expr) types.Type {
+	switch parent := parent.(type) {
+	case *ast.ValueSpec:
+		return params.ctx.Types.TypeOf(parent.Type)
+
+	case *ast.ReturnStmt:
+		for i, result := range parent.Results {
+			if astutil.Unparen(result) != e {
+				continue
+			}
+			sig := findContainingFunc(params)
+			if sig == nil {
+				break
+			}
+			return sig.Results().At(i).Type()
+		}
+
+	case *ast.IndexExpr:
+		if astutil.Unparen(parent.Index) == e {
+			switch typ := params.ctx.Types.TypeOf(parent.X).Underlying().(type) {
+			case *types.Map:
+				return typ.Key()
+			case *types.Slice, *types.Array:
+				return nil // TODO: some untyped int type?
+			}
+		}
+
+	case *ast.AssignStmt:
+		if parent.Tok != token.ASSIGN || len(parent.Lhs) != len(parent.Rhs) {
+			break
+		}
+		for i, rhs := range parent.Rhs {
+			if rhs == e {
+				return params.ctx.Types.TypeOf(parent.Lhs[i])
+			}
+		}
+
+	case *ast.CompositeLit:
+		switch typ := params.ctx.Types.TypeOf(parent).Underlying().(type) {
+		case *types.Slice:
+			return typ.Elem()
+		case *types.Array:
+			return typ.Elem()
+		case *types.Map:
+			if astutil.Unparen(kv.Key) == e {
+				return typ.Key()
+			}
+			return typ.Elem()
+		case *types.Struct:
+			fieldName, ok := kv.Key.(*ast.Ident)
+			if !ok {
+				break
+			}
+			for i := 0; i < typ.NumFields(); i++ {
+				field := typ.Field(i)
+				if field.Name() == fieldName.String() {
+					return field.Type()
+				}
+			}
+		}
+
+	case *ast.CallExpr:
+		switch typ := params.ctx.Types.TypeOf(parent.Fun).(type) {
+		case *types.Signature:
+			// A function call argument.
+			for i, arg := range parent.Args {
+				if astutil.Unparen(arg) != e {
+					continue
+				}
+				isVariadicArg := (i >= typ.Params().Len()-1) && typ.Variadic()
+				if isVariadicArg && !parent.Ellipsis.IsValid() {
+					return typ.Params().At(typ.Params().Len() - 1).Type().(*types.Slice).Elem()
+				}
+				if i < typ.Params().Len() {
+					return typ.Params().At(i).Type()
+				}
+				break
+			}
+		default:
+			// Probably a type cast.
+			return typ
+		}
+	}
+
+	return invalidType
 }
