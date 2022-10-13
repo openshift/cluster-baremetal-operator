@@ -40,6 +40,7 @@ import (
 	"github.com/openshift/cluster-baremetal-operator/controllers"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
 var (
@@ -102,6 +103,7 @@ func main() {
 	}
 
 	enableWebhook := provisioning.WebhookDependenciesReady(osClient)
+	resourceCache := resourceapply.NewResourceCache()
 
 	if err = (&controllers.ProvisioningReconciler{
 		Client:          mgr.GetClient(),
@@ -112,6 +114,7 @@ func main() {
 		ImagesFilename:  imagesJSONFilename,
 		WebHookEnabled:  enableWebhook,
 		EnabledFeatures: enabledFeatures,
+		ResourceCache:   resourceCache,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
 		os.Exit(1)
@@ -122,6 +125,7 @@ func main() {
 			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
 			Namespace:     controllers.ComponentNamespace,
 			OSClient:      osClient,
+			ResourceCache: resourceCache,
 		}
 		if err = provisioning.EnableValidatingWebhook(info, mgr, enabledFeatures); err != nil {
 			klog.ErrorS(err, "problem enabling validating webhook")

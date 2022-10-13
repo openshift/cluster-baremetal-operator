@@ -8,6 +8,7 @@ import (
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
 type NetworkStackType int
@@ -44,4 +45,5 @@ type ProvisioningInfo struct {
 	SSHKey                  string
 	BaremetalWebhookEnabled bool
 	OSClient                osclientset.Interface
+	ResourceCache           resourceapply.ResourceCache
 }

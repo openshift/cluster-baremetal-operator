@@ -75,7 +75,7 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager, enable
 		},
 	}
 	_, _, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(context.Background(),
-		info.Client.AdmissionregistrationV1(), info.EventRecorder, instance, resourceapply.NewResourceCache())
+		info.Client.AdmissionregistrationV1(), info.EventRecorder, instance, info.ResourceCache)
 	if err != nil {
 		return err
 	}

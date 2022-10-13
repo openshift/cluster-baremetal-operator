@@ -52,6 +52,7 @@ import (
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
 const (
@@ -80,6 +81,7 @@ type ProvisioningReconciler struct {
 	WebHookEnabled  bool
 	NetworkStack    provisioning.NetworkStackType
 	EnabledFeatures v1alpha1.EnabledFeatures
+	ResourceCache   resourceapply.ResourceCache
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -392,6 +394,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		SSHKey:                  sshkey,
 		BaremetalWebhookEnabled: enableBaremetalWebhook,
 		OSClient:                r.OSClient,
+		ResourceCache:           r.ResourceCache,
 	}, nil
 }
 

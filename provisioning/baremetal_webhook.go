@@ -38,7 +38,7 @@ func EnsureBaremetalOperatorWebhook(info *ProvisioningInfo) (bool, error) {
 	}
 
 	vw := newBaremetalOperatorWebhook(info.Namespace)
-	validatingWebhook, updated, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(context.Background(), info.Client.AdmissionregistrationV1(), info.EventRecorder, vw, resourceapply.NewResourceCache())
+	validatingWebhook, updated, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(context.Background(), info.Client.AdmissionregistrationV1(), info.EventRecorder, vw, info.ResourceCache)
 	if err != nil {
 		err = errors.Wrap(err, "unable to create validatingwebhook configuration")
 		return false, err
