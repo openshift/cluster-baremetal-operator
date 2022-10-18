@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/go-toolsmith/astequal"
+	"golang.org/x/exp/typeparams"
 )
 
 type matcher struct {
@@ -37,6 +38,13 @@ func (m *matcher) ifaceValue(inst instruction) interface{} {
 	return m.prog.ifaces[inst.valueIndex]
 }
 
+func (m *matcher) resetCapture(state *MatcherState) {
+	state.capture = state.capture[:0]
+	if state.CapturePreset != nil {
+		state.capture = append(state.capture, state.CapturePreset...)
+	}
+}
+
 func (m *matcher) MatchNode(state *MatcherState, n ast.Node, accept func(MatchData)) {
 	state.pc = 0
 	inst := m.nextInst(state)
@@ -63,8 +71,16 @@ func (m *matcher) MatchNode(state *MatcherState, n ast.Node, accept func(MatchDa
 		if n, ok := n.(*ast.File); ok {
 			m.walkDeclSlice(state, n.Decls, accept)
 		}
+	case opRangeClause:
+		m.matchRangeClause(state, n, accept)
+	case opRangeHeader:
+		m.matchRangeHeader(state, n, accept)
+	case opRangeKeyHeader:
+		m.matchRangeKeyHeader(state, inst, n, accept)
+	case opRangeKeyValueHeader:
+		m.matchRangeKeyValueHeader(state, inst, n, accept)
 	default:
-		state.capture = state.capture[:0]
+		m.resetCapture(state)
 		if m.matchNodeWithInst(state, inst, n) {
 			accept(MatchData{
 				Capture: state.capture,
@@ -91,7 +107,7 @@ func (m *matcher) walkNodeSlice(state *MatcherState, nodes NodeSlice, accept fun
 	from := 0
 	for {
 		state.pc = 1 // FIXME: this is a kludge
-		state.capture = state.capture[:0]
+		m.resetCapture(state)
 		matched, offset := m.matchNodeList(state, nodes.slice(from, sliceLen), true)
 		if matched == nil {
 			break
@@ -114,6 +130,7 @@ func (m *matcher) matchNamed(state *MatcherState, name string, n ast.Node) bool 
 		state.capture = append(state.capture, CapturedNode{Name: name, Node: n})
 		return true
 	}
+
 	return equalNodes(prev, n)
 }
 
@@ -216,6 +233,15 @@ func (m *matcher) matchNodeWithInst(state *MatcherState, inst instruction, n ast
 	case opNonVariadicCallExpr:
 		n, ok := n.(*ast.CallExpr)
 		return ok && !n.Ellipsis.IsValid() && m.matchNode(state, n.Fun) && m.matchArgList(state, n.Args)
+	case opMaybeVariadicCallExpr:
+		n, ok := n.(*ast.CallExpr)
+		if !ok {
+			return false
+		}
+		if n.Ellipsis.IsValid() && len(n.Args) <= int(inst.value) {
+			return false
+		}
+		return m.matchNode(state, n.Fun) && m.matchArgList(state, n.Args)
 	case opCallExpr:
 		n, ok := n.(*ast.CallExpr)
 		return ok && m.matchNode(state, n.Fun) && m.matchArgList(state, n.Args)
@@ -261,6 +287,10 @@ func (m *matcher) matchNodeWithInst(state *MatcherState, inst instruction, n ast
 		n, ok := n.(*ast.IndexExpr)
 		return ok && m.matchNode(state, n.X) && m.matchNode(state, n.Index)
 
+	case opIndexListExpr:
+		n, ok := n.(*typeparams.IndexListExpr)
+		return ok && m.matchNode(state, n.X) && m.matchExprSlice(state, n.Indices)
+
 	case opKeyValueExpr:
 		n, ok := n.(*ast.KeyValueExpr)
 		return ok && m.matchNode(state, n.Key) && m.matchNode(state, n.Value)
@@ -291,15 +321,30 @@ func (m *matcher) matchNodeWithInst(state *MatcherState, inst instruction, n ast
 	case opVoidFuncType:
 		n, ok := n.(*ast.FuncType)
 		return ok && n.Results == nil && m.matchNode(state, n.Params)
+	case opGenericVoidFuncType:
+		n, ok := n.(*ast.FuncType)
+		return ok && n.Results == nil && m.matchNode(state, typeparams.ForFuncType(n)) && m.matchNode(state, n.Params)
 	case opFuncType:
 		n, ok := n.(*ast.FuncType)
 		return ok && m.matchNode(state, n.Params) && m.matchNode(state, n.Results)
+	case opGenericFuncType:
+		n, ok := n.(*ast.FuncType)
+		return ok && m.matchNode(state, typeparams.ForFuncType(n)) && m.matchNode(state, n.Params) && m.matchNode(state, n.Results)
 	case opStructType:
 		n, ok := n.(*ast.StructType)
 		return ok && m.matchNode(state, n.Fields)
 	case opInterfaceType:
 		n, ok := n.(*ast.InterfaceType)
 		return ok && m.matchNode(state, n.Methods)
+	case opEfaceType:
+		switch n := n.(type) {
+		case *ast.InterfaceType:
+			return len(n.Methods.List) == 0
+		case *ast.Ident:
+			return n.Name == "any"
+		default:
+			return false
+		}
 
 	case opCompositeLit:
 		n, ok := n.(*ast.CompositeLit)
@@ -495,13 +540,17 @@ func (m *matcher) matchNodeWithInst(state *MatcherState, inst instruction, n ast
 		_, ok := n.(*ast.EmptyStmt)
 		return ok
 
+	case opSimpleFuncDecl:
+		n, ok := n.(*ast.FuncDecl)
+		return ok && n.Recv == nil && n.Body != nil && typeparams.ForFuncType(n.Type) == nil &&
+			n.Name.Name == m.stringValue(inst) && m.matchNode(state, n.Type) && m.matchNode(state, n.Body)
 	case opFuncDecl:
 		n, ok := n.(*ast.FuncDecl)
 		return ok && n.Recv == nil && n.Body != nil &&
 			m.matchNode(state, n.Name) && m.matchNode(state, n.Type) && m.matchNode(state, n.Body)
 	case opFuncProtoDecl:
 		n, ok := n.(*ast.FuncDecl)
-		return ok && n.Recv == nil && n.Body == nil &&
+		return ok && n.Recv == nil && n.Body == nil && typeparams.ForFuncType(n.Type) == nil &&
 			m.matchNode(state, n.Name) && m.matchNode(state, n.Type)
 	case opMethodDecl:
 		n, ok := n.(*ast.FuncDecl)
@@ -529,9 +578,15 @@ func (m *matcher) matchNodeWithInst(state *MatcherState, inst instruction, n ast
 		return ok && len(n.Values) != 0 &&
 			m.matchIdentSlice(state, n.Names) && m.matchNode(state, n.Type) && m.matchExprSlice(state, n.Values)
 
+	case opSimpleTypeSpec:
+		n, ok := n.(*ast.TypeSpec)
+		return ok && !n.Assign.IsValid() && typeparams.ForTypeSpec(n) == nil && n.Name.Name == m.stringValue(inst) && m.matchNode(state, n.Type)
 	case opTypeSpec:
 		n, ok := n.(*ast.TypeSpec)
 		return ok && !n.Assign.IsValid() && m.matchNode(state, n.Name) && m.matchNode(state, n.Type)
+	case opGenericTypeSpec:
+		n, ok := n.(*ast.TypeSpec)
+		return ok && !n.Assign.IsValid() && m.matchNode(state, n.Name) && m.matchNode(state, typeparams.ForTypeSpec(n)) && m.matchNode(state, n.Type)
 	case opTypeAliasSpec:
 		n, ok := n.(*ast.TypeSpec)
 		return ok && n.Assign.IsValid() && m.matchNode(state, n.Name) && m.matchNode(state, n.Type)
@@ -722,6 +777,98 @@ func (m *matcher) matchNodeList(state *MatcherState, nodes NodeSlice, partial bo
 		return nil, -1
 	}
 	return nodes.slice(partialStart, partialEnd), partialEnd + 1
+}
+
+func (m *matcher) matchRangeClause(state *MatcherState, n ast.Node, accept func(MatchData)) {
+	rng, ok := n.(*ast.RangeStmt)
+	if !ok {
+		return
+	}
+	m.resetCapture(state)
+	if !m.matchNode(state, rng.X) {
+		return
+	}
+
+	// Now the fun begins: there is no Range pos in RangeStmt, so we need
+	// to make our best guess to find it.
+	// See https://github.com/golang/go/issues/50429
+	//
+	// In gogrep we don't have []byte sources available, and
+	// it would be cumbersome to walk bytes manually to find the "range" keyword.
+	// What we can do is to hope that code is:
+	// 1. Properly gofmt-ed.
+	// 2. There are no some freefloating artifacts between TokPos and "range".
+	var from int
+	if rng.TokPos != token.NoPos {
+		// Start from the end of the '=' or ':=' token.
+		from = int(rng.TokPos + 1)
+		if rng.Tok == token.DEFINE {
+			from++ // ':=' is 1 byte longer that '='
+		}
+		// Now suppose we have 'for _, x := range xs {...}'
+		// If this is true, then `xs.Pos.Offset - len(" range ")` would
+		// lead us to the current 'from' value.
+		// It's syntactically correct to have `:=range`, so we don't
+		// unconditionally add a space here.
+		if int(rng.X.Pos())-len(" range ") == from {
+			// This means that there is exactly one space between Tok and "range".
+			// There are some afwul cases where this might break, but let's
+			// not think about them too much.
+			from += len(" ")
+		}
+	} else {
+		// `for range xs {...}` form.
+		// There should be at least 1 space between "for" and "range".
+		from = int(rng.For) + len("for ")
+	}
+
+	state.partial.X = rng
+	state.partial.from = token.Pos(from)
+	state.partial.to = rng.X.End()
+
+	accept(MatchData{
+		Capture: state.capture,
+		Node:    &state.partial,
+	})
+}
+
+func (m *matcher) matchRangeHeader(state *MatcherState, n ast.Node, accept func(MatchData)) {
+	rng, ok := n.(*ast.RangeStmt)
+	if ok && rng.Key == nil && rng.Value == nil && m.matchNode(state, rng.X) {
+		m.setRangeHeaderPos(state, rng)
+		accept(MatchData{
+			Capture: state.capture,
+			Node:    &state.partial,
+		})
+	}
+}
+
+func (m *matcher) matchRangeKeyHeader(state *MatcherState, inst instruction, n ast.Node, accept func(MatchData)) {
+	rng, ok := n.(*ast.RangeStmt)
+	if ok && rng.Key != nil && rng.Value == nil && token.Token(inst.value) == rng.Tok && m.matchNode(state, rng.Key) && m.matchNode(state, rng.X) {
+		m.setRangeHeaderPos(state, rng)
+		accept(MatchData{
+			Capture: state.capture,
+			Node:    &state.partial,
+		})
+	}
+}
+
+func (m *matcher) matchRangeKeyValueHeader(state *MatcherState, inst instruction, n ast.Node, accept func(MatchData)) {
+	rng, ok := n.(*ast.RangeStmt)
+	if ok && rng.Key != nil && rng.Value != nil && token.Token(inst.value) == rng.Tok && m.matchNode(state, rng.Key) && m.matchNode(state, rng.Value) && m.matchNode(state, rng.X) {
+		m.setRangeHeaderPos(state, rng)
+		accept(MatchData{
+			Capture: state.capture,
+			Node:    &state.partial,
+		})
+	}
+}
+
+func (m *matcher) setRangeHeaderPos(state *MatcherState, rng *ast.RangeStmt) {
+	state.partial.X = rng
+	state.partial.from = rng.Pos()
+	state.partial.to = rng.Body.Pos() - 1
 }
 
 func findNamed(capture []CapturedNode, name string) (ast.Node, bool) {
