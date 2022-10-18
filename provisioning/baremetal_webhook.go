@@ -109,6 +109,10 @@ func newBaremetalOperatorWebhook(targetNamespace string) *admissionregistration.
 	failurePolicy := admissionregistration.Fail
 	sideEffect := admissionregistration.SideEffectClassNone
 	instance := &admissionregistration.ValidatingWebhookConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ValidatingWebhookConfiguration",
+			APIVersion: "admissionregistration.k8s.io/v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: validatingWebhookConfigurationName,
 			Annotations: map[string]string{

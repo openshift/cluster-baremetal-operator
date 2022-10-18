@@ -65,7 +65,9 @@ func TestValidatingWebhookConfiguration(t *testing.T) {
 			name: "valid webhook configuration",
 			ns:   "test-namespace",
 			expected: []byte(
-				`metadata:
+				`apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
   annotations:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"

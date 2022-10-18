@@ -36,6 +36,10 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager, enable
 	ignore := admissionregistration.Ignore
 	noSideEffects := admissionregistration.SideEffectClassNone
 	instance := &admissionregistration.ValidatingWebhookConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ValidatingWebhookConfiguration",
+			APIVersion: "admissionregistration.k8s.io/v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-baremetal-validating-webhook-configuration",
 			Annotations: map[string]string{
