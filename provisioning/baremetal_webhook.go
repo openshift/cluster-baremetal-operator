@@ -124,7 +124,6 @@ func newBaremetalOperatorWebhook(targetNamespace string) *admissionregistration.
 		Webhooks: []admissionregistration.ValidatingWebhook{
 			{
 				ClientConfig: admissionregistration.WebhookClientConfig{
-					CABundle: []byte("Cg=="),
 					Service: &admissionregistration.ServiceReference{
 						Name:      validatingWebhookService,
 						Namespace: targetNamespace,
@@ -151,7 +150,6 @@ func newBaremetalOperatorWebhook(targetNamespace string) *admissionregistration.
 			},
 			{
 				ClientConfig: admissionregistration.WebhookClientConfig{
-					CABundle: []byte("Cg=="),
 					Service: &admissionregistration.ServiceReference{
 						Name:      validatingWebhookService,
 						Namespace: targetNamespace,

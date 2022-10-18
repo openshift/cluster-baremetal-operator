@@ -51,7 +51,6 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager, enable
 		Webhooks: []admissionregistration.ValidatingWebhook{
 			{
 				ClientConfig: admissionregistration.WebhookClientConfig{
-					CABundle: []byte("Cg=="),
 					Service: &admissionregistration.ServiceReference{
 						Name:      "cluster-baremetal-webhook-service",
 						Namespace: info.Namespace,
