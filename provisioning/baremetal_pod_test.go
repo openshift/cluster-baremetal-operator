@@ -298,9 +298,13 @@ func TestNewMetal3Containers(t *testing.T) {
 			override, haveOverride := newMap[existing.Name]
 			if haveOverride {
 				new = append(new, override)
+				delete(newMap, existing.Name)
 			} else {
 				new = append(new, existing)
 			}
+		}
+		for _, value := range newMap {
+			new = append(new, value)
 		}
 		c.Env = new
 		return c
@@ -335,7 +339,11 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with virtualmedia",
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-baremetal-operator"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"), envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183")),
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"),
+					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
+				),
 				withEnv(containers["metal3-httpd"], sshkey, envWithValue("IRONIC_LISTEN_PORT", "6388")),
 				withEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
 				containers["metal3-ramdisk-logs"],
