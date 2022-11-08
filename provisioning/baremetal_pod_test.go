@@ -25,6 +25,8 @@ import (
 
 	v1 "github.com/openshift/api/config/v1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+
+	fakekube "k8s.io/client-go/kubernetes/fake"
 )
 
 func TestBuildEnvVar(t *testing.T) {
@@ -333,7 +335,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with virtualmedia",
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-baremetal-operator"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"), envWithValue("IRONIC_EXTERNAL_URL_V6", "https://$(IRONIC_EXTERNAL_IP):6183")),
+				withEnv(containers["metal3-baremetal-operator"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"), envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183")),
 				withEnv(containers["metal3-httpd"], sshkey, envWithValue("IRONIC_LISTEN_PORT", "6388")),
 				withEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
 				containers["metal3-ramdisk-logs"],
@@ -417,6 +419,20 @@ func TestNewMetal3Containers(t *testing.T) {
 				ProvConfig:   &metal3iov1alpha1.Provisioning{Spec: *tc.config},
 				SSHKey:       tc.sshkey,
 				NetworkStack: NetworkStackV6,
+				Client: fakekube.NewSimpleClientset(&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-machine-api",
+						Labels: map[string]string{
+							"k8s-app":    metal3AppName,
+							cboLabelName: stateService,
+						},
+					},
+					Status: corev1.PodStatus{
+						PodIPs: []corev1.PodIP{
+							{IP: "192.168.111.22"},
+							{IP: "fd2e:6f44:5dd8:c956::16"},
+						},
+					}}),
 			}
 			actualContainers := newMetal3Containers(info)
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
