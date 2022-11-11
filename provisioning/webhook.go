@@ -36,6 +36,10 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager, enable
 	ignore := admissionregistration.Ignore
 	noSideEffects := admissionregistration.SideEffectClassNone
 	instance := &admissionregistration.ValidatingWebhookConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ValidatingWebhookConfiguration",
+			APIVersion: "admissionregistration.k8s.io/v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-baremetal-validating-webhook-configuration",
 			Annotations: map[string]string{
@@ -47,7 +51,6 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager, enable
 		Webhooks: []admissionregistration.ValidatingWebhook{
 			{
 				ClientConfig: admissionregistration.WebhookClientConfig{
-					CABundle: []byte("Cg=="),
 					Service: &admissionregistration.ServiceReference{
 						Name:      "cluster-baremetal-webhook-service",
 						Namespace: info.Namespace,
@@ -74,10 +77,8 @@ func EnableValidatingWebhook(info *ProvisioningInfo, mgr manager.Manager, enable
 			},
 		},
 	}
-	// we might not have a baremetalCR (when disabled), so we have no where to store
-	// the expectedGeneration, so just fake it.
-	expectedGeneration := int64(0)
-	_, _, err := resourceapply.ApplyValidatingWebhookConfiguration(info.Client.AdmissionregistrationV1(), info.EventRecorder, instance, expectedGeneration)
+	_, _, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(context.Background(),
+		info.Client.AdmissionregistrationV1(), info.EventRecorder, instance, info.ResourceCache)
 	if err != nil {
 		return err
 	}

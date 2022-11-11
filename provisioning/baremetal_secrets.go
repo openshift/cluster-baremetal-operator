@@ -62,7 +62,7 @@ func applySecret(client coreclientv1.SecretsGetter, recorder events.Recorder, re
 	}
 
 	if needsApply {
-		_, _, err = resourceapply.ApplySecret(client, recorder, requiredInput)
+		_, _, err = resourceapply.ApplySecret(context.TODO(), client, recorder, requiredInput)
 	}
 
 	return err

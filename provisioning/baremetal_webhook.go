@@ -31,15 +31,14 @@ func EnsureBaremetalOperatorWebhook(info *ProvisioningInfo) (bool, error) {
 	}
 
 	webhookService := newBaremetalOperatorWebhookService(info.Namespace)
-	_, _, err := resourceapply.ApplyService(info.Client.CoreV1(), info.EventRecorder, webhookService)
+	_, _, err := resourceapply.ApplyService(context.Background(), info.Client.CoreV1(), info.EventRecorder, webhookService)
 	if err != nil {
 		err = errors.Wrap(err, "unable to create validatingwebhook service")
 		return false, err
 	}
 
 	vw := newBaremetalOperatorWebhook(info.Namespace)
-	expectedGeneration := resourcemerge.ExpectedValidatingWebhooksConfiguration(validatingWebhookConfigurationName, info.ProvConfig.Status.Generations)
-	validatingWebhook, updated, err := resourceapply.ApplyValidatingWebhookConfiguration(info.Client.AdmissionregistrationV1(), info.EventRecorder, vw, expectedGeneration)
+	validatingWebhook, updated, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(context.Background(), info.Client.AdmissionregistrationV1(), info.EventRecorder, vw, info.ResourceCache)
 	if err != nil {
 		err = errors.Wrap(err, "unable to create validatingwebhook configuration")
 		return false, err
@@ -110,6 +109,10 @@ func newBaremetalOperatorWebhook(targetNamespace string) *admissionregistration.
 	failurePolicy := admissionregistration.Fail
 	sideEffect := admissionregistration.SideEffectClassNone
 	instance := &admissionregistration.ValidatingWebhookConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ValidatingWebhookConfiguration",
+			APIVersion: "admissionregistration.k8s.io/v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: validatingWebhookConfigurationName,
 			Annotations: map[string]string{
@@ -121,7 +124,6 @@ func newBaremetalOperatorWebhook(targetNamespace string) *admissionregistration.
 		Webhooks: []admissionregistration.ValidatingWebhook{
 			{
 				ClientConfig: admissionregistration.WebhookClientConfig{
-					CABundle: []byte("Cg=="),
 					Service: &admissionregistration.ServiceReference{
 						Name:      validatingWebhookService,
 						Namespace: targetNamespace,
@@ -148,7 +150,6 @@ func newBaremetalOperatorWebhook(targetNamespace string) *admissionregistration.
 			},
 			{
 				ClientConfig: admissionregistration.WebhookClientConfig{
-					CABundle: []byte("Cg=="),
 					Service: &admissionregistration.ServiceReference{
 						Name:      validatingWebhookService,
 						Namespace: targetNamespace,
