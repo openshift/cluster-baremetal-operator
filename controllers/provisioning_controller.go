@@ -19,8 +19,9 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/url"
 	"os"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,6 +46,7 @@ import (
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	"github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -60,6 +63,8 @@ const (
 	clusterConfigName      = "cluster-config-v1"
 	clusterConfigKey       = "install-config"
 	clusterConfigNamespace = "kube-system"
+	// Annotation linking a machine to a host
+	HostAnnotation = "metal3.io/BareMetalHost"
 )
 
 // ProvisioningReconciler reconciles a Provisioning object
@@ -93,8 +98,8 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;infrastructures/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;watch;list;patch
 // +kubebuilder:rbac:groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=machine.openshift.io,resources=machines,verbs=get;list;watch
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings;provisionings/finalizers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
@@ -425,22 +430,25 @@ func (r *ProvisioningReconciler) networkStackFromServiceNetwork(ctx context.Cont
 	return ns, nil
 }
 
-func getHostByProviderId(provId string) string {
-	if provId == "" {
+func getHostByMachine(meta metav1.ObjectMeta) string {
+	annotations := meta.GetAnnotations()
+	annotation, ok := annotations[HostAnnotation]
+	if !ok {
+		klog.Warningf("Ignoring machine %s without annotation linking it to BareMetalHost", meta.Name)
 		return ""
 	}
 
-	provider, err := url.Parse(provId)
-	if err != nil || provider.Scheme != "baremetalhost" {
+	hostNamespace, hostName, err := cache.SplitMetaNamespaceKey(annotation)
+	if err != nil {
+		klog.Warningf("Ignoring machine %s with invalid BareMetalHost link %s", meta.Name, annotation)
+		return ""
+	}
+	if hostNamespace != ComponentNamespace {
+		klog.Warningf("Ignoring machine %s that is linked to a BareMetalHost in namespace %s", meta.Name, hostNamespace)
 		return ""
 	}
 
-	path := strings.Split(strings.Trim(provider.Path, "/"), "/")
-	if len(path) < 2 || path[0] != ComponentNamespace {
-		return ""
-	}
-
-	return path[1]
+	return hostName
 }
 
 func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) error {
@@ -448,14 +456,18 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 		return nil
 	}
 
-	nodes := corev1.NodeList{}
+	machines := machinev1beta1.MachineList{}
 	bmhNames := []string{}
-	labelReq, _ := labels.NewRequirement("node-role.kubernetes.io/master", selection.Exists, nil)
-	if err := r.Client.List(ctx, &nodes, &client.ListOptions{LabelSelector: labels.NewSelector().Add(*labelReq)}); err != nil {
-		return errors.Wrap(err, "cannot list master nodes")
+	labelReq, _ := labels.NewRequirement("machine.openshift.io/cluster-api-machine-role", selection.Equals, []string{"master"})
+	if err := r.Client.List(ctx, &machines, &client.ListOptions{LabelSelector: labels.NewSelector().Add(*labelReq)}); err != nil {
+		return errors.Wrap(err, "cannot list master machines")
 	}
-	for _, node := range nodes.Items {
-		bmhName := getHostByProviderId(node.Spec.ProviderID)
+	if len(machines.Items) < 1 {
+		return errors.New("machines with cluster-api-machine-role=master not found")
+	}
+
+	for _, machine := range machines.Items {
+		bmhName := getHostByMachine(machine.ObjectMeta)
 		if bmhName != "" {
 			bmhNames = append(bmhNames, bmhName)
 		}
@@ -471,8 +483,16 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 			macs = append(macs, bmh.Spec.BootMACAddress)
 		}
 	}
-	provConfig.Spec.ProvisioningMacAddresses = macs
-	return r.Client.Update(ctx, provConfig)
+
+	sort.Strings(macs)
+	if !reflect.DeepEqual(provConfig.Spec.ProvisioningMacAddresses, macs) {
+		klog.InfoS("Updating provisioning MAC addresses",
+			"CurrentMacAddresses", provConfig.Spec.ProvisioningMacAddresses, "NewMacAddresses", macs)
+		provConfig.Spec.ProvisioningMacAddresses = macs
+		return r.Client.Update(ctx, provConfig)
+	} else {
+		return nil
+	}
 }
 
 // SetupWithManager configures the manager to run the controller
@@ -520,5 +540,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Owns(&osconfigv1.Proxy{}).
+		Owns(&machinev1beta1.Machine{}).
 		Complete(r)
 }
