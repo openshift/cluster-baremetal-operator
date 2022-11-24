@@ -237,7 +237,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			Env: []corev1.EnvVar{
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "IRONIC_INSPECTOR_INSECURE", Value: "true"},
-				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp"},
+				{Name: "IRONIC_KERNEL_PARAMS", Value: "rd.net.timeout.carrier=30 ip=dhcp"},
 				{Name: "IRONIC_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "IRONIC_HTTPD", Value: "true"},
 				{Name: "IRONIC_PRIVATE_PORT", Value: "6388"},
@@ -259,7 +259,7 @@ func TestNewMetal3Containers(t *testing.T) {
 			Name: "metal3-ironic-inspector",
 			Env: []corev1.EnvVar{
 				{Name: "IRONIC_INSECURE", Value: "true"},
-				{Name: "IRONIC_KERNEL_PARAMS", Value: "ip=dhcp"},
+				{Name: "IRONIC_KERNEL_PARAMS", Value: "rd.net.timeout.carrier=30 ip=dhcp"},
 				{Name: "INSPECTOR_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "IRONIC_INSPECTOR_PRIVATE_PORT", Value: "5049"},
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
@@ -364,9 +364,17 @@ func TestNewMetal3Containers(t *testing.T) {
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "")),
-				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", ""), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
+				withEnv(
+					containers["metal3-ironic"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithValue("IRONIC_KERNEL_PARAMS", "rd.net.timeout.carrier=30 ip=dhcp6"),
+				),
 				containers["metal3-ramdisk-logs"],
-				withEnv(containers["metal3-ironic-inspector"], envWithValue("PROVISIONING_INTERFACE", ""), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
+				withEnv(
+					containers["metal3-ironic-inspector"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithValue("IRONIC_KERNEL_PARAMS", "rd.net.timeout.carrier=30 ip=dhcp6"),
+				),
 			},
 			sshkey: "",
 		},
@@ -375,10 +383,24 @@ func TestNewMetal3Containers(t *testing.T) {
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
 				containers["metal3-baremetal-operator"],
-				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP")),
-				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP"), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
+				withEnv(
+					containers["metal3-httpd"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
+				),
+				withEnv(
+					containers["metal3-ironic"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
+					envWithValue("IRONIC_KERNEL_PARAMS", "rd.net.timeout.carrier=30 ip=dhcp6"),
+				),
 				containers["metal3-ramdisk-logs"],
-				withEnv(containers["metal3-ironic-inspector"], envWithValue("PROVISIONING_INTERFACE", ""), envWithFieldValue("PROVISIONING_IP", "status.hostIP"), envWithValue("IRONIC_KERNEL_PARAMS", "ip=dhcp6")),
+				withEnv(
+					containers["metal3-ironic-inspector"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
+					envWithValue("IRONIC_KERNEL_PARAMS", "rd.net.timeout.carrier=30 ip=dhcp6"),
+				),
 			},
 			sshkey: "",
 		},
