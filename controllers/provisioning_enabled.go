@@ -46,7 +46,7 @@ func EnabledFeatures(ctx context.Context, osClient osclientset.Interface) (v1alp
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkDisabled] = true
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkUnmanaged] = true
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkManaged] = true
-	case osconfigv1.OpenStackPlatformType, osconfigv1.NonePlatformType, osconfigv1.VSpherePlatformType, osconfigv1.AWSPlatformType:
+	case osconfigv1.OpenStackPlatformType, osconfigv1.NonePlatformType, osconfigv1.VSpherePlatformType, osconfigv1.AWSPlatformType, osconfigv1.AzurePlatformType:
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkDisabled] = true
 	}
 
