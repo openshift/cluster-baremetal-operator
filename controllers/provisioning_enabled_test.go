@@ -68,6 +68,12 @@ func TestIsEnabled(t *testing.T) {
 			isEnabled:     true,
 		},
 		{
+			name:          "gcp",
+			infra:         withPlatformType(infra, configv1.GCPPlatformType),
+			expectedError: false,
+			isEnabled:     true,
+		},
+		{
 			name:          "NoPlatform",
 			infra:         withPlatformType(infra, ""),
 			expectedError: false,
