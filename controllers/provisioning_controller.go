@@ -515,7 +515,8 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 		return errors.Wrap(err, "cannot list master machines")
 	}
 	if len(machines.Items) < 1 {
-		return errors.New("machines with cluster-api-machine-role=master not found")
+		klog.Info("No Machines with cluster-api-machine-role=master found, set provisioningMacAddresses if the metal3 pod fails to start")
+		return nil
 	}
 
 	for _, machine := range machines.Items {
