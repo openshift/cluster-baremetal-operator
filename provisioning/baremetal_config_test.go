@@ -232,6 +232,11 @@ func (pb *provisioningBuilder) ProvisioningOSDownloadURL(value string) *provisio
 	return pb
 }
 
+func (pb *provisioningBuilder) ProvisioningDNS(value bool) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningDNS = value
+	return pb
+}
+
 func enableMultiNamespace() *provisioningBuilder {
 	return &provisioningBuilder{
 		metal3iov1alpha1.ProvisioningSpec{

@@ -533,6 +533,18 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 }
 
 func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
+	envVars := []corev1.EnvVar{
+		buildEnvVar(httpPort, config),
+		buildEnvVar(provisioningInterface, config),
+		buildEnvVar(dhcpRange, config),
+		buildEnvVar(provisioningMacAddresses, config),
+	}
+	if config.ProvisioningDNS {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  dnsIP,
+			Value: useProvisioningDNS,
+		})
+	}
 	container := corev1.Container{
 		Name:            "metal3-dnsmasq",
 		Image:           images.Ironic,
@@ -545,12 +557,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 			sharedVolumeMount,
 			imageVolumeMount,
 		},
-		Env: []corev1.EnvVar{
-			buildEnvVar(httpPort, config),
-			buildEnvVar(provisioningInterface, config),
-			buildEnvVar(dhcpRange, config),
-			buildEnvVar(provisioningMacAddresses, config),
-		},
+		Env: envVars,
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("5m"),
