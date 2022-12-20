@@ -148,7 +148,7 @@ func (r *ProvisioningReconciler) readSSHKey() string {
 	return strings.TrimSpace(installConfigData.SSHKey)
 }
 
-func (r *ProvisioningReconciler) checkDaemonSet(state appsv1.DaemonSetConditionType, stateError error, name string) error {
+func (r *ProvisioningReconciler) checkDaemonSet(state appsv1.DaemonSetConditionType, stateError error, name string, deleter func() error) error {
 	if stateError != nil {
 		msg := fmt.Sprintf("%s daemonset inaccessible", name)
 		err := r.updateCOStatus(ReasonResourceNotFound, msg, "")
@@ -167,6 +167,10 @@ func (r *ProvisioningReconciler) checkDaemonSet(state appsv1.DaemonSetConditionT
 		}
 
 		return errors.New(msg)
+	}
+
+	if state == provisioning.DaemonSetDisabled {
+		return deleter()
 	}
 
 	return nil
@@ -342,13 +346,13 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Determine the status of the image cache DaemonSet
 	imageCacheState, err := provisioning.GetImageCacheState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
-	err = r.checkDaemonSet(imageCacheState, err, "metal3 image cache")
+	err = r.checkDaemonSet(imageCacheState, err, "metal3 image cache", func() error { return provisioning.DeleteImageCache(info) })
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	ironicProxyState, err := provisioning.GetIronicProxyState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
-	err = r.checkDaemonSet(ironicProxyState, err, "ironic proxy")
+	err = r.checkDaemonSet(ironicProxyState, err, "ironic proxy", func() error { return provisioning.DeleteIronicProxy(info) })
 	if err != nil {
 		return ctrl.Result{}, err
 	}
