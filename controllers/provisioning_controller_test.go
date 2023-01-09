@@ -191,30 +191,61 @@ func TestUpdateProvisioningMacAddresses(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "test-master-0", Namespace: ComponentNamespace},
 			Spec: baremetalv1alpha1.BareMetalHostSpec{
 				BootMACAddress: "00:3d:25:45:bf:e5",
+				ConsumerRef: &corev1.ObjectReference{
+					APIVersion: "machine.openshift.io/v1beta1",
+					Kind:       "Machine",
+					Name:       "node-0",
+					Namespace:  "openshift-machine-api",
+				},
 			},
 		},
 		&baremetalv1alpha1.BareMetalHost{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-controlplane-1", Namespace: ComponentNamespace},
 			Spec: baremetalv1alpha1.BareMetalHostSpec{
 				BootMACAddress: "00:3d:25:45:bf:e6",
+				// No consumerRef, using the reference from the Machine
 			},
 		},
 		&baremetalv1alpha1.BareMetalHost{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-master-2", Namespace: ComponentNamespace},
 			Spec: baremetalv1alpha1.BareMetalHostSpec{
 				BootMACAddress: "00:3d:25:45:bf:e7",
+				ConsumerRef: &corev1.ObjectReference{
+					APIVersion: "machine.openshift.io/v1beta1",
+					Kind:       "Machine",
+					Name:       "node-5",
+					Namespace:  "openshift-machine-api",
+				},
 			},
 		},
 		&baremetalv1alpha1.BareMetalHost{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-worker-0", Namespace: ComponentNamespace},
 			Spec: baremetalv1alpha1.BareMetalHostSpec{
 				BootMACAddress: "00:3d:25:45:bf:e8",
+				ConsumerRef: &corev1.ObjectReference{
+					APIVersion: "machine.openshift.io/v1beta1",
+					Kind:       "Machine",
+					Name:       "node-6",
+					Namespace:  "openshift-machine-api",
+				},
 			},
 		},
 		&baremetalv1alpha1.BareMetalHost{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-worker-1", Namespace: ComponentNamespace},
 			Spec: baremetalv1alpha1.BareMetalHostSpec{
 				BootMACAddress: "00:3d:25:45:bf:e9",
+			},
+		},
+		&baremetalv1alpha1.BareMetalHost{
+			ObjectMeta: metav1.ObjectMeta{Name: "something-else", Namespace: ComponentNamespace},
+			Spec: baremetalv1alpha1.BareMetalHostSpec{
+				BootMACAddress: "00:3d:25:45:bf:ea",
+				ConsumerRef: &corev1.ObjectReference{
+					APIVersion: "machine.openshift.io/v1beta1",
+					Kind:       "Machine",
+					Name:       "not-node",
+					Namespace:  "unexpected-namespace",
+				},
 			},
 		},
 		&machinev1beta1.Machine{
@@ -252,10 +283,10 @@ func TestUpdateProvisioningMacAddresses(t *testing.T) {
 			},
 		},
 		&machinev1beta1.Machine{
+			// This machine does not have a direct reference, but there is a back reference from the BMH.
 			ObjectMeta: metav1.ObjectMeta{
-				Name:        "node-5",
-				Labels:      map[string]string{"machine.openshift.io/cluster-api-machine-role": "master"},
-				Annotations: map[string]string{"metal3.io/BareMetalHost": "openshift-machine-api/test-master-2"},
+				Name:   "node-5",
+				Labels: map[string]string{"machine.openshift.io/cluster-api-machine-role": "master"},
 			},
 		},
 		&machinev1beta1.Machine{
