@@ -490,21 +490,39 @@ func getHostByMachine(meta metav1.ObjectMeta) string {
 	annotations := meta.GetAnnotations()
 	annotation, ok := annotations[HostAnnotation]
 	if !ok {
-		klog.Warningf("Ignoring machine %s without annotation linking it to BareMetalHost", meta.Name)
+		klog.Warningf("Machine %s has no annotation linking it to BareMetalHost", meta.Name)
 		return ""
 	}
 
 	hostNamespace, hostName, err := cache.SplitMetaNamespaceKey(annotation)
 	if err != nil {
-		klog.Warningf("Ignoring machine %s with invalid BareMetalHost link %s", meta.Name, annotation)
+		klog.Warningf("Machine %s has an invalid BareMetalHost link %s", meta.Name, annotation)
 		return ""
 	}
 	if hostNamespace != ComponentNamespace {
-		klog.Warningf("Ignoring machine %s that is linked to a BareMetalHost in namespace %s", meta.Name, hostNamespace)
+		klog.Warningf("Machine %s is linked to a BareMetalHost in namespace %s (expected %s)", meta.Name, hostNamespace, ComponentNamespace)
 		return ""
 	}
 
 	return hostName
+}
+
+func getMachineByHost(name string, consumerRef *corev1.ObjectReference) string {
+	if consumerRef == nil || consumerRef.Name == "" {
+		return ""
+	}
+
+	if consumerRef.APIVersion != "machine.openshift.io/v1beta1" || consumerRef.Kind != "Machine" {
+		klog.Warningf("BareMetalHost %s is consumed by an object of kind %s (API %s)", name, consumerRef.Kind, consumerRef.APIVersion)
+		return ""
+	}
+
+	if consumerRef.Namespace != ComponentNamespace {
+		klog.Warningf("BareMetalHost %s is linked to a Machine in namespace %s (expected %s)", name, consumerRef.Namespace, ComponentNamespace)
+		return ""
+	}
+
+	return consumerRef.Name
 }
 
 func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) error {
@@ -523,7 +541,9 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 		return nil
 	}
 
+	masterMachineNames := []string{}
 	for _, machine := range machines.Items {
+		masterMachineNames = append(masterMachineNames, machine.Name)
 		bmhName := getHostByMachine(machine.ObjectMeta)
 		if bmhName != "" {
 			bmhNames = append(bmhNames, bmhName)
@@ -536,7 +556,8 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 		return err
 	}
 	for _, bmh := range bmhl.Items {
-		if slice.Contains(bmhNames, bmh.Name) && len(bmh.Spec.BootMACAddress) > 0 {
+		if (slice.Contains(bmhNames, bmh.Name) || slice.Contains(masterMachineNames, getMachineByHost(bmh.Name, bmh.Spec.ConsumerRef))) &&
+			len(bmh.Spec.BootMACAddress) > 0 {
 			macs = append(macs, bmh.Spec.BootMACAddress)
 		}
 	}
