@@ -342,8 +342,8 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 	}, nil
 }
 
-//Ensure Finalizer is present on the Provisioning CR when not deleted and
-//delete resources and remove Finalizer when it is
+// Ensure Finalizer is present on the Provisioning CR when not deleted and
+// delete resources and remove Finalizer when it is
 func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *provisioning.ProvisioningInfo) (bool, error) {
 	// examine DeletionTimestamp to determine if object is under deletion
 	if info.ProvConfig.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -379,7 +379,7 @@ func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *p
 	}
 }
 
-//Delete Secrets and the Metal3 Deployment objects
+// Delete Secrets and the Metal3 Deployment objects
 func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.ProvisioningInfo) error {
 	if err := provisioning.DeleteAllSecrets(info); err != nil {
 		return errors.Wrap(err, "failed to delete one or more metal3 secrets")
