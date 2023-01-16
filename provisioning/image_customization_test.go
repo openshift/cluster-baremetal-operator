@@ -51,7 +51,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Env: []corev1.EnvVar{
 			{Name: "HTTP_PROXY", Value: "https://172.2.0.1:3128"},
 			{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"},
-			{Name: "NO_PROXY", Value: ".example.com"},
+			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2,192.168.0.2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2"},

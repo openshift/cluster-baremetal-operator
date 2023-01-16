@@ -883,7 +883,7 @@ func injectProxyAndCA(containers []corev1.Container, proxy *configv1.Proxy) []co
 	var injectedContainers []corev1.Container
 
 	for _, container := range containers {
-		container.Env = envWithProxy(proxy, container.Env)
+		container.Env = envWithProxy(proxy, container.Env, "")
 		container.VolumeMounts = mountsWithTrustedCA(container.VolumeMounts)
 		injectedContainers = append(injectedContainers, container)
 	}
@@ -891,7 +891,7 @@ func injectProxyAndCA(containers []corev1.Container, proxy *configv1.Proxy) []co
 	return injectedContainers
 }
 
-func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar) []corev1.EnvVar {
+func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar, noproxy string) []corev1.EnvVar {
 	if proxy == nil {
 		return envVars
 	}
@@ -908,10 +908,10 @@ func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar) []corev1.EnvVa
 			Value: proxy.Status.HTTPSProxy,
 		})
 	}
-	if proxy.Status.NoProxy != "" {
+	if proxy.Status.NoProxy != "" || noproxy != "" {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  "NO_PROXY",
-			Value: proxy.Status.NoProxy,
+			Value: proxy.Status.NoProxy + "," + noproxy,
 		})
 	}
 
