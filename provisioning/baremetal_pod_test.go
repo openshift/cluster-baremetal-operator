@@ -512,7 +512,7 @@ func TestProxyAndCAInjection(t *testing.T) {
 			for _, container := range tc.containers {
 				assert.Contains(t, container.Env, corev1.EnvVar{Name: "HTTP_PROXY", Value: "https://172.2.0.1:3128"})
 				assert.Contains(t, container.Env, corev1.EnvVar{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"})
-				assert.Contains(t, container.Env, corev1.EnvVar{Name: "NO_PROXY", Value: ".example.com"})
+				assert.Contains(t, container.Env, corev1.EnvVar{Name: "NO_PROXY", Value: ".example.com,"})
 
 				assert.Contains(t, container.VolumeMounts, corev1.VolumeMount{
 					MountPath: "/etc/pki/ca-trust/extracted/pem",
