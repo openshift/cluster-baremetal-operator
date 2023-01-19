@@ -198,7 +198,7 @@ func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 	}
 }
 
-//syncStatus applies the new condition to the CBO ClusterOperator object.
+// syncStatus applies the new condition to the CBO ClusterOperator object.
 func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, conds []osconfigv1.ClusterOperatorStatusCondition) error {
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
