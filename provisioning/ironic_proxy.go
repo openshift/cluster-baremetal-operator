@@ -27,7 +27,7 @@ import (
 const (
 	ironicProxyService         = "ironic-proxy"
 	ironicPrivatePort          = 6388
-	ironicPrivatePortv6        = 6388 // TODO(honza): What should this value be?
+	ironicPrivatePortv6        = 6388
 	ironicUpstreamIPEnvVar     = "IRONIC_UPSTREAM_IP"
 	ironicUpstreamIPv6EnvVar   = "IRONIC_UPSTREAM_IP_V6"
 	ironicUpstreamPortEnvVar   = "IRONIC_UPSTREAM_PORT"
@@ -115,7 +115,7 @@ func createContainerIronicProxy(ironicIPs []string, images *Images) corev1.Conta
 }
 
 func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSpec, error) {
-	ironicIPs, _, err := GetIronicIPs(info.Client, info.Namespace, &info.ProvConfig.Spec, info.OSClient)
+	ironicIPs, _, err := GetIronicIPs(*info)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot figure out the upstream IP for ironic proxy")
 	}
