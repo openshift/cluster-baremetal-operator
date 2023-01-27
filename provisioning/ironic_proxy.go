@@ -107,13 +107,13 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 }
 
 func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSpec, error) {
-	ironicIP, err := getPodHostIP(info.Client.CoreV1(), info.Namespace)
+	ironicIPs, _, err := GetIronicIPs(*info)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot figure out the upstream IP for ironic proxy")
 	}
 
 	containers := []corev1.Container{
-		createContainerIronicProxy(ironicIP, info.Images),
+		createContainerIronicProxy(ironicIPs[0], info.Images),
 	}
 
 	tolerations := []corev1.Toleration{

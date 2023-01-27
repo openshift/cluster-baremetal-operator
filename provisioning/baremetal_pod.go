@@ -26,8 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -279,34 +280,53 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 	}
 }
 
-func setIronicExternalUrl(client kubernetes.Interface, config *metal3iov1alpha1.ProvisioningSpec, namespace string) corev1.EnvVar {
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
-		ipv6PodIP, err := GetPodIP(client.CoreV1(), namespace, NetworkStackV6)
+func setIronicExternalUrl(info ProvisioningInfo) corev1.EnvVar {
+	// We need to set the external URL to point to the ironic-proxy when IPv6
+	// is enabled and the proxy is present
 
-		if err != nil {
-			return corev1.EnvVar{
-				Name: externalUrlEnvVar,
-			}
-		}
-
-		// protocol, host, port
-		urlTemplate := "%s://[%s]:%s"
-
-		if config.DisableVirtualMediaTLS {
-			return corev1.EnvVar{
-				Name:  externalUrlEnvVar,
-				Value: fmt.Sprintf(urlTemplate, "http", ipv6PodIP, baremetalHttpPort),
-			}
-		} else {
-			return corev1.EnvVar{
-				Name:  externalUrlEnvVar,
-				Value: fmt.Sprintf(urlTemplate, "https", ipv6PodIP, baremetalVmediaHttpsPort),
-			}
+	if !UseIronicProxy(&info.ProvConfig.Spec) {
+		return corev1.EnvVar{
+			Name: externalUrlEnvVar,
 		}
 	}
 
-	return corev1.EnvVar{
-		Name: externalUrlEnvVar,
+	ironicIPs, _, err := GetIronicIPs(info)
+
+	if err != nil {
+		klog.Errorf("Failed to get Ironic IP when setting external url: %w", err)
+		return corev1.EnvVar{
+			Name: externalUrlEnvVar,
+		}
+	}
+
+	var ironicIPv6 string
+
+	for _, ironicIP := range ironicIPs {
+		if utilnet.IsIPv6String(ironicIP) {
+			ironicIPv6 = ironicIP
+			break
+		}
+	}
+
+	if ironicIPv6 == "" {
+		return corev1.EnvVar{
+			Name: externalUrlEnvVar,
+		}
+	}
+
+	// protocol, host, port
+	urlTemplate := "%s://[%s]:%s"
+
+	if info.ProvConfig.Spec.DisableVirtualMediaTLS {
+		return corev1.EnvVar{
+			Name:  externalUrlEnvVar,
+			Value: fmt.Sprintf(urlTemplate, "http", ironicIPv6, baremetalHttpPort),
+		}
+	} else {
+		return corev1.EnvVar{
+			Name:  externalUrlEnvVar,
+			Value: fmt.Sprintf(urlTemplate, "https", ironicIPv6, baremetalVmediaHttpsPort),
+		}
 	}
 }
 
@@ -401,7 +421,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 
 func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 	containers := []corev1.Container{
-		createContainerMetal3BaremetalOperator(info.Client, info.Images, &info.ProvConfig.Spec, info.BaremetalWebhookEnabled, info.Namespace),
+		createContainerMetal3BaremetalOperator(*info),
 		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3Ironic(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3RamdiskLogs(info.Images),
@@ -444,11 +464,11 @@ func buildSSHKeyEnvVar(sshKey string) corev1.EnvVar {
 	return corev1.EnvVar{Name: sshKeyEnvVar, Value: sshKey}
 }
 
-func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images *Images, config *metal3iov1alpha1.ProvisioningSpec, enableWebhook bool, namespace string) corev1.Container {
+func createContainerMetal3BaremetalOperator(info ProvisioningInfo) corev1.Container {
 	webhookPort, _ := strconv.ParseInt(baremetalWebhookPort, 10, 32) // #nosec
 	container := corev1.Container{
 		Name:  "metal3-baremetal-operator",
-		Image: images.BaremetalOperator,
+		Image: info.Images.BaremetalOperator,
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "metrics",
@@ -471,7 +491,7 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 			baremetalWebhookCertMount,
 		},
 		Env: []corev1.EnvVar{
-			getWatchNamespace(config),
+			getWatchNamespace(&info.ProvConfig.Spec),
 			{
 				Name: "POD_NAMESPACE",
 				ValueFrom: &corev1.EnvVarSource{
@@ -500,9 +520,9 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 				Name:  ironicInsecureEnvVar,
 				Value: "true",
 			},
-			buildEnvVar(deployKernelUrl, config),
-			buildEnvVar(ironicEndpoint, config),
-			buildEnvVar(ironicInspectorEndpoint, config),
+			buildEnvVar(deployKernelUrl, &info.ProvConfig.Spec),
+			buildEnvVar(ironicEndpoint, &info.ProvConfig.Spec),
+			buildEnvVar(ironicInspectorEndpoint, &info.ProvConfig.Spec),
 			{
 				Name:  "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE",
 				Value: "Never",
@@ -511,8 +531,8 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 				Name:  "METAL3_AUTH_ROOT_DIR",
 				Value: metal3AuthRootDir,
 			},
-			setIronicExternalIp(externalIpEnvVar, config),
-			setIronicExternalUrl(client, config, namespace),
+			setIronicExternalIp(externalIpEnvVar, &info.ProvConfig.Spec),
+			setIronicExternalUrl(info),
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -522,7 +542,7 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 		},
 	}
 
-	if !enableWebhook {
+	if !info.BaremetalWebhookEnabled {
 		// Webhook dependencies are not ready, thus we disable webhook explicitly,
 		// since default is enabled.
 		container.Args = append(container.Args, "--webhook-port", "0")

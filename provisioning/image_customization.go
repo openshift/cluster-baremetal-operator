@@ -240,7 +240,7 @@ func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIPs []string,
 }
 
 func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, err error) {
-	ironicIPs, inspectorIPs, err := GetIronicIPs(info.Client, info.Namespace, &info.ProvConfig.Spec, info.OSClient)
+	ironicIPs, inspectorIPs, err := GetIronicIPs(*info)
 	if err != nil {
 		return false, fmt.Errorf("unable to determine Ironic's IP to pass to the machine-image-customization-controller: %w", err)
 	}

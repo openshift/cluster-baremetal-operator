@@ -23,7 +23,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	osconfigv1 "github.com/openshift/api/config/v1"
 	v1 "github.com/openshift/api/config/v1"
+	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 
 	fakekube "k8s.io/client-go/kubernetes/fake"
@@ -394,7 +396,11 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpec",
 			config: disabledProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				containers["metal3-baremetal-operator"],
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("IRONIC_EXTERNAL_IP", ""),
+					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
+				),
 				withEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
@@ -419,7 +425,11 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpecWithoutProvisioningIP",
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
-				containers["metal3-baremetal-operator"],
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("IRONIC_EXTERNAL_IP", ""),
+					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
+				),
 				withEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
@@ -466,6 +476,27 @@ func TestNewMetal3Containers(t *testing.T) {
 							{IP: "fd2e:6f44:5dd8:c956::16"},
 						},
 					}}),
+				OSClient: fakeconfigclientset.NewSimpleClientset(
+					&osconfigv1.Infrastructure{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "Infrastructure",
+							APIVersion: "config.openshift.io/v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "cluster",
+						},
+						Status: v1.InfrastructureStatus{
+							PlatformStatus: &v1.PlatformStatus{
+								Type: v1.BareMetalPlatformType,
+								BareMetal: &v1.BareMetalPlatformStatus{
+									APIServerInternalIPs: []string{
+										"192.168.1.1",
+										"fd2e:6f44:5dd8:c956::16",
+									},
+								},
+							},
+						},
+					}),
 			}
 			actualContainers := newMetal3Containers(info)
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
