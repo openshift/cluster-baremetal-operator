@@ -82,6 +82,8 @@ func getServerInternalIP(osclient osclientset.Interface) (string, error) {
 		return "", nil
 	case osconfigv1.AzurePlatformType:
 		return "", nil
+	case osconfigv1.GCPPlatformType:
+		return "", nil
 	case osconfigv1.NonePlatformType:
 		return "", nil
 	default:
