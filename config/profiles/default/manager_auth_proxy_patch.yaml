@@ -34,6 +34,16 @@ spec:
         - name: https
           containerPort: 8443
           protocol: TCP
+        livenessProbe:
+          tcpSocket:
+            port: 8443
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: 8443
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources:
           requests:
             memory: 20Mi

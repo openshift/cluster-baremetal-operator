@@ -39,11 +39,23 @@ spec:
         - name: METRICS_PORT
           value: "8080"
         image: registry.ci.openshift.org/openshift:cluster-baremetal-operator
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
         name: cluster-baremetal-operator
         ports:
         - containerPort: 9443
           name: webhook-server
           protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources:
           requests:
             cpu: 10m
@@ -64,11 +76,21 @@ spec:
         - --logtostderr=true
         - --v=10
         image: registry.ci.openshift.org/openshift:kube-rbac-proxy
+        livenessProbe:
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          tcpSocket:
+            port: 8443
         name: baremetal-kube-rbac-proxy
         ports:
         - containerPort: 8443
           name: https
           protocol: TCP
+        readinessProbe:
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          tcpSocket:
+            port: 8443
         resources:
           requests:
             cpu: 10m

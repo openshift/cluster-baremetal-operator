@@ -29,6 +29,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	// +kubebuilder:scaffold:imports
 
@@ -61,11 +62,13 @@ func init() {
 
 func main() {
 	var metricsAddr string
+	var probeAddr string
 	var enableLeaderElection bool
 	var imagesJSONFilename string
 
 	klog.InitFlags(nil)
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
@@ -81,12 +84,13 @@ func main() {
 
 	config := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Namespace:          controllers.ComponentNamespace,
-		LeaderElection:     enableLeaderElection,
-		Port:               9443,
-		CertDir:            "/etc/cluster-baremetal-operator/tls",
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		HealthProbeBindAddress: probeAddr,
+		Namespace:              controllers.ComponentNamespace,
+		LeaderElection:         enableLeaderElection,
+		Port:                   9443,
+		CertDir:                "/etc/cluster-baremetal-operator/tls",
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start manager")
@@ -137,6 +141,16 @@ func main() {
 	klog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		klog.ErrorS(err, "problem running manager")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		klog.ErrorS(err, "unable to setup health check")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		klog.ErrorS(err, "unable to setup ready check")
 		os.Exit(1)
 	}
 }

@@ -36,6 +36,18 @@ spec:
               fieldPath: metadata.namespace
         - name: METRICS_PORT
           value: "8080"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources:
           requests:
             cpu: 10m
