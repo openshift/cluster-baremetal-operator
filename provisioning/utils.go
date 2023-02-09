@@ -64,11 +64,11 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 	return pod.Status.HostIP, nil
 }
 
-func getServerInternalIP(osclient osclientset.Interface) ([]string, error) {
+func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	infra, err := osclient.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if err != nil {
 		err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
-		return []string{""}, err
+		return nil, err
 	}
 	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
 	switch infra.Status.PlatformStatus.Type {
@@ -78,6 +78,12 @@ func getServerInternalIP(osclient osclientset.Interface) ([]string, error) {
 		return infra.Status.PlatformStatus.OpenStack.APIServerInternalIPs, nil
 	case osconfigv1.VSpherePlatformType:
 		return infra.Status.PlatformStatus.VSphere.APIServerInternalIPs, nil
+	case osconfigv1.AWSPlatformType:
+		return nil, nil
+	case osconfigv1.AzurePlatformType:
+		return nil, nil
+	case osconfigv1.GCPPlatformType:
+		return nil, nil
 	case osconfigv1.NonePlatformType:
 		return nil, nil
 	default:
@@ -88,6 +94,7 @@ func getServerInternalIP(osclient osclientset.Interface) ([]string, error) {
 
 func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec, osclient osclientset.Interface) (ironicIP string, inspectorIP string, err error) {
 	// Inspector does not support proxy
+
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		inspectorIP = config.ProvisioningIP
 	} else {
@@ -98,8 +105,16 @@ func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *me
 	}
 
 	if UseIronicProxy(config) {
-		internalIPs, _ := getServerInternalIP(osclient)
-		ironicIP = internalIPs[0]
+		var internalIPs []string
+		internalIPs, err = getServerInternalIPs(osclient)
+		if err != nil {
+			err = fmt.Errorf("error fetching internalIPs: %w", err)
+			return
+		}
+
+		if internalIPs != nil {
+			ironicIP = internalIPs[0]
+		}
 		// NOTE(janders) if ironicIP is an empty string (e.g. for NonePlatformType) fall back to Pod IP (which is what Inspector uses)
 		if ironicIP == "" {
 			ironicIP = inspectorIP
@@ -108,7 +123,7 @@ func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *me
 		ironicIP = inspectorIP
 	}
 
-	return
+	return ironicIP, inspectorIP, err
 }
 
 func GetPodIP(podClient coreclientv1.PodsGetter, targetNamespace string, networkType NetworkStackType) (string, error) {
