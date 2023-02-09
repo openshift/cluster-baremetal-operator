@@ -59,27 +59,27 @@ func getPodHostIP(podClient coreclientv1.PodsGetter, targetNamespace string) (st
 	return hostIP, err
 }
 
-func getServerInternalIP(osclient osclientset.Interface) ([]string, error) {
+func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	infra, err := osclient.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if err != nil {
 		err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
-		return []string{""}, err
+		return nil, err
 	}
 	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
 	switch infra.Status.PlatformStatus.Type {
 	case osconfigv1.BareMetalPlatformType:
 		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.BareMetal == nil {
-			return "", nil
+			return nil, nil
 		}
 		return infra.Status.PlatformStatus.BareMetal.APIServerInternalIPs, nil
 	case osconfigv1.OpenStackPlatformType:
 		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.OpenStack == nil {
-			return "", nil
+			return nil, nil
 		}
 		return infra.Status.PlatformStatus.OpenStack.APIServerInternalIPs, nil
 	case osconfigv1.VSpherePlatformType:
 		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.VSphere == nil {
-			return "", nil
+			return nil, nil
 		}
 		return infra.Status.PlatformStatus.VSphere.APIServerInternalIPs, nil
 	case osconfigv1.AWSPlatformType:
@@ -105,8 +105,16 @@ func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *me
 	}
 
 	if UseIronicProxy(config) {
-		internalIPs, _ := getServerInternalIP(osclient)
-		ironicIP = internalIPs[0]
+		var internalIPs []string
+		internalIPs, err = getServerInternalIPs(osclient)
+		if err != nil {
+			err = fmt.Errorf("error fetching internalIPs: %w", err)
+			return
+		}
+
+		if internalIPs != nil {
+			ironicIP = internalIPs[0]
+		}
 		// NOTE(janders) if ironicIP is an empty string (e.g. for NonePlatformType) fall back to Pod IP
 		if ironicIP == "" {
 			ironicIP = podIP
