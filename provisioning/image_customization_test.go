@@ -106,7 +106,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 				NetworkStack: NetworkStackV4,
 				Proxy:        tc.proxy,
 			}
-			actualContainer := createImageCustomizationContainer(&images, info, ironicIP, tc.inspectorIP)
+			actualContainer := createImageCustomizationContainer(&images, info, []string{ironicIP}, []string{tc.inspectorIP})
 			for e := range actualContainer.Env {
 				assert.EqualValues(t, tc.expectedContainer.Env[e], actualContainer.Env[e])
 			}
