@@ -79,6 +79,7 @@ var podTemplateAnnotations = map[string]string{
 }
 
 var deploymentRolloutStartTime = time.Now()
+
 var deploymentRolloutTimeout = 5 * time.Minute
 
 var sharedVolumeMount = corev1.VolumeMount{
