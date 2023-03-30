@@ -234,6 +234,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_PRIVATE_PORT", Value: "unix"},
 				{Name: "IRONIC_INSPECTOR_PRIVATE_PORT", Value: "unix"},
 				{Name: "IRONIC_LISTEN_PORT", Value: "6385"},
+				{Name: "IRONIC_INSPECTOR_LISTEN_PORT", Value: "5050"},
 			},
 		},
 		"metal3-ironic": {
@@ -361,7 +362,12 @@ func TestNewMetal3Containers(t *testing.T) {
 					envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"),
 					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
 				),
-				withEnv(containers["metal3-httpd"], sshkey, envWithValue("IRONIC_LISTEN_PORT", "6388")),
+				withEnv(
+					containers["metal3-httpd"],
+					sshkey,
+					envWithValue("IRONIC_LISTEN_PORT", "6388"),
+					envWithValue("IRONIC_INSPECTOR_LISTEN_PORT", "5051"),
+				),
 				withEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
 				containers["metal3-ramdisk-logs"],
 				containers["metal3-ironic-inspector"],
@@ -393,6 +399,7 @@ func TestNewMetal3Containers(t *testing.T) {
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
 					envWithValue("IRONIC_LISTEN_PORT", "6388"),
+					envWithValue("IRONIC_INSPECTOR_LISTEN_PORT", "5051"),
 				),
 				withEnv(
 					containers["metal3-ironic"],
@@ -418,6 +425,7 @@ func TestNewMetal3Containers(t *testing.T) {
 					envWithValue("PROVISIONING_INTERFACE", ""),
 					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
 					envWithValue("IRONIC_LISTEN_PORT", "6388"),
+					envWithValue("IRONIC_INSPECTOR_LISTEN_PORT", "5051"),
 				),
 				withEnv(
 					containers["metal3-ironic"],
