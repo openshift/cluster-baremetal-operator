@@ -31,7 +31,7 @@ var (
 	baremetalWebhookPort           = "9447"
 	baremetalIronicPort            = 6385
 	baremetalIronicInspectorPort   = 5050
-	baremetalKernelUrlSubPath      = "images/ironic-python-agent.kernel"
+	baremetalKernelSubPath         = "ironic-python-agent.kernel"
 	baremetalIronicEndpointSubpath = "v1/"
 	provisioningIP                 = "PROVISIONING_IP"
 	provisioningInterface          = "PROVISIONING_INTERFACE"
@@ -75,8 +75,7 @@ func getProvisioningIPCIDR(config *metal3iov1alpha1.ProvisioningSpec) *string {
 }
 
 func getDeployKernelUrl() *string {
-	// TODO(dtantsur): it's a share file system, we should look into using a file:// URL
-	deployKernelUrl := fmt.Sprintf("http://localhost:%s/%s", baremetalHttpPort, baremetalKernelUrlSubPath)
+	deployKernelUrl := fmt.Sprintf("file://%s/%s", imageSharedDir, baremetalKernelSubPath)
 	return &deployKernelUrl
 }
 
