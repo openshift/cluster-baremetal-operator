@@ -498,7 +498,10 @@ func TestNewMetal3Containers(t *testing.T) {
 						},
 					}),
 			}
-			actualContainers := newMetal3Containers(info)
+			actualContainers, err := newMetal3Containers(info)
+			if err != nil {
+				t.Errorf("Failed to get metal3 containers: %v", err)
+			}
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 			for i, container := range actualContainers {
 				assert.Equal(t, tc.expectedContainers[i].Name, actualContainers[i].Name)
@@ -532,6 +535,10 @@ func TestProxyAndCAInjection(t *testing.T) {
 		},
 	}
 
+	containers, err := newMetal3Containers(info)
+	if err != nil {
+		t.Errorf("Failed to get metal3 containers: %v", err)
+	}
 	tCases := []struct {
 		name       string
 		containers []corev1.Container
@@ -542,7 +549,7 @@ func TestProxyAndCAInjection(t *testing.T) {
 		},
 		{
 			name:       "metal3 containers have proxy and CA information",
-			containers: newMetal3Containers(info),
+			containers: containers,
 		},
 	}
 	for _, tc := range tCases {
