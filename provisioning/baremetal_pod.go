@@ -26,8 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -278,34 +278,50 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 	}
 }
 
-func setIronicExternalUrl(client kubernetes.Interface, config *metal3iov1alpha1.ProvisioningSpec, namespace string) corev1.EnvVar {
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
-		ipv6PodIP, err := GetPodIP(client.CoreV1(), namespace, NetworkStackV6)
+func setIronicExternalUrl(info ProvisioningInfo) (corev1.EnvVar, error) {
+	// We need to set the external URL to point to the ironic-proxy when IPv6
+	// is enabled and the proxy is present
 
-		if err != nil {
-			return corev1.EnvVar{
-				Name: externalUrlEnvVar,
-			}
-		}
+	if !UseIronicProxy(&info.ProvConfig.Spec) {
+		return corev1.EnvVar{
+			Name: externalUrlEnvVar,
+		}, nil
+	}
 
-		// protocol, host, port
-		urlTemplate := "%s://[%s]:%s"
+	ironicIPs, _, err := GetIronicIPs(info)
 
-		if config.DisableVirtualMediaTLS {
-			return corev1.EnvVar{
-				Name:  externalUrlEnvVar,
-				Value: fmt.Sprintf(urlTemplate, "http", ipv6PodIP, baremetalHttpPort),
-			}
-		} else {
-			return corev1.EnvVar{
-				Name:  externalUrlEnvVar,
-				Value: fmt.Sprintf(urlTemplate, "https", ipv6PodIP, baremetalVmediaHttpsPort),
-			}
+	if err != nil {
+		return corev1.EnvVar{}, fmt.Errorf("Failed to get Ironic IP when setting external url: %w", err)
+	}
+
+	var ironicIPv6 string
+
+	for _, ironicIP := range ironicIPs {
+		if utilnet.IsIPv6String(ironicIP) {
+			ironicIPv6 = ironicIP
+			break
 		}
 	}
 
-	return corev1.EnvVar{
-		Name: externalUrlEnvVar,
+	if ironicIPv6 == "" {
+		return corev1.EnvVar{
+			Name: externalUrlEnvVar,
+		}, nil
+	}
+
+	// protocol, host, port
+	urlTemplate := "%s://[%s]:%s"
+
+	if info.ProvConfig.Spec.DisableVirtualMediaTLS {
+		return corev1.EnvVar{
+			Name:  externalUrlEnvVar,
+			Value: fmt.Sprintf(urlTemplate, "http", ironicIPv6, baremetalHttpPort),
+		}, nil
+	} else {
+		return corev1.EnvVar{
+			Name:  externalUrlEnvVar,
+			Value: fmt.Sprintf(urlTemplate, "https", ironicIPv6, baremetalVmediaHttpsPort),
+		}, nil
 	}
 }
 
@@ -398,9 +414,13 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 	return initContainer
 }
 
-func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
+func newMetal3Containers(info *ProvisioningInfo) ([]corev1.Container, error) {
+	bmo, err := createContainerMetal3BaremetalOperator(*info)
+	if err != nil {
+		return []corev1.Container{}, err
+	}
 	containers := []corev1.Container{
-		createContainerMetal3BaremetalOperator(info.Client, info.Images, &info.ProvConfig.Spec, info.BaremetalWebhookEnabled, info.Namespace),
+		bmo,
 		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3Ironic(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3RamdiskLogs(info.Images),
@@ -418,7 +438,7 @@ func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 		containers = append(containers, createContainerMetal3Dnsmasq(info.Images, &info.ProvConfig.Spec))
 	}
 
-	return injectProxyAndCA(containers, info.Proxy)
+	return injectProxyAndCA(containers, info.Proxy), nil
 }
 
 func getWatchNamespace(config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
@@ -443,11 +463,15 @@ func buildSSHKeyEnvVar(sshKey string) corev1.EnvVar {
 	return corev1.EnvVar{Name: sshKeyEnvVar, Value: sshKey}
 }
 
-func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images *Images, config *metal3iov1alpha1.ProvisioningSpec, enableWebhook bool, namespace string) corev1.Container {
+func createContainerMetal3BaremetalOperator(info ProvisioningInfo) (corev1.Container, error) {
 	webhookPort, _ := strconv.ParseInt(baremetalWebhookPort, 10, 32) // #nosec
+	externalUrlVar, err := setIronicExternalUrl(info)
+	if err != nil {
+		return corev1.Container{}, err
+	}
 	container := corev1.Container{
 		Name:  "metal3-baremetal-operator",
-		Image: images.BaremetalOperator,
+		Image: info.Images.BaremetalOperator,
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "metrics",
@@ -470,7 +494,7 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 			baremetalWebhookCertMount,
 		},
 		Env: []corev1.EnvVar{
-			getWatchNamespace(config),
+			getWatchNamespace(&info.ProvConfig.Spec),
 			{
 				Name: "POD_NAMESPACE",
 				ValueFrom: &corev1.EnvVarSource{
@@ -499,9 +523,9 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 				Name:  ironicInsecureEnvVar,
 				Value: "true",
 			},
-			buildEnvVar(deployKernelUrl, config),
-			buildEnvVar(ironicEndpoint, config),
-			buildEnvVar(ironicInspectorEndpoint, config),
+			buildEnvVar(deployKernelUrl, &info.ProvConfig.Spec),
+			buildEnvVar(ironicEndpoint, &info.ProvConfig.Spec),
+			buildEnvVar(ironicInspectorEndpoint, &info.ProvConfig.Spec),
 			{
 				Name:  "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE",
 				Value: "Never",
@@ -510,8 +534,8 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 				Name:  "METAL3_AUTH_ROOT_DIR",
 				Value: metal3AuthRootDir,
 			},
-			setIronicExternalIp(externalIpEnvVar, config),
-			setIronicExternalUrl(client, config, namespace),
+			setIronicExternalIp(externalIpEnvVar, &info.ProvConfig.Spec),
+			externalUrlVar,
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -521,7 +545,7 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 		},
 	}
 
-	if !enableWebhook {
+	if !info.BaremetalWebhookEnabled {
 		// Webhook dependencies are not ready, thus we disable webhook explicitly,
 		// since default is enabled.
 		container.Args = append(container.Args, "--webhook-port", "0")
@@ -529,7 +553,7 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 		container.Args = append(container.Args, "--webhook-port", baremetalWebhookPort)
 	}
 
-	return container
+	return container, nil
 }
 
 func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
@@ -820,9 +844,12 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 	return container
 }
 
-func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) *corev1.PodTemplateSpec {
+func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*corev1.PodTemplateSpec, error) {
 	initContainers := newMetal3InitContainers(info)
-	containers := newMetal3Containers(info)
+	containers, err := newMetal3Containers(info)
+	if err != nil {
+		return nil, err
+	}
 	tolerations := []corev1.Toleration{
 		{
 			Key:      "node-role.kubernetes.io/master",
@@ -866,7 +893,7 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 			ServiceAccountName: "cluster-baremetal-operator",
 			Tolerations:        tolerations,
 		},
-	}
+	}, nil
 }
 
 func mountsWithTrustedCA(mounts []corev1.VolumeMount) []corev1.VolumeMount {
@@ -918,7 +945,7 @@ func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar, noproxy string
 	return envVars
 }
 
-func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
+func newMetal3Deployment(info *ProvisioningInfo) (*appsv1.Deployment, error) {
 	selector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"k8s-app":                 metal3AppName,
@@ -931,7 +958,10 @@ func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
 		cboLabelName:              stateService,
 		baremetalWebhookLabelName: baremetalWebhookServiceLabel,
 	}
-	template := newMetal3PodTemplateSpec(info, &podSpecLabels)
+	template, err := newMetal3PodTemplateSpec(info, &podSpecLabels)
+	if err != nil {
+		return nil, err
+	}
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      baremetalDeploymentName,
@@ -953,7 +983,7 @@ func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
 				Type: appsv1.RecreateDeploymentStrategyType,
 			},
 		},
-	}
+	}, nil
 }
 
 func getMetal3DeploymentSelector(client appsclientv1.DeploymentsGetter, targetNamespace string) (*metav1.LabelSelector, error) {
@@ -968,7 +998,12 @@ func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 	// Create metal3 deployment object based on current baremetal configuration
 	// It will be created with the cboOwnedAnnotation
 
-	metal3Deployment := newMetal3Deployment(info)
+	metal3Deployment, err := newMetal3Deployment(info)
+	if err != nil {
+		err = fmt.Errorf("unable to create a metal3 deployment: %w", err)
+		return
+	}
+
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(metal3Deployment, info.ProvConfig.Status.Generations)
 
 	err = controllerutil.SetControllerReference(info.ProvConfig, metal3Deployment, info.Scheme)

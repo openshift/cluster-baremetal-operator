@@ -7,7 +7,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -70,7 +69,6 @@ func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 		err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
 		return nil, err
 	}
-	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
 	switch infra.Status.PlatformStatus.Type {
 	case osconfigv1.BareMetalPlatformType:
 		return infra.Status.PlatformStatus.BareMetal.APIServerInternalIPs, nil
@@ -92,38 +90,36 @@ func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	}
 }
 
-func GetIronicIP(client kubernetes.Interface, targetNamespace string, config *metal3iov1alpha1.ProvisioningSpec, osclient osclientset.Interface) (ironicIP string, inspectorIP string, err error) {
+func GetIronicIPs(info ProvisioningInfo) (ironicIPs []string, inspectorIP string, err error) {
 	// Inspector does not support proxy
+
+	config := info.ProvConfig.Spec
 
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		inspectorIP = config.ProvisioningIP
 	} else {
-		inspectorIP, err = getPodHostIP(client.CoreV1(), targetNamespace)
+		inspectorIP, err = getPodHostIP(info.Client.CoreV1(), info.Namespace)
 		if err != nil {
 			return
 		}
 	}
 
-	if UseIronicProxy(config) {
-		var internalIPs []string
-		internalIPs, err = getServerInternalIPs(osclient)
+	if UseIronicProxy(&config) {
+		ironicIPs, err = getServerInternalIPs(info.OSClient)
 		if err != nil {
 			err = fmt.Errorf("error fetching internalIPs: %w", err)
 			return
 		}
 
-		if internalIPs != nil {
-			ironicIP = internalIPs[0]
-		}
 		// NOTE(janders) if ironicIP is an empty string (e.g. for NonePlatformType) fall back to Pod IP (which is what Inspector uses)
-		if ironicIP == "" {
-			ironicIP = inspectorIP
+		if ironicIPs == nil {
+			ironicIPs = []string{inspectorIP}
 		}
 	} else {
-		ironicIP = inspectorIP
+		ironicIPs = []string{inspectorIP}
 	}
 
-	return ironicIP, inspectorIP, err
+	return ironicIPs, inspectorIP, err
 }
 
 func GetPodIP(podClient coreclientv1.PodsGetter, targetNamespace string, networkType NetworkStackType) (string, error) {
