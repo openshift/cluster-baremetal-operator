@@ -13,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
-	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -25,66 +24,13 @@ import (
 )
 
 const (
-	ironicProxyService         = "ironic-proxy"
-	ironicPrivatePort          = 6388
-	ironicPrivatePortv6        = 6388
-	ironicUpstreamIPEnvVar     = "IRONIC_UPSTREAM_IP"
-	ironicUpstreamIPv6EnvVar   = "IRONIC_UPSTREAM_IP_V6"
-	ironicUpstreamPortEnvVar   = "IRONIC_UPSTREAM_PORT"
-	ironicUpstreamPortv6EnvVar = "IRONIC_UPSTREAM_PORT_V6"
+	ironicProxyService       = "ironic-proxy"
+	ironicPrivatePort        = 6388
+	ironicUpstreamIPEnvVar   = "IRONIC_UPSTREAM_IP"
+	ironicUpstreamPortEnvVar = "IRONIC_UPSTREAM_PORT"
 )
 
-func ironicIPsToVars(ironicIPs []string) []corev1.EnvVar {
-	var vars []corev1.EnvVar
-
-	for _, ironicIP := range ironicIPs {
-		if utilnet.IsIPv4String(ironicIP) {
-			vars = append(vars, []corev1.EnvVar{
-				{
-					Name:  ironicUpstreamIPEnvVar,
-					Value: ironicIP,
-				},
-				{
-					Name:  ironicUpstreamPortEnvVar,
-					Value: fmt.Sprint(ironicPrivatePort),
-				},
-			}...)
-		} else {
-			vars = append(vars, []corev1.EnvVar{
-				{
-					Name:  ironicUpstreamIPv6EnvVar,
-					Value: ironicIP,
-				},
-				{
-					Name:  ironicUpstreamPortv6EnvVar,
-					Value: fmt.Sprint(ironicPrivatePortv6),
-				},
-			}...)
-		}
-	}
-
-	return vars
-}
-
-func createContainerIronicProxy(ironicIPs []string, images *Images) corev1.Container {
-	vars := []corev1.EnvVar{
-		{
-			Name:  httpPort,
-			Value: fmt.Sprint(baremetalIronicPort),
-		},
-		// The provisioning IP is not used except that
-		// httpd cannot start until the IP is available on some interface
-		{
-			Name: provisioningIP,
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "status.hostIP",
-				},
-			},
-		},
-	}
-
-	vars = append(vars, ironicIPsToVars(ironicIPs)...)
+func createContainerIronicProxy(ironicIP string, images *Images) corev1.Container {
 	container := corev1.Container{
 		Name:            "ironic-proxy",
 		Image:           images.Ironic,
@@ -103,7 +49,30 @@ func createContainerIronicProxy(ironicIPs []string, images *Images) corev1.Conta
 				HostPort:      int32(baremetalIronicPort),
 			},
 		},
-		Env: vars,
+		Env: []corev1.EnvVar{
+			{
+				Name:  httpPort,
+				Value: fmt.Sprint(baremetalIronicPort),
+			},
+			{
+				Name:  ironicUpstreamIPEnvVar,
+				Value: ironicIP,
+			},
+			{
+				Name:  ironicUpstreamPortEnvVar,
+				Value: fmt.Sprint(ironicPrivatePort),
+			},
+			// The provisioning IP is not used except that
+			// httpd cannot start until the IP is available on some interface
+			{
+				Name: provisioningIP,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.hostIP",
+					},
+				},
+			},
+		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("5m"),
@@ -115,13 +84,13 @@ func createContainerIronicProxy(ironicIPs []string, images *Images) corev1.Conta
 }
 
 func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSpec, error) {
-	ironicIPs, _, err := GetIronicIPs(*info)
+	ironicIP, err := getPodHostIP(info.Client.CoreV1(), info.Namespace)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot figure out the upstream IP for ironic proxy")
 	}
 
 	containers := []corev1.Container{
-		createContainerIronicProxy(ironicIPs, info.Images),
+		createContainerIronicProxy(ironicIP, info.Images),
 	}
 
 	tolerations := []corev1.Toleration{
