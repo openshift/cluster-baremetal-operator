@@ -90,15 +90,14 @@ func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	}
 }
 
-func GetIronicIPs(info ProvisioningInfo) (ironicIPs []string, inspectorIP string, err error) {
-	// Inspector does not support proxy
-
+func GetIronicIPs(info ProvisioningInfo) (ironicIPs []string, inspectorIPs []string, err error) {
+	var podIP string
 	config := info.ProvConfig.Spec
 
 	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
-		inspectorIP = config.ProvisioningIP
+		podIP = config.ProvisioningIP
 	} else {
-		inspectorIP, err = getPodHostIP(info.Client.CoreV1(), info.Namespace)
+		podIP, err = getPodHostIP(info.Client.CoreV1(), info.Namespace)
 		if err != nil {
 			return
 		}
@@ -111,15 +110,15 @@ func GetIronicIPs(info ProvisioningInfo) (ironicIPs []string, inspectorIP string
 			return
 		}
 
-		// NOTE(janders) if ironicIP is an empty string (e.g. for NonePlatformType) fall back to Pod IP (which is what Inspector uses)
 		if ironicIPs == nil {
-			ironicIPs = []string{inspectorIP}
+			ironicIPs = []string{podIP}
 		}
 	} else {
-		ironicIPs = []string{inspectorIP}
+		ironicIPs = []string{podIP}
 	}
 
-	return ironicIPs, inspectorIP, err
+	inspectorIPs = ironicIPs // keep returning separate variables for future enhancements
+	return ironicIPs, inspectorIPs, err
 }
 
 func GetPodIP(podClient coreclientv1.PodsGetter, targetNamespace string, networkType NetworkStackType) (string, error) {
