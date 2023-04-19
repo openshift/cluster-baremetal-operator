@@ -48,13 +48,13 @@ func TestGetMetal3DeploymentConfig(t *testing.T) {
 			name:          "Unmanaged DeployKernelUrl",
 			configName:    deployKernelUrl,
 			spec:          unmanagedProvisioning().build(),
-			expectedValue: "http://localhost:6180/images/ironic-python-agent.kernel",
+			expectedValue: "file:///shared/html/images/ironic-python-agent.kernel",
 		},
 		{
 			name:          "Disabled DeployKernelUrl",
 			configName:    deployKernelUrl,
 			spec:          disabledProvisioning().build(),
-			expectedValue: "http://localhost:6180/images/ironic-python-agent.kernel",
+			expectedValue: "file:///shared/html/images/ironic-python-agent.kernel",
 		},
 		{
 			name:          "Disabled IronicEndpoint",
