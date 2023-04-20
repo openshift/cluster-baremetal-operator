@@ -121,6 +121,7 @@ docker-build: test
 docker-push:
 	docker push ${IMG}
 
+.PHONY: vendor
 vendor:
 	go mod tidy
 	go mod vendor
