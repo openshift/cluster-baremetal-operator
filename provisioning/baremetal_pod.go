@@ -280,16 +280,7 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 }
 
 func setIronicExternalUrl(info ProvisioningInfo) (corev1.EnvVar, error) {
-	// We need to set the external URL to point to the ironic-proxy when IPv6
-	// is enabled and the proxy is present
-
-	if !UseIronicProxy(&info.ProvConfig.Spec) {
-		return corev1.EnvVar{
-			Name: externalUrlEnvVar,
-		}, nil
-	}
-
-	ironicIPs, _, err := GetIronicIPs(info)
+	ironicIPs, err := getServerInternalIPs(info.OSClient)
 
 	if err != nil {
 		return corev1.EnvVar{}, fmt.Errorf("Failed to get Ironic IP when setting external url: %w", err)
