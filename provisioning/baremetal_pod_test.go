@@ -328,7 +328,10 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec",
 			config: managedProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				containers["metal3-baremetal-operator"],
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
+				),
 				withEnv(containers["metal3-httpd"], sshkey),
 				withEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
@@ -342,7 +345,10 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with DNS",
 			config: managedProvisioning().ProvisioningDNS(true).build(),
 			expectedContainers: []corev1.Container{
-				containers["metal3-baremetal-operator"],
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
+				),
 				withEnv(containers["metal3-httpd"], sshkey),
 				withEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
@@ -382,7 +388,10 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "UnmanagedSpec",
 			config: unmanagedProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				containers["metal3-baremetal-operator"],
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
+				),
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
 				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
 				containers["metal3-ramdisk-logs"],
@@ -533,6 +542,27 @@ func TestProxyAndCAInjection(t *testing.T) {
 				NoProxy:    ".example.com",
 			},
 		},
+		OSClient: fakeconfigclientset.NewSimpleClientset(
+			&osconfigv1.Infrastructure{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Infrastructure",
+					APIVersion: "config.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Status: v1.InfrastructureStatus{
+					PlatformStatus: &v1.PlatformStatus{
+						Type: v1.BareMetalPlatformType,
+						BareMetal: &v1.BareMetalPlatformStatus{
+							APIServerInternalIPs: []string{
+								"192.168.1.1",
+								"fd2e:6f44:5dd8:c956::16",
+							},
+						},
+					},
+				},
+			}),
 	}
 
 	containers, err := newMetal3Containers(info)
