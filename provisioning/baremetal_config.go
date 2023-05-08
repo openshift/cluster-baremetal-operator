@@ -80,6 +80,8 @@ func getDeployKernelUrl() *string {
 	return &deployKernelUrl
 }
 
+// TODO(dtantsur): these two can be removed once we no longer have ironic/inspector split
+
 func getIronicEndpoint() *string {
 	ironicEndpoint := fmt.Sprintf("https://localhost:%d/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
 	return &ironicEndpoint
@@ -88,6 +90,17 @@ func getIronicEndpoint() *string {
 func getIronicInspectorEndpoint() *string {
 	ironicInspectorEndpoint := fmt.Sprintf("https://localhost:%d/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
 	return &ironicInspectorEndpoint
+}
+
+func getRemoteEndpoints(info *ProvisioningInfo) (ironicEndpoint string, inspectorEndpoint string, err error) {
+	ironicIPs, inspectorIPs, err := GetIronicIPs(*info)
+	if err != nil {
+		return
+	}
+
+	ironicEndpoint = fmt.Sprintf("https://%s:%d/%s", wrapIPv6(ironicIPs[0]), baremetalIronicPort, baremetalIronicEndpointSubpath)
+	inspectorEndpoint = fmt.Sprintf("https://%s:%d/%s", wrapIPv6(inspectorIPs[0]), baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
+	return
 }
 
 func getProvisioningOSDownloadURL(config *metal3iov1alpha1.ProvisioningSpec) *string {
