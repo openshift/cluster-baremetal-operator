@@ -202,24 +202,6 @@ func TestNewMetal3Containers(t *testing.T) {
 		}
 	}
 	containers := map[string]corev1.Container{
-		"metal3-baremetal-operator": {
-			Name: "metal3-baremetal-operator",
-			Env: []corev1.EnvVar{
-				envWithFieldValue("WATCH_NAMESPACE", "metadata.namespace"),
-				envWithFieldValue("POD_NAMESPACE", "metadata.namespace"),
-				envWithFieldValue("POD_NAME", "metadata.name"),
-				{Name: "OPERATOR_NAME", Value: "baremetal-operator"},
-				{Name: "IRONIC_CACERT_FILE", Value: "/certs/ironic/tls.crt"},
-				{Name: "IRONIC_INSECURE", Value: "true"},
-				{Name: "DEPLOY_KERNEL_URL", Value: "file:///shared/html/images/ironic-python-agent.kernel"},
-				{Name: "IRONIC_ENDPOINT", Value: "https://localhost:6385/v1/"},
-				{Name: "IRONIC_INSPECTOR_ENDPOINT", Value: "https://localhost:5050/v1/"},
-				{Name: "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE", Value: "Never"},
-				{Name: "METAL3_AUTH_ROOT_DIR", Value: "/auth"},
-				{Name: "IRONIC_EXTERNAL_IP", Value: ""},
-				{Name: "IRONIC_EXTERNAL_URL_V6", Value: ""},
-			},
-		},
 		"metal3-httpd": {
 			Name: "metal3-httpd",
 			Env: []corev1.EnvVar{
@@ -328,10 +310,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec",
 			config: managedProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
-					containers["metal3-baremetal-operator"],
-					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
-				),
 				withEnv(containers["metal3-httpd"], sshkey),
 				withEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
@@ -345,10 +323,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with DNS",
 			config: managedProvisioning().ProvisioningDNS(true).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
-					containers["metal3-baremetal-operator"],
-					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
-				),
 				withEnv(containers["metal3-httpd"], sshkey),
 				withEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
@@ -365,11 +339,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with virtualmedia",
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
-					containers["metal3-baremetal-operator"],
-					envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"),
-					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
-				),
 				withEnv(
 					containers["metal3-httpd"],
 					sshkey,
@@ -388,10 +357,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "UnmanagedSpec",
 			config: unmanagedProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
-					containers["metal3-baremetal-operator"],
-					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
-				),
 				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
 				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", "ensp0")),
 				containers["metal3-ramdisk-logs"],
@@ -405,11 +370,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpec",
 			config: disabledProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
-					containers["metal3-baremetal-operator"],
-					envWithValue("IRONIC_EXTERNAL_IP", ""),
-					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
-				),
 				withEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
@@ -434,11 +394,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpecWithoutProvisioningIP",
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
-					containers["metal3-baremetal-operator"],
-					envWithValue("IRONIC_EXTERNAL_IP", ""),
-					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
-				),
 				withEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
@@ -507,10 +462,7 @@ func TestNewMetal3Containers(t *testing.T) {
 						},
 					}),
 			}
-			actualContainers, err := newMetal3Containers(info)
-			if err != nil {
-				t.Errorf("Failed to get metal3 containers: %v", err)
-			}
+			actualContainers := newMetal3Containers(info)
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
 			for i, container := range actualContainers {
 				assert.Equal(t, tc.expectedContainers[i].Name, actualContainers[i].Name)
@@ -565,10 +517,7 @@ func TestProxyAndCAInjection(t *testing.T) {
 			}),
 	}
 
-	containers, err := newMetal3Containers(info)
-	if err != nil {
-		t.Errorf("Failed to get metal3 containers: %v", err)
-	}
+	containers := newMetal3Containers(info)
 	tCases := []struct {
 		name       string
 		containers []corev1.Container

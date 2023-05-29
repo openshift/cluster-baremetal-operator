@@ -304,6 +304,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	for _, ensureResource := range []ensureFunc{
 		provisioning.EnsureAllSecrets,
 		provisioning.EnsureMetal3Deployment,
+		provisioning.EnsureBaremetalOperatorDeployment,
 		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
 		provisioning.EnsureBaremetalOperatorWebhook,
@@ -328,7 +329,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	// Determine the status of the deployment
+	// Determine the status of the baremetal deployment
 	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	if err != nil {
 		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 deployment inaccessible", "")
@@ -339,6 +340,22 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 	if deploymentState == appsv1.DeploymentReplicaFailure {
 		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+		}
+	}
+
+	// Determine the status of the BMO deployment
+	bmoState, err := provisioning.GetBaremetalOperatorDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	if err != nil {
+		err = r.updateCOStatus(ReasonResourceNotFound, "baremetal-operator deployment inaccessible", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+		}
+		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of baremetal-operator deployment")
+	}
+	if bmoState == appsv1.DeploymentReplicaFailure {
+		err = r.updateCOStatus(ReasonDeployTimedOut, "baremetal-operator deployment rollout taking too long", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
@@ -357,7 +374,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	if deploymentState == appsv1.DeploymentAvailable {
+	if deploymentState == appsv1.DeploymentAvailable && bmoState == appsv1.DeploymentAvailable {
 		msg := getSuccessStatus(imageCacheState, ironicProxyState)
 		if msg != "" {
 			err = r.updateCOStatus(ReasonComplete, msg, "")
