@@ -41,7 +41,9 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 		Image:           images.Ironic,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Add: []corev1.Capability{"FOWNER"},
+			},
 		},
 		Command: []string{"/bin/runironic-proxy"},
 		VolumeMounts: []corev1.VolumeMount{

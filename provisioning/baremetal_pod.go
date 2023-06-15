@@ -354,6 +354,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 		Command:         []string{command},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
@@ -375,7 +376,9 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 		Command:         []string{"/set-static-ip"},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Add: []corev1.Capability{"NET_ADMIN"},
+			},
 		},
 		Env: []corev1.EnvVar{
 			buildEnvVar(provisioningIP, config),
@@ -455,6 +458,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		Command: []string{"/bin/rundnsmasq"},
@@ -528,6 +532,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		Command:      []string{"/bin/runhttpd"},
@@ -595,6 +600,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		Command:      []string{"/bin/runironic"},
@@ -644,11 +650,8 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 		Name:            "metal3-ramdisk-logs",
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
-		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
-		},
-		Command:      []string{"/bin/runlogwatch.sh"},
-		VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+		Command:         []string{"/bin/runlogwatch.sh"},
+		VolumeMounts:    []corev1.VolumeMount{sharedVolumeMount},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("10m"),
@@ -664,10 +667,7 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 		Name:            "metal3-ironic-inspector",
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
-		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
-		},
-		Command: []string{"/bin/runironic-inspector"},
+		Command:         []string{"/bin/runironic-inspector"},
 		VolumeMounts: []corev1.VolumeMount{
 			sharedVolumeMount,
 			ironicCredentialsMount,
@@ -713,7 +713,12 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		Command:         []string{"/refresh-static-ip"},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Add: []corev1.Capability{
+					"NET_ADMIN",
+					"FOWNER", // Needed to set the addr_gen_mode in /proc
+				},
+			},
 		},
 		Env: []corev1.EnvVar{
 			buildEnvVar(provisioningIP, config),
