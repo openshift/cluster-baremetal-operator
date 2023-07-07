@@ -30,7 +30,8 @@ func TestNewBMOContainers(t *testing.T) {
 			},
 		}
 	}
-	primaryIP := "192.168.1.1"
+	primaryIP := "192.168.111.1"
+	realIP := "192.168.111.22"
 	containers := map[string]corev1.Container{
 		"metal3-baremetal-operator": {
 			Name: "metal3-baremetal-operator",
@@ -91,11 +92,11 @@ func TestNewBMOContainers(t *testing.T) {
 					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
 					envWithValue(
 						"IRONIC_ENDPOINT",
-						fmt.Sprintf("https://%s:6385/v1/", testProvisioningIP),
+						fmt.Sprintf("https://%s:6385/v1/", realIP),
 					),
 					envWithValue(
 						"IRONIC_INSPECTOR_ENDPOINT",
-						fmt.Sprintf("https://%s:5050/v1/", testProvisioningIP),
+						fmt.Sprintf("https://%s:5050/v1/", realIP),
 					),
 				),
 			},
@@ -143,8 +144,9 @@ func TestNewBMOContainers(t *testing.T) {
 						},
 					},
 					Status: corev1.PodStatus{
+						HostIP: realIP,
 						PodIPs: []corev1.PodIP{
-							{IP: "192.168.111.22"},
+							{IP: realIP},
 							{IP: "fd2e:6f44:5dd8:c956::16"},
 						},
 					}}),

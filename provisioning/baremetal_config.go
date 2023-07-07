@@ -91,8 +91,9 @@ func getIronicInspectorEndpoint() *string {
 	return &ironicInspectorEndpoint
 }
 
-func getRemoteEndpoints(info *ProvisioningInfo) (ironicEndpoint string, inspectorEndpoint string, err error) {
-	ironicIPs, inspectorIPs, err := GetIronicIPs(*info)
+func getControlPlaneEndpoints(info *ProvisioningInfo) (ironicEndpoint string, inspectorEndpoint string, err error) {
+	// NOTE(dtantsur): don't use provisioning network here, this call is for traffic within the control plane.
+	ironicIPs, inspectorIPs, err := GetIronicIPs(*info, false)
 	if err != nil {
 		return
 	}

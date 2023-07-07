@@ -91,11 +91,11 @@ func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	}
 }
 
-func GetIronicIPs(info ProvisioningInfo) (ironicIPs []string, inspectorIPs []string, err error) {
+func GetIronicIPs(info ProvisioningInfo, allowProvisioningNetwork bool) (ironicIPs []string, inspectorIPs []string, err error) {
 	var podIP string
 	config := info.ProvConfig.Spec
 
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
+	if allowProvisioningNetwork && config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		podIP = config.ProvisioningIP
 	} else {
 		podIP, err = getPodHostIP(info.Client.CoreV1(), info.Namespace)
