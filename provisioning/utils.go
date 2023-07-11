@@ -8,7 +8,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	utilnet "k8s.io/utils/net"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
@@ -91,11 +90,11 @@ func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	}
 }
 
-func GetIronicIPs(info ProvisioningInfo, allowProvisioningNetwork bool) (ironicIPs []string, inspectorIPs []string, err error) {
+func GetIronicIPs(info ProvisioningInfo) (ironicIPs []string, inspectorIPs []string, err error) {
 	var podIP string
 	config := info.ProvConfig.Spec
 
-	if allowProvisioningNetwork && config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
 		podIP = config.ProvisioningIP
 	} else {
 		podIP, err = getPodHostIP(info.Client.CoreV1(), info.Namespace)
@@ -157,12 +156,4 @@ func IpOptionForProvisioning(config *metal3iov1alpha1.ProvisioningSpec, networkS
 		optionValue = "ip=dhcp6"
 	}
 	return optionValue
-}
-
-func wrapIPv6(ip string) string {
-	if utilnet.IsIPv6String(ip) {
-		return fmt.Sprintf("[%s]", ip)
-	} else {
-		return ip
-	}
 }

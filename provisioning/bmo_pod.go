@@ -98,10 +98,7 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		return corev1.Container{}, err
 	}
 
-	ironicURL, inspectorURL, err := getControlPlaneEndpoints(info)
-	if err != nil {
-		return corev1.Container{}, err
-	}
+	ironicURL, inspectorURL := getControlPlaneEndpoints(info)
 
 	container := corev1.Container{
 		Name:  "metal3-baremetal-operator",

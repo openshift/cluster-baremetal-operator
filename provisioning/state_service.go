@@ -25,6 +25,14 @@ func newMetal3StateService(targetNamespace string, disableVirtualMediaTLS bool) 
 
 	ports := []corev1.ServicePort{
 		{
+			Name: "ironic",
+			Port: int32(baremetalIronicPort),
+		},
+		{
+			Name: "inspector",
+			Port: int32(baremetalIronicInspectorPort),
+		},
+		{
 			Name: httpPortName,
 			Port: int32(port),
 		},

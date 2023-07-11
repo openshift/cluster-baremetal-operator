@@ -30,8 +30,7 @@ func TestNewBMOContainers(t *testing.T) {
 			},
 		}
 	}
-	primaryIP := "192.168.111.1"
-	realIP := "192.168.111.22"
+	primaryIP := "192.168.1.1"
 	containers := map[string]corev1.Container{
 		"metal3-baremetal-operator": {
 			Name: "metal3-baremetal-operator",
@@ -43,8 +42,8 @@ func TestNewBMOContainers(t *testing.T) {
 				{Name: "IRONIC_CACERT_FILE", Value: "/certs/ironic/tls.crt"},
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "DEPLOY_KERNEL_URL", Value: "file:///shared/html/images/ironic-python-agent.kernel"},
-				{Name: "IRONIC_ENDPOINT", Value: fmt.Sprintf("https://%s:6385/v1/", primaryIP)},
-				{Name: "IRONIC_INSPECTOR_ENDPOINT", Value: fmt.Sprintf("https://%s:5050/v1/", primaryIP)},
+				{Name: "IRONIC_ENDPOINT", Value: fmt.Sprintf("https://metal3-state.openshift-machine-api.svc.cluster.local:6385/v1/")},
+				{Name: "IRONIC_INSPECTOR_ENDPOINT", Value: fmt.Sprintf("https://metal3-state.openshift-machine-api.svc.cluster.local:5050/v1/")},
 				{Name: "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE", Value: "Never"},
 				{Name: "METAL3_AUTH_ROOT_DIR", Value: "/auth"},
 				{Name: "IRONIC_EXTERNAL_IP", Value: ""},
@@ -90,14 +89,6 @@ func TestNewBMOContainers(t *testing.T) {
 				withEnv(
 					containers["metal3-baremetal-operator"],
 					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
-					envWithValue(
-						"IRONIC_ENDPOINT",
-						fmt.Sprintf("https://%s:6385/v1/", realIP),
-					),
-					envWithValue(
-						"IRONIC_INSPECTOR_ENDPOINT",
-						fmt.Sprintf("https://%s:5050/v1/", realIP),
-					),
 				),
 			},
 			sshkey: "sshkey",
@@ -131,6 +122,7 @@ func TestNewBMOContainers(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			info := &ProvisioningInfo{
+				Namespace:    "openshift-machine-api",
 				Images:       &images,
 				ProvConfig:   &metal3iov1alpha1.Provisioning{Spec: *tc.config},
 				SSHKey:       tc.sshkey,
@@ -144,9 +136,8 @@ func TestNewBMOContainers(t *testing.T) {
 						},
 					},
 					Status: corev1.PodStatus{
-						HostIP: realIP,
 						PodIPs: []corev1.PodIP{
-							{IP: realIP},
+							{IP: "192.168.111.22"},
 							{IP: "fd2e:6f44:5dd8:c956::16"},
 						},
 					}}),
