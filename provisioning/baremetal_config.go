@@ -91,14 +91,9 @@ func getIronicInspectorEndpoint() *string {
 	return &ironicInspectorEndpoint
 }
 
-func getRemoteEndpoints(info *ProvisioningInfo) (ironicEndpoint string, inspectorEndpoint string, err error) {
-	ironicIPs, inspectorIPs, err := GetIronicIPs(*info)
-	if err != nil {
-		return
-	}
-
-	ironicEndpoint = fmt.Sprintf("https://%s:%d/%s", wrapIPv6(ironicIPs[0]), baremetalIronicPort, baremetalIronicEndpointSubpath)
-	inspectorEndpoint = fmt.Sprintf("https://%s:%d/%s", wrapIPv6(inspectorIPs[0]), baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
+func getControlPlaneEndpoints(info *ProvisioningInfo) (ironicEndpoint string, inspectorEndpoint string) {
+	ironicEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, baremetalIronicPort, baremetalIronicEndpointSubpath)
+	inspectorEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
 	return
 }
 

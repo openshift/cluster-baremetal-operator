@@ -8,7 +8,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	utilnet "k8s.io/utils/net"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
@@ -157,12 +156,4 @@ func IpOptionForProvisioning(config *metal3iov1alpha1.ProvisioningSpec, networkS
 		optionValue = "ip=dhcp6"
 	}
 	return optionValue
-}
-
-func wrapIPv6(ip string) string {
-	if utilnet.IsIPv6String(ip) {
-		return fmt.Sprintf("[%s]", ip)
-	} else {
-		return ip
-	}
 }
