@@ -193,8 +193,8 @@ github.com/go-toolsmith/typep
 # github.com/go-xmlfmt/xmlfmt v1.1.2
 ## explicit
 github.com/go-xmlfmt/xmlfmt
-# github.com/gobuffalo/flect v0.2.0
-## explicit; go 1.12
+# github.com/gobuffalo/flect v0.2.3
+## explicit; go 1.13
 github.com/gobuffalo/flect
 # github.com/gobwas/glob v0.2.3
 ## explicit
@@ -1551,8 +1551,8 @@ sigs.k8s.io/controller-runtime/pkg/webhook
 sigs.k8s.io/controller-runtime/pkg/webhook/admission
 sigs.k8s.io/controller-runtime/pkg/webhook/conversion
 sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics
-# sigs.k8s.io/controller-tools v0.4.1
-## explicit; go 1.13
+# sigs.k8s.io/controller-tools v0.6.2 => sigs.k8s.io/controller-tools v0.6.2
+## explicit; go 1.16
 sigs.k8s.io/controller-tools/cmd/controller-gen
 sigs.k8s.io/controller-tools/pkg/crd
 sigs.k8s.io/controller-tools/pkg/crd/markers
@@ -1571,7 +1571,7 @@ sigs.k8s.io/controller-tools/pkg/webhook
 ## explicit; go 1.18
 sigs.k8s.io/json
 sigs.k8s.io/json/internal/golang/encoding/json
-# sigs.k8s.io/kube-storage-version-migrator v0.0.4
+# sigs.k8s.io/kube-storage-version-migrator v0.0.5
 ## explicit; go 1.13
 sigs.k8s.io/kube-storage-version-migrator/pkg/apis/migration/v1alpha1
 sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset
@@ -1704,3 +1704,4 @@ sigs.k8s.io/yaml
 # github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20221021112927-c457e46aec1e
 # github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20221021112927-c457e46aec1e
 # github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20221021112927-c457e46aec1e
+# sigs.k8s.io/controller-tools => sigs.k8s.io/controller-tools v0.6.2
