@@ -29,6 +29,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	// +kubebuilder:scaffold:imports
 
@@ -83,10 +84,11 @@ func main() {
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
-		Namespace:          controllers.ComponentNamespace,
-		LeaderElection:     enableLeaderElection,
-		Port:               9443,
-		CertDir:            "/etc/cluster-baremetal-operator/tls",
+		NewCache: cache.MultiNamespacedCacheBuilder(
+			[]string{controllers.ComponentNamespace, provisioning.OpenshiftConfigNamespace}),
+		LeaderElection: enableLeaderElection,
+		Port:           9443,
+		CertDir:        "/etc/cluster-baremetal-operator/tls",
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start manager")
