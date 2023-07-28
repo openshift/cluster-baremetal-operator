@@ -2,6 +2,9 @@ package provisioning
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -45,6 +48,9 @@ bfat4QMUFATLxweNkAUqJdp4bQZ+3euCvdl8/gIN9rZ7y/dPkIttZ0PPVb6D/6n+
 bPnmpVQ+hguo1JNC/lbo5zmZ2mHDA+tUbUhxCYWKq8v/qWLj
 -----END CERTIFICATE-----
 `
+
+const oldPullSecret = `{"auths":{"registry.example.com:5000":{"auth":"dXNlcm5hbWU6cGFzc3dvcmQK"}}}`      //nolint:gosec
+const newPullSecret = `{"auths":{"registry2.example.com:5000":{"auth":"dXNlcm5hbWUyOnBhc3N3b3JkMgo="}}}` //nolint:gosec
 
 var (
 	scheme = runtime.NewScheme()
@@ -216,5 +222,183 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 			// In case of expiration, the certificate must be re-created
 			assert.Equal(t, tc.expire, bytes.Compare(original, recreated) != 0, "re-created Tls certificate is invalid")
 		})
+	}
+}
+
+func TestRegistryPullSecret(t *testing.T) {
+	baremetalCR := &metal3iov1alpha1.Provisioning{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Provisioning",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+	}
+
+	cases := []struct {
+		name               string
+		secrets            []*corev1.Secret
+		expectedPullSecret string
+		expectUpdate       bool
+	}{
+		{
+			name: "Create new machine API secret",
+			secrets: []*corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      PullSecretName,
+						Namespace: OpenshiftConfigNamespace,
+					},
+					StringData: map[string]string{
+						openshiftConfigSecretKey: oldPullSecret,
+					},
+				},
+			},
+			expectedPullSecret: oldPullSecret,
+			expectUpdate:       false,
+		},
+		{
+			name: "Update machine API secret if the contents are different",
+			secrets: []*corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      PullSecretName,
+						Namespace: OpenshiftConfigNamespace,
+					},
+					StringData: map[string]string{
+						openshiftConfigSecretKey: newPullSecret,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      PullSecretName,
+						Namespace: testNamespace,
+					},
+					StringData: map[string]string{
+						openshiftConfigSecretKey: base64.StdEncoding.EncodeToString([]byte(oldPullSecret)),
+					},
+				},
+			},
+			expectedPullSecret: newPullSecret,
+			expectUpdate:       true,
+		},
+		{
+			name: "Do not update machine API secret if the contents are the same",
+			secrets: []*corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      PullSecretName,
+						Namespace: OpenshiftConfigNamespace,
+					},
+					StringData: map[string]string{
+						openshiftConfigSecretKey: newPullSecret,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      PullSecretName,
+						Namespace: testNamespace,
+					},
+					StringData: map[string]string{
+						openshiftConfigSecretKey: base64.StdEncoding.EncodeToString([]byte(newPullSecret)),
+					},
+				},
+			},
+			expectedPullSecret: newPullSecret,
+			expectUpdate:       false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create the client set. Create a PrependReactor which copies content from StringData to Data, upon create
+			// and update. Then, create all secrets.
+			kubeClient := fakekube.NewSimpleClientset()
+			kubeClient.PrependReactor("create", "secrets", secretDataReactor)
+			kubeClient.PrependReactor("update", "secrets", secretDataReactor)
+			for _, secret := range tc.secrets {
+				_, err := kubeClient.CoreV1().Secrets(secret.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+				if err != nil {
+					t.Fatalf("could not populate clientset with secret %s/%s, err: %q", secret.Namespace, secret.Name, err)
+				}
+			}
+
+			info := &ProvisioningInfo{
+				Client:        kubeClient,
+				Namespace:     testNamespace,
+				ProvConfig:    baremetalCR,
+				Scheme:        scheme,
+				EventRecorder: events.NewLoggingEventRecorder("tests"),
+			}
+
+			// Overwrite the reportRegistryPullSecretReconcile callback. This allows us to track if applySecret deems
+			// that an update to the secret is necessary.
+			reconcilerTriggered := false
+			reportRegistryPullSecretReconcile = func() {
+				reconcilerTriggered = true
+			}
+
+			// Run the method under test.
+			if err := createRegistryPullSecret(info); err != nil {
+				t.Fatalf("createRegistryPullSecret returned an error, err: %q", err)
+			}
+
+			// This should be true if the secret in testNamespace exists but is different. It should be false
+			// if the secret content (double encoded) is the same, or if the secret must be created.
+			if tc.expectUpdate != reconcilerTriggered {
+				t.Fatalf("expected an update: %t, but reconcilerTriggered returns: %t",
+					tc.expectUpdate, reconcilerTriggered)
+			}
+
+			// Get the generated / update pull secret from testNamespace.
+			s, err := kubeClient.CoreV1().Secrets(testNamespace).Get(context.TODO(), PullSecretName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("could not get secret %s/%s, err: %q", testNamespace, PullSecretName, err)
+			}
+
+			// Compare the generated to the expected secret.
+			// Remember that the expect secret is double encoded due to PR
+			// https://github.com/openshift/cluster-baremetal-operator/pull/184
+			generatedPullSecret := string(s.Data[openshiftConfigSecretKey])
+			doubleEncodedExpectedPullSecret := base64.StdEncoding.EncodeToString(
+				[]byte(base64.StdEncoding.EncodeToString([]byte(tc.expectedPullSecret))))
+			if generatedPullSecret != doubleEncodedExpectedPullSecret {
+				t.Fatalf("expected generated pull-secret %q to match %q", generatedPullSecret, doubleEncodedExpectedPullSecret)
+			}
+		})
+	}
+}
+
+// secretDataReactor copies the base64 encoded contents of a secret's StringData to the Data field, upon create and
+// update actions.
+func secretDataReactor(action faketesting.Action) (bool, runtime.Object, error) {
+	switch a := action.(type) {
+	case faketesting.CreateAction:
+		secret, ok := a.GetObject().(*corev1.Secret)
+		if !ok {
+			return false, nil, fmt.Errorf("unsupported object type %T", a.GetObject())
+		}
+		secretStringDataToData(secret)
+	case faketesting.UpdateAction: //nolint: staticcheck
+		secret, ok := a.GetObject().(*corev1.Secret)
+		if !ok {
+			return false, nil, fmt.Errorf("unsupported object type %T", a.GetObject())
+		}
+		secretStringDataToData(secret)
+	default:
+		return false, nil, fmt.Errorf("unsupported action %T", a)
+	}
+	return false, nil, nil
+}
+
+// secretStringDataToData takes a secret and copies the base64 encoded contents of StringData to Data. After encoding,
+// it erases the content from StringData, as StringData is a write only field.
+func secretStringDataToData(secret *corev1.Secret) {
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+	for k, v := range secret.StringData {
+		secret.Data[k] = []byte(base64.StdEncoding.EncodeToString([]byte(v)))
+		delete(secret.StringData, k)
 	}
 }
