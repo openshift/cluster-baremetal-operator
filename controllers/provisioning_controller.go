@@ -41,8 +41,12 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -200,14 +204,6 @@ func getSuccessStatus(imageCacheState appsv1.DaemonSetConditionType, ironicProxy
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// provisioning.metal3.io is a singleton
-	// Note: this check is here to make sure that the early startup configuration
-	// is correct. For day 2 operatations the webhook will validate this.
-	if req.Name != metal3iov1alpha1.ProvisioningSingletonName {
-		klog.Info("ignoring invalid CR", "name", req.Name)
-		return ctrl.Result{}, nil
-	}
-
 	// Make sure ClusterOperator exists
 	err := r.ensureClusterOperator()
 	if err != nil {
@@ -603,14 +599,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Check the Platform Type to determine the state of the CO
 	enabled := IsEnabled(r.EnabledFeatures)
-	if !enabled {
-		//Set ClusterOperator status to disabled=true, available=true
-		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
-		if err != nil {
-			return fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %w", clusterOperatorName, err)
-		}
-		return nil
-	}
 
 	// If Platform is BareMetal, we could still be missing the Provisioning CR
 	if enabled {
@@ -630,8 +618,17 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	klog.InfoS("Network stack calculation", "NetworkStack", r.NetworkStack)
 
+	provisioningFilter := predicate.NewPredicateFuncs(func(object client.Object) bool {
+		if object.GetName() == metal3iov1alpha1.ProvisioningSingletonName {
+			return true
+		}
+		klog.Info("ignoring provisioning config with unexpected name", "name", object.GetName(), "expected-name", metal3iov1alpha1.ProvisioningSingletonName)
+		return false
+	})
+	clusterOperatorFilter := predicate.NewPredicateFuncs(func(object client.Object) bool { return object.GetName() == clusterOperatorName })
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&metal3iov1alpha1.Provisioning{}).
+		For(&metal3iov1alpha1.Provisioning{}, builder.WithPredicates(provisioningFilter)).
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
@@ -639,5 +636,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&osconfigv1.ClusterOperator{}).
 		Owns(&osconfigv1.Proxy{}).
 		Owns(&machinev1beta1.Machine{}).
+		Watches(&source.Kind{Type: &osconfigv1.ClusterOperator{}}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(clusterOperatorFilter)).
 		Complete(r)
 }
