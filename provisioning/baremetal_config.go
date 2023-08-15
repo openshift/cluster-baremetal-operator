@@ -92,16 +92,8 @@ func getIronicInspectorEndpoint() *string {
 }
 
 func getControlPlaneEndpoints(info *ProvisioningInfo) (ironicEndpoint string, inspectorEndpoint string) {
-	ironicPort := baremetalIronicPort
-	inspectorPort := baremetalIronicInspectorPort
-	if UseIronicProxy(&info.ProvConfig.Spec) {
-		// Direct access to real services behind the proxy.
-		ironicPort = ironicPrivatePort
-		inspectorPort = inspectorPrivatePort
-	}
-
-	ironicEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, ironicPort, baremetalIronicEndpointSubpath)
-	inspectorEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, inspectorPort, baremetalIronicEndpointSubpath)
+	ironicEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, baremetalIronicPort, baremetalIronicEndpointSubpath)
+	inspectorEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
 	return
 }
 
