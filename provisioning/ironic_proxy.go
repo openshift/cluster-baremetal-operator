@@ -152,34 +152,8 @@ func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateS
 				"node-role.kubernetes.io/master": "",
 			},
 			Volumes: []corev1.Volume{
-				{
-					Name: ironicTlsVolume,
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: tlsSecretName,
-						},
-					},
-				},
-				{
-					Name: inspectorTlsVolume,
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: tlsSecretName,
-						},
-					},
-				},
-				{
-					Name: "trusted-ca",
-					VolumeSource: corev1.VolumeSource{
-						ConfigMap: &corev1.ConfigMapVolumeSource{
-							Items: []corev1.KeyToPath{{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}},
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: externalTrustBundleConfigMapName,
-							},
-							Optional: pointer.BoolPtr(true),
-						},
-					},
-				},
+				serviceTlsVolume(),
+				trustedCAVolume(),
 			},
 			Containers:        injectProxyAndCA(containers, info.Proxy),
 			HostNetwork:       true,

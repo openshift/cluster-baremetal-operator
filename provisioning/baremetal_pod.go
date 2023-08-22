@@ -46,15 +46,12 @@ const (
 	metal3TlsRootDir                 = "/certs"
 	ironicCredentialsVolume          = "metal3-ironic-basic-auth"
 	inspectorCredentialsVolume       = "metal3-inspector-basic-auth"
-	ironicTlsVolume                  = "metal3-ironic-tls"
-	inspectorTlsVolume               = "metal3-inspector-tls"
-	vmediaTlsVolume                  = "metal3-vmedia-tls"
+	stateServiceTlsVolume            = "metal3-state-tls"
 	ironicHtpasswdEnvVar             = "IRONIC_HTPASSWD"    // #nosec
 	inspectorHtpasswdEnvVar          = "INSPECTOR_HTPASSWD" // #nosec
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
 	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
 	ironicKernelParamsEnvVar         = "IRONIC_KERNEL_PARAMS"
-	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
 	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
 	externalIpEnvVar                 = "IRONIC_EXTERNAL_IP"
 	externalUrlEnvVar                = "IRONIC_EXTERNAL_URL_V6"
@@ -68,6 +65,7 @@ const (
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
 	pullSecretEnvVar                 = "IRONIC_AGENT_PULL_SECRET" // #nosec
+	trustedCAMountPath               = "/etc/pki/ca-trust/extracted/pem"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -95,19 +93,19 @@ var inspectorCredentialsMount = corev1.VolumeMount{
 }
 
 var ironicTlsMount = corev1.VolumeMount{
-	Name:      ironicTlsVolume,
+	Name:      stateServiceTlsVolume,
 	MountPath: metal3TlsRootDir + "/ironic",
 	ReadOnly:  true,
 }
 
 var inspectorTlsMount = corev1.VolumeMount{
-	Name:      inspectorTlsVolume,
+	Name:      stateServiceTlsVolume,
 	MountPath: metal3TlsRootDir + "/ironic-inspector",
 	ReadOnly:  true,
 }
 
 var vmediaTlsMount = corev1.VolumeMount{
-	Name:      vmediaTlsVolume,
+	Name:      stateServiceTlsVolume,
 	MountPath: metal3TlsRootDir + "/vmedia",
 	ReadOnly:  true,
 }
@@ -134,6 +132,17 @@ func trustedCAVolume() corev1.Volume {
 					Name: externalTrustBundleConfigMapName,
 				},
 				Optional: pointer.BoolPtr(true),
+			},
+		},
+	}
+}
+
+func serviceTlsVolume() corev1.Volume {
+	return corev1.Volume{
+		Name: stateServiceTlsVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: stateServiceSecretName,
 			},
 		},
 	}
@@ -182,30 +191,7 @@ var metal3Volumes = []corev1.Volume{
 		},
 	},
 	trustedCAVolume(),
-	{
-		Name: ironicTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
-			},
-		},
-	},
-	{
-		Name: inspectorTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
-			},
-		},
-	},
-	{
-		Name: vmediaTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
-			},
-		},
-	},
+	serviceTlsVolume(),
 }
 
 func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
@@ -783,7 +769,7 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 
 func mountsWithTrustedCA(mounts []corev1.VolumeMount) []corev1.VolumeMount {
 	mounts = append(mounts, corev1.VolumeMount{
-		MountPath: "/etc/pki/ca-trust/extracted/pem",
+		MountPath: trustedCAMountPath,
 		Name:      "trusted-ca",
 		ReadOnly:  true,
 	})

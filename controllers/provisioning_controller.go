@@ -300,8 +300,8 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	for _, ensureResource := range []ensureFunc{
 		provisioning.EnsureAllSecrets,
 		provisioning.EnsureMetal3Deployment,
-		provisioning.EnsureBaremetalOperatorDeployment,
 		provisioning.EnsureMetal3StateService,
+		provisioning.EnsureBaremetalOperatorDeployment,
 		provisioning.EnsureImageCache,
 		provisioning.EnsureBaremetalOperatorWebhook,
 		provisioning.EnsureImageCustomizationService,

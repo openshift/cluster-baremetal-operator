@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	stateService        = "metal3-state"
-	httpPortName        = "http"
-	vmediaHttpsPortName = "vmedia-https"
+	stateService           = "metal3-state"
+	httpPortName           = "http"
+	vmediaHttpsPortName    = "vmedia-https"
+	stateServiceSecretName = "metal3-state-tls" // #nosec
 )
 
 func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
@@ -49,6 +50,9 @@ func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      stateService,
 			Namespace: info.Namespace,
+			Annotations: map[string]string{
+				"service.beta.openshift.io/serving-cert-secret-name": stateServiceSecretName,
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,

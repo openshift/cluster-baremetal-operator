@@ -29,6 +29,7 @@ const (
 	baremetalWebhookSecretName    = "baremetal-operator-webhook-server-cert"
 	baremetalWebhookLabelName     = "baremetal.openshift.io/metal3-validating-webhook"
 	baremetalWebhookServiceLabel  = "metal3-validating-webhook"
+	ironicCertEnvVar              = "IRONIC_CACERT_FILE"
 )
 
 var baremetalWebhookCertMount = corev1.VolumeMount{
@@ -73,22 +74,6 @@ var bmoVolumes = []corev1.Volume{
 			},
 		},
 	},
-	{
-		Name: ironicTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
-			},
-		},
-	},
-	{
-		Name: inspectorTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
-			},
-		},
-	},
 }
 
 func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container, error) {
@@ -121,7 +106,6 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
 			inspectorCredentialsMount,
-			ironicTlsMount,
 			baremetalWebhookCertMount,
 		},
 		Env: []corev1.EnvVar{
@@ -146,13 +130,10 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 				Name:  "OPERATOR_NAME",
 				Value: "baremetal-operator",
 			},
+			// FIXME(dtantsur): this should not be required: we mount the OCP CA...
 			{
 				Name:  ironicCertEnvVar,
-				Value: metal3TlsRootDir + "/ironic/" + corev1.TLSCertKey,
-			},
-			{
-				Name:  ironicInsecureEnvVar,
-				Value: "true",
+				Value: trustedCAMountPath + "/" + corev1.TLSCertKey,
 			},
 			buildEnvVar(deployKernelUrl, &info.ProvConfig.Spec),
 			{
