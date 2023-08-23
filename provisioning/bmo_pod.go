@@ -222,6 +222,8 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 		},
 	}
 
+	containers := injectProxyAndCA([]corev1.Container{container}, info.Proxy)
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: podTemplateAnnotations,
@@ -229,7 +231,7 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 		},
 		Spec: corev1.PodSpec{
 			Volumes:            bmoVolumes,
-			Containers:         []corev1.Container{container},
+			Containers:         containers,
 			HostNetwork:        false,
 			DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName:  "system-node-critical",
