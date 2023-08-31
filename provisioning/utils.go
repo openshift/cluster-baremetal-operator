@@ -68,10 +68,19 @@ func getServerInternalIP(osclient osclientset.Interface) (string, error) {
 	// FIXME(dtantsur): handle the new APIServerInternalIPs field and the dualstack case.
 	switch infra.Status.PlatformStatus.Type {
 	case osconfigv1.BareMetalPlatformType:
+		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.BareMetal == nil {
+			return "", nil
+		}
 		return infra.Status.PlatformStatus.BareMetal.APIServerInternalIP, nil
 	case osconfigv1.OpenStackPlatformType:
+		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.OpenStack == nil {
+			return "", nil
+		}
 		return infra.Status.PlatformStatus.OpenStack.APIServerInternalIP, nil
 	case osconfigv1.VSpherePlatformType:
+		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.VSphere == nil {
+			return "", nil
+		}
 		return infra.Status.PlatformStatus.VSphere.APIServerInternalIP, nil
 	case osconfigv1.AWSPlatformType:
 		return "", nil
