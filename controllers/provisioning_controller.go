@@ -40,6 +40,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
+	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -625,7 +626,11 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		klog.Info("ignoring provisioning config with unexpected name", "name", object.GetName(), "expected-name", metal3iov1alpha1.ProvisioningSingletonName)
 		return false
 	})
-	clusterOperatorFilter := predicate.NewPredicateFuncs(func(object client.Object) bool { return object.GetName() == clusterOperatorName })
+
+	clusterOperatorsWatched := []string{clusterOperatorName, "service-ca"}
+	clusterOperatorFilter := predicate.NewPredicateFuncs(func(object client.Object) bool {
+		return slices.Contains(clusterOperatorsWatched, object.GetName())
+	})
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}, builder.WithPredicates(provisioningFilter)).
