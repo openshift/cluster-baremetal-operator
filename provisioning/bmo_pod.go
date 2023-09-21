@@ -105,11 +105,6 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		Image: info.Images.BaremetalOperator,
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          "metrics",
-				ContainerPort: 60000,
-				HostPort:      60000,
-			},
-			{
 				Name:          "webhook-server",
 				HostPort:      int32(webhookPort),
 				ContainerPort: int32(webhookPort),
