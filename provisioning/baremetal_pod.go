@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -279,34 +278,26 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 	}
 }
 
-func setIronicExternalUrl(client kubernetes.Interface, config *metal3iov1alpha1.ProvisioningSpec, namespace string) corev1.EnvVar {
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
-		ipv6PodIP, err := GetPodIP(client.CoreV1(), namespace, NetworkStackV6)
-
-		if err != nil {
-			return corev1.EnvVar{
-				Name: externalUrlEnvVar,
-			}
-		}
-
-		// protocol, host, port
-		urlTemplate := "%s://[%s]:%s"
-
-		if config.DisableVirtualMediaTLS {
-			return corev1.EnvVar{
-				Name:  externalUrlEnvVar,
-				Value: fmt.Sprintf(urlTemplate, "http", ipv6PodIP, baremetalHttpPort),
-			}
-		} else {
-			return corev1.EnvVar{
-				Name:  externalUrlEnvVar,
-				Value: fmt.Sprintf(urlTemplate, "https", ipv6PodIP, baremetalVmediaHttpsPort),
-			}
+func setIronicExternalUrl(config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
+		return corev1.EnvVar{
+			Name: externalUrlEnvVar,
 		}
 	}
 
-	return corev1.EnvVar{
-		Name: externalUrlEnvVar,
+	// protocol, host, port
+	urlTemplate := "%s://(POD_IP):%s"
+
+	if config.DisableVirtualMediaTLS {
+		return corev1.EnvVar{
+			Name:  externalUrlEnvVar,
+			Value: fmt.Sprintf(urlTemplate, "http", baremetalHttpPort),
+		}
+	} else {
+		return corev1.EnvVar{
+			Name:  externalUrlEnvVar,
+			Value: fmt.Sprintf(urlTemplate, "https", baremetalVmediaHttpsPort),
+		}
 	}
 }
 
@@ -401,7 +392,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 
 func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 	containers := []corev1.Container{
-		createContainerMetal3BaremetalOperator(info.Client, info.Images, &info.ProvConfig.Spec, info.BaremetalWebhookEnabled, info.Namespace),
+		createContainerMetal3BaremetalOperator(info.Images, &info.ProvConfig.Spec, info.BaremetalWebhookEnabled),
 		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3Ironic(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3RamdiskLogs(info.Images),
@@ -444,7 +435,7 @@ func buildSSHKeyEnvVar(sshKey string) corev1.EnvVar {
 	return corev1.EnvVar{Name: sshKeyEnvVar, Value: sshKey}
 }
 
-func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images *Images, config *metal3iov1alpha1.ProvisioningSpec, enableWebhook bool, namespace string) corev1.Container {
+func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1alpha1.ProvisioningSpec, enableWebhook bool) corev1.Container {
 	webhookPort, _ := strconv.ParseInt(baremetalWebhookPort, 10, 32) // #nosec
 	container := corev1.Container{
 		Name:  "metal3-baremetal-operator",
@@ -512,7 +503,15 @@ func createContainerMetal3BaremetalOperator(client kubernetes.Interface, images 
 				Value: metal3AuthRootDir,
 			},
 			setIronicExternalIp(externalIpEnvVar, config),
-			setIronicExternalUrl(client, config, namespace),
+			setIronicExternalUrl(config),
+			{
+				Name: "POD_IPS",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.podIPs",
+					},
+				},
+			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
