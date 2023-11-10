@@ -268,8 +268,7 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 }
 
 func setIronicExternalUrl(info *ProvisioningInfo) (corev1.EnvVar, error) {
-	ironicIPs, err := getServerInternalIPs(info.OSClient)
-
+	ironicIPs, err := GetRealIronicIPs(info)
 	if err != nil {
 		return corev1.EnvVar{}, fmt.Errorf("Failed to get Ironic IP when setting external url: %w", err)
 	}

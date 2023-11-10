@@ -107,12 +107,13 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 }
 
 func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSpec, error) {
-	ironicIPs, _, err := GetIronicIPs(*info)
+	ironicIPs, err := getPodIPs(info.Client.CoreV1(), info.Namespace)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot figure out the upstream IP for ironic proxy")
 	}
 
 	containers := []corev1.Container{
+		// Even in a dual-stack environment, we don't really care which IP address to use since both are accessible internally.
 		createContainerIronicProxy(ironicIPs[0], info.Images),
 	}
 

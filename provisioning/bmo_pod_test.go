@@ -83,12 +83,22 @@ func TestNewBMOContainers(t *testing.T) {
 		expectedContainers []corev1.Container
 	}{
 		{
-			name:   "ManagedSpec",
+			name:   "ManagedSpec with IPv4",
 			config: managedProvisioning().build(),
 			expectedContainers: []corev1.Container{
 				withEnv(
 					containers["metal3-baremetal-operator"],
-					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
+				),
+			},
+			sshkey: "sshkey",
+		},
+		{
+			name:   "ManagedSpec with IPv6",
+			config: managedIPv6Provisioning().build(),
+			expectedContainers: []corev1.Container{
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("IRONIC_EXTERNAL_URL_V6", fmt.Sprintf("https://[%s]:6183", testProvisioningIPv6)),
 				),
 			},
 			sshkey: "sshkey",
