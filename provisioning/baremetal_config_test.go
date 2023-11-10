@@ -115,6 +115,7 @@ type provisioningBuilder struct {
 }
 
 const testProvisioningIP = "172.30.20.3"
+const testProvisioningIPv6 = "fd2e:6f44:5dd8:b856::2"
 
 func managedProvisioning() *provisioningBuilder {
 	return &provisioningBuilder{
@@ -134,7 +135,7 @@ func managedIPv6Provisioning() *provisioningBuilder {
 	return &provisioningBuilder{
 		metal3iov1alpha1.ProvisioningSpec{
 			ProvisioningInterface:     "eth0",
-			ProvisioningIP:            "fd2e:6f44:5dd8:b856::2",
+			ProvisioningIP:            testProvisioningIPv6,
 			ProvisioningNetworkCIDR:   "fd2e:6f44:5dd8:b856::0/80",
 			ProvisioningMacAddresses:  []string{"34:b3:2d:81:f8:fb", "34:b3:2d:81:f8:fc", "34:b3:2d:81:f8:fd"},
 			ProvisioningDHCPRange:     "fd2e:6f44:5dd8:b856::10,fd2e:6f44:5dd8:b856::ff",
