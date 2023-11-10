@@ -29,11 +29,11 @@ test: generate lint manifests
 unit: test
 
 # Build cluster-baremetal-operator binary
-cluster-baremetal-operator: generate lint
+cluster-baremetal-operator: generate
 	go build -o bin/cluster-baremetal-operator main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate lint manifests
+run: generate manifests
 	go run ./main.go -images-json $(IMAGES_JSON)
 
 # Install CRDs into a cluster
@@ -111,7 +111,6 @@ generate:
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=cluster-baremetal-operator webhook paths=./... output:crd:artifacts:config=config/crd/bases
 	sed -i '/^    controller-gen.kubebuilder.io\/version: (devel)/d' config/crd/bases/*
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
-	$(GOLANGCI_LINT) run --fix
 
 # Build the docker image
 docker-build: test
