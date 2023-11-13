@@ -48,7 +48,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -635,7 +634,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Watch Secret openshift-config/pull-secret. If this secret changes, we must requeue the provisioning Singleton,
 	// if it exists.
-	watchOCPConfigPullSecret := func(object client.Object) []reconcile.Request {
+	watchOCPConfigPullSecret := func(ctx context.Context, object client.Object) []reconcile.Request {
 		prov, err := r.readProvisioningCR(ctx)
 		// readProvisioningCR can return nil, nil upon IsNotFound, account for this as well.
 		if err != nil || prov == nil {
@@ -664,7 +663,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&osconfigv1.ClusterOperator{}).
 		Owns(&osconfigv1.Proxy{}).
 		Owns(&machinev1beta1.Machine{}).
-		Watches(&source.Kind{Type: &osconfigv1.ClusterOperator{}}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(clusterOperatorFilter)).
-		Watches(&source.Kind{Type: &corev1.Secret{}}, handler.EnqueueRequestsFromMapFunc(watchOCPConfigPullSecret), builder.WithPredicates(secretFilter)).
+		Watches(&osconfigv1.ClusterOperator{}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(clusterOperatorFilter)).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(watchOCPConfigPullSecret), builder.WithPredicates(secretFilter)).
 		Complete(r)
 }
