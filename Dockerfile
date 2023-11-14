@@ -3,7 +3,7 @@
 FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.20-openshift-4.15 AS builder
 WORKDIR /go/src/github.com/openshift/cluster-baremetal-operator
 COPY . .
-RUN make cluster-baremetal-operator
+RUN make build
 
 FROM registry.ci.openshift.org/ocp/4.15:base
 COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/bin/cluster-baremetal-operator /usr/bin/cluster-baremetal-operator
