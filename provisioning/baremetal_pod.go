@@ -827,6 +827,7 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) *corev1.PodTemplateSpec {
 	initContainers := newMetal3InitContainers(info)
 	containers := newMetal3Containers(info)
+
 	tolerations := []corev1.Toleration{
 		{
 			Key:      "node-role.kubernetes.io/master",
