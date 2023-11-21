@@ -215,7 +215,8 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE", Value: "Never"},
 				{Name: "METAL3_AUTH_ROOT_DIR", Value: "/auth"},
 				{Name: "IRONIC_EXTERNAL_IP", Value: ""},
-				{Name: "IRONIC_EXTERNAL_URL_V6", Value: ""},
+				{Name: "IRONIC_EXTERNAL_URL_V6_PROTO", Value: ""},
+				{Name: "IRONIC_EXTERNAL_URL_V6_HOSTS", Value: ""},
 			},
 		},
 		"metal3-httpd": {
@@ -360,7 +361,8 @@ func TestNewMetal3Containers(t *testing.T) {
 				withEnv(
 					containers["metal3-baremetal-operator"],
 					envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"),
-					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
+					envWithValue("IRONIC_EXTERNAL_URL_V6_PROTO", "https"),
+					envWithFieldValue("IRONIC_EXTERNAL_URL_V6_HOSTS", "status.podIPs"),
 				),
 				withEnv(
 					containers["metal3-httpd"],
@@ -394,7 +396,11 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpec",
 			config: disabledProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				containers["metal3-baremetal-operator"],
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("IRONIC_EXTERNAL_URL_V6_PROTO", "https"),
+					envWithFieldValue("IRONIC_EXTERNAL_URL_V6_HOSTS", "status.podIPs"),
+				),
 				withEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
@@ -419,7 +425,11 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpecWithoutProvisioningIP",
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
-				containers["metal3-baremetal-operator"],
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("IRONIC_EXTERNAL_URL_V6_PROTO", "https"),
+					envWithFieldValue("IRONIC_EXTERNAL_URL_V6_HOSTS", "status.podIPs"),
+				),
 				withEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
