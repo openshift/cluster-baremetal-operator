@@ -288,8 +288,12 @@ func TestNewMetal3Containers(t *testing.T) {
 				new = append(new, existing)
 			}
 		}
-		for _, value := range newMap {
-			new = append(new, value)
+		// Make sure new variables also end up in the final list.
+		// Append them to the end in the same order.
+		for _, value := range ne {
+			if _, exist := newMap[value.Name]; exist {
+				new = append(new, value)
+			}
 		}
 		c.Env = new
 		return c
