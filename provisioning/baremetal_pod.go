@@ -56,7 +56,6 @@ const (
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
 	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
 	externalIpEnvVar                 = "IRONIC_EXTERNAL_IP"
-	externalUrlEnvVar                = "IRONIC_EXTERNAL_URL_V6"
 	ironicProxyEnvVar                = "IRONIC_REVERSE_PROXY_SETUP"
 	inspectorProxyEnvVar             = "INSPECTOR_REVERSE_PROXY_SETUP"
 	ironicPrivatePortEnvVar          = "IRONIC_PRIVATE_PORT"
@@ -279,37 +278,34 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 }
 
 func setIronicExternalUrl(config *metal3iov1alpha1.ProvisioningSpec) []corev1.EnvVar {
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
-		envVars := []corev1.EnvVar{
-			setIronicExternalIp(externalIpEnvVar, config),
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && !config.VirtualMediaViaExternalNetwork {
+		return []corev1.EnvVar{
+			{
+				Name: "IRONIC_EXTERNAL_URL_V6_PROTO",
+			},
+			{
+				Name: "IRONIC_EXTERNAL_URL_V6_HOSTS",
+			},
 		}
+	}
 
-		// protocol, host, port
-		urlTemplate := "%s://$(%s):%s"
-
-		if config.DisableVirtualMediaTLS {
-			envVars = append(envVars,
-				corev1.EnvVar{
-					Name:  externalUrlEnvVar,
-					Value: fmt.Sprintf(urlTemplate, "http", externalIpEnvVar, baremetalHttpPort),
-				})
-		} else {
-			envVars = append(envVars,
-				corev1.EnvVar{
-					Name:  externalUrlEnvVar,
-					Value: fmt.Sprintf(urlTemplate, "https", externalIpEnvVar, baremetalVmediaHttpsPort),
-				})
-		}
-
-		return envVars
+	proto := "https"
+	if config.DisableVirtualMediaTLS {
+		proto = "http"
 	}
 
 	return []corev1.EnvVar{
 		{
-			Name: externalIpEnvVar,
+			Name:  "IRONIC_EXTERNAL_URL_V6_PROTO",
+			Value: proto,
 		},
 		{
-			Name: externalUrlEnvVar,
+			Name: "IRONIC_EXTERNAL_URL_V6_HOSTS",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "status.podIPs",
+				},
+			},
 		},
 	}
 }
@@ -515,6 +511,7 @@ func createContainerMetal3BaremetalOperator(images *Images, config *metal3iov1al
 				Name:  "METAL3_AUTH_ROOT_DIR",
 				Value: metal3AuthRootDir,
 			},
+			setIronicExternalIp(externalIpEnvVar, config),
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
