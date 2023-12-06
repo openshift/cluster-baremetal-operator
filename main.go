@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"os"
 
@@ -30,6 +31,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// +kubebuilder:scaffold:imports
 
@@ -81,14 +83,22 @@ func main() {
 	}
 
 	config := ctrl.GetConfigOrDie()
+
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 9443,
+			TLSOpts: []func(*tls.Config){
+				func(t *tls.Config) {
+					t.MinVersion = tls.VersionTLS12
+				},
+			},
+			CertDir: "/etc/cluster-baremetal-operator/tls",
+		}),
 		NewCache: cache.MultiNamespacedCacheBuilder(
 			[]string{controllers.ComponentNamespace, provisioning.OpenshiftConfigNamespace}),
 		LeaderElection: enableLeaderElection,
-		Port:           9443,
-		CertDir:        "/etc/cluster-baremetal-operator/tls",
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start manager")
