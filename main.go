@@ -98,7 +98,9 @@ func main() {
 		}),
 		NewCache: cache.MultiNamespacedCacheBuilder(
 			[]string{controllers.ComponentNamespace, provisioning.OpenshiftConfigNamespace}),
-		LeaderElection: enableLeaderElection,
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionID:        "cluster-baremetal-operator",
+		LeaderElectionNamespace: controllers.ComponentNamespace,
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start manager")
