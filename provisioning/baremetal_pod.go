@@ -354,6 +354,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 		Command:         []string{command},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
@@ -457,6 +458,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		Command: []string{"/bin/rundnsmasq"},
@@ -530,6 +532,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		Command:      []string{"/bin/runhttpd"},
@@ -597,6 +600,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		Command:      []string{"/bin/runironic"},
@@ -709,6 +713,7 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		Command:         []string{"/refresh-static-ip"},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for mounting /proc to set the addr_gen_mode
 			Privileged: pointer.BoolPtr(true),
 		},
 		Env: []corev1.EnvVar{

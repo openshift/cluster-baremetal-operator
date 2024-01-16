@@ -98,6 +98,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		// TODO: This container does not have to run in privileged mode when the i-c-c has
 		// its own volume and does not have to use the imageCacheSharedVolume
 		SecurityContext: &corev1.SecurityContext{
+			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
 		VolumeMounts: []corev1.VolumeMount{
