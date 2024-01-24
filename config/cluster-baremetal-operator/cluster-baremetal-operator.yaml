@@ -44,6 +44,7 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
         - name: images
           mountPath: /etc/cluster-baremetal-operator/images

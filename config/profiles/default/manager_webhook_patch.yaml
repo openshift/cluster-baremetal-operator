@@ -15,6 +15,7 @@ spec:
         - containerPort: 9443
           name: webhook-server
           protocol: TCP
+        terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
         - mountPath: /etc/cluster-baremetal-operator/tls
           name: cert
