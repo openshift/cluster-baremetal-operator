@@ -219,6 +219,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_INSPECTOR_PRIVATE_PORT", Value: "unix"},
 				{Name: "IRONIC_LISTEN_PORT", Value: "6385"},
 				{Name: "IRONIC_INSPECTOR_LISTEN_PORT", Value: "5050"},
+				{Name: "USE_IRONIC_INSPECTOR", Value: "true"},
 			},
 		},
 		"metal3-ironic": {
@@ -236,6 +237,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_EXTERNAL_IP"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
 				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
+				{Name: "USE_IRONIC_INSPECTOR", Value: "true"},
 			},
 		},
 		"metal3-ramdisk-logs": {
@@ -252,6 +254,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+				{Name: "USE_IRONIC_INSPECTOR", Value: "true"},
 			},
 		},
 		"metal3-static-ip-manager": {

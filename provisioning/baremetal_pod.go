@@ -68,6 +68,7 @@ const (
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
 	pullSecretEnvVar                 = "IRONIC_AGENT_PULL_SECRET" // #nosec
+	forceInspectorEnvVar             = "USE_IRONIC_INSPECTOR"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -565,6 +566,11 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 				Name:  inspectorListenPortEnvVar,
 				Value: fmt.Sprint(inspectorPort),
 			},
+			// TODO(dtantsur): remove when removing inspector
+			{
+				Name:  forceInspectorEnvVar,
+				Value: "true",
+			},
 		},
 		Ports: ports,
 		Resources: corev1.ResourceRequirements{
@@ -627,6 +633,11 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
+			// TODO(dtantsur): remove when removing inspector
+			{
+				Name:  forceInspectorEnvVar,
+				Value: "true",
+			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -694,6 +705,10 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			buildEnvVar(provisioningMacAddresses, config),
+			{
+				Name:  forceInspectorEnvVar,
+				Value: "true",
+			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
