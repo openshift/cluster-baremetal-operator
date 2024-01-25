@@ -45,6 +45,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		StaticIpManager:     expectedIronicStaticIpManager,
 	}
 	ironicIP := "192.168.0.2"
+	ironicIP6 := "2001:db8::2"
 
 	container1 := corev1.Container{
 		Name: "image-customization-controller",
@@ -54,8 +55,8 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2,192.168.0.2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
-			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2"},
-			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: "https://192.168.0.2"},
+			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
+			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: "https://192.168.0.2:5050"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
@@ -69,8 +70,26 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
-			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2"},
-			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: "https://192.168.0.3"},
+			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
+			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: "https://192.168.0.3:5050"},
+			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
+			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
+			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
+			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
+			pullSecret,
+		},
+	}
+
+	container3 := corev1.Container{
+		Name: "image-customization-controller",
+		Env: []corev1.EnvVar{
+			{Name: "HTTP_PROXY", Value: "https://172.2.0.1:3128"},
+			{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"},
+			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2,2001:db8::2"},
+			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
+			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385,https://[2001:db8::2]:6385"},
+			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: ""},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
@@ -81,21 +100,30 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 
 	tCases := []struct {
 		name              string
-		inspectorIP       string
+		ironicIPs         []string
+		inspectorIPs      []string
 		proxy             *v1.Proxy
 		expectedContainer corev1.Container
 	}{
 		{
-			name:              "image customization containe with proxy",
-			inspectorIP:       ironicIP,
+			name:              "image customization container with proxy",
+			ironicIPs:         []string{ironicIP},
+			inspectorIPs:      []string{ironicIP},
 			proxy:             testProxy,
 			expectedContainer: container1,
 		},
 		{
-			name:              "image customization containe without proxy",
-			inspectorIP:       "192.168.0.3",
+			name:              "image customization container without proxy",
+			ironicIPs:         []string{ironicIP},
+			inspectorIPs:      []string{"192.168.0.3"},
 			proxy:             nil,
 			expectedContainer: container2,
+		},
+		{
+			name:              "image customization container with proxy",
+			ironicIPs:         []string{ironicIP, ironicIP6},
+			proxy:             testProxy,
+			expectedContainer: container3,
 		},
 	}
 	for _, tc := range tCases {
@@ -106,7 +134,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 				NetworkStack: NetworkStackV4,
 				Proxy:        tc.proxy,
 			}
-			actualContainer := createImageCustomizationContainer(&images, info, []string{ironicIP}, []string{tc.inspectorIP})
+			actualContainer := createImageCustomizationContainer(&images, info, tc.ironicIPs, tc.inspectorIPs)
 			for e := range actualContainer.Env {
 				assert.EqualValues(t, tc.expectedContainer.Env[e], actualContainer.Env[e])
 			}
@@ -116,25 +144,29 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 
 func TestGetUrlFromIP(t *testing.T) {
 	tests := []struct {
-		ipAddr string
+		ipAddr []string
 		want   string
 	}{
 		{
-			ipAddr: "0:0:0:0:0:0:0:1",
-			want:   "https://[0:0:0:0:0:0:0:1]",
+			ipAddr: []string{"0:0:0:0:0:0:0:1"},
+			want:   "https://[0:0:0:0:0:0:0:1]:6385",
 		},
 		{
-			ipAddr: "127.0.0.1",
-			want:   "https://127.0.0.1",
+			ipAddr: []string{"127.0.0.1"},
+			want:   "https://127.0.0.1:6385",
 		},
 		{
-			ipAddr: "",
+			ipAddr: []string{"2001:db8::1", "192.0.2.1"},
+			want:   "https://[2001:db8::1]:6385,https://192.0.2.1:6385",
+		},
+		{
+			ipAddr: nil,
 			want:   "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
-			if got := getUrlFromIP(tt.ipAddr); got != tt.want {
+			if got := getUrlFromIP(tt.ipAddr, 6385); got != tt.want {
 				t.Errorf("getUrlFromIP() = %v, want %v", got, tt.want)
 			}
 		})

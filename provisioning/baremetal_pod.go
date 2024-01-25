@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -809,7 +810,7 @@ func injectProxyAndCA(containers []corev1.Container, proxy *configv1.Proxy) []co
 	var injectedContainers []corev1.Container
 
 	for _, container := range containers {
-		container.Env = envWithProxy(proxy, container.Env, "")
+		container.Env = envWithProxy(proxy, container.Env, nil)
 		container.VolumeMounts = mountsWithTrustedCA(container.VolumeMounts)
 		injectedContainers = append(injectedContainers, container)
 	}
@@ -817,7 +818,7 @@ func injectProxyAndCA(containers []corev1.Container, proxy *configv1.Proxy) []co
 	return injectedContainers
 }
 
-func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar, noproxy string) []corev1.EnvVar {
+func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar, noproxy []string) []corev1.EnvVar {
 	if proxy == nil {
 		return envVars
 	}
@@ -834,10 +835,10 @@ func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar, noproxy string
 			Value: proxy.Status.HTTPSProxy,
 		})
 	}
-	if proxy.Status.NoProxy != "" || noproxy != "" {
+	if proxy.Status.NoProxy != "" || noproxy != nil {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  "NO_PROXY",
-			Value: proxy.Status.NoProxy + "," + noproxy,
+			Value: proxy.Status.NoProxy + "," + strings.Join(noproxy, ","),
 		})
 	}
 
