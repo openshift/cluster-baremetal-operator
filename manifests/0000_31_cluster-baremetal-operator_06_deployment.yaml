@@ -52,6 +52,7 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
         - mountPath: /etc/cluster-baremetal-operator/tls
           name: cert
@@ -78,6 +79,7 @@ spec:
           requests:
             cpu: 10m
             memory: 20Mi
+        terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
         - mountPath: /etc/baremetal-kube-rbac-proxy
           name: config

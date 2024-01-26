@@ -39,6 +39,7 @@ spec:
           requests:
             memory: 20Mi
             cpu: 10m
+        terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
         - name: config
           mountPath: /etc/baremetal-kube-rbac-proxy
