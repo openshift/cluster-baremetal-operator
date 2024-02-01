@@ -35,6 +35,9 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
 		},
 	}
 	return container

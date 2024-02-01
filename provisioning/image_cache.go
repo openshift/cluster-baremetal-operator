@@ -95,6 +95,9 @@ func createContainerImageCache(images *Images) corev1.Container {
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
 		},
 		Command:      []string{"/bin/runhttpd"},
 		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},

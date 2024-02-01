@@ -356,6 +356,9 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
 		},
 		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Env:          env,
@@ -377,7 +380,8 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			Capabilities: &corev1.Capabilities{
-				Add: []corev1.Capability{"NET_ADMIN"},
+				Drop: []corev1.Capability{"ALL"},
+				Add:  []corev1.Capability{"NET_ADMIN"},
 			},
 		},
 		Env: []corev1.EnvVar{
@@ -460,6 +464,14 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+				Add: []corev1.Capability{
+					"NET_ADMIN",
+					"NET_RAW",
+					"NET_BIND_SERVICE",
+				},
+			},
 		},
 		Command: []string{"/bin/rundnsmasq"},
 		VolumeMounts: []corev1.VolumeMount{
@@ -534,6 +546,9 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
 		},
 		Command:      []string{"/bin/runhttpd"},
 		VolumeMounts: volumes,
@@ -602,6 +617,9 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
 		},
 		Command:      []string{"/bin/runironic"},
 		VolumeMounts: volumes,
@@ -715,6 +733,13 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for mounting /proc to set the addr_gen_mode
 			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+				Add: []corev1.Capability{
+					"NET_ADMIN",
+					"FOWNER", // Needed for setting the addr_gen_mode
+				},
+			},
 		},
 		Env: []corev1.EnvVar{
 			buildEnvVar(provisioningIP, config),
