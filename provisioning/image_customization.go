@@ -18,6 +18,7 @@ package provisioning
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -70,21 +71,21 @@ func imageRegistriesVolume() corev1.Volume {
 	}
 }
 
-func getUrlFromIP(ipAddr string) string {
-	if strings.Contains(ipAddr, ":") {
-		// This is an IPv6 addr
-		return "https://" + fmt.Sprintf("[%s]", ipAddr)
+func getUrlFromIP(ipAddrs []string, port int) string {
+	portString := fmt.Sprint(port)
+	var result []string
+	for _, ipAddr := range ipAddrs {
+		if ipAddr != "" {
+			result = append(result,
+				"https://"+net.JoinHostPort(ipAddr, portString))
+		}
 	}
-	if ipAddr != "" {
-		// This is an IPv4 addr
-		return "https://" + ipAddr
-	} else {
-		return ""
-	}
+	return strings.Join(result, ",")
 }
 
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIPs []string, inspectorIPs []string) corev1.Container {
-	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{}, ironicIPs[0]+","+inspectorIPs[0])
+	noProxy := append(ironicIPs, inspectorIPs...)
+	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{}, noProxy)
 
 	container := corev1.Container{
 		Name:  "machine-image-customization-controller",
@@ -116,11 +117,12 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			},
 			corev1.EnvVar{
 				Name:  ironicBaseUrl,
-				Value: getUrlFromIP(ironicIPs[0]),
+				Value: getUrlFromIP(ironicIPs, baremetalIronicPort),
 			},
 			corev1.EnvVar{
-				Name:  ironicInspectorBaseUrl,
-				Value: getUrlFromIP(inspectorIPs[0]),
+				Name: ironicInspectorBaseUrl,
+				// TODO(dtantsur): when inspector is gone, we may be able to stop passing this URL
+				Value: getUrlFromIP(inspectorIPs, baremetalIronicInspectorPort),
 			},
 			corev1.EnvVar{
 				Name:  ironicAgentImage,
