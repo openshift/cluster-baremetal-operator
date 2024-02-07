@@ -593,25 +593,8 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	ctx := context.Background()
-	err := r.ensureClusterOperator()
-	if err != nil {
-		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
-	}
 
-	// Check the Platform Type to determine the state of the CO
-	enabled := IsEnabled(r.EnabledFeatures)
-
-	// If Platform is BareMetal, we could still be missing the Provisioning CR
-	if enabled {
-		baremetalConfig, err := r.readProvisioningCR(context.Background())
-		if err != nil || baremetalConfig == nil {
-			err = r.updateCOStatus(ReasonProvisioningCRNotFound, "Waiting for Provisioning CR on BareMetal Platform", "")
-			if err != nil {
-				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
-			}
-		}
-	}
-
+	var err error
 	r.NetworkStack, err = r.networkStackFromServiceNetwork(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to determine network stack from service network: %w", err)

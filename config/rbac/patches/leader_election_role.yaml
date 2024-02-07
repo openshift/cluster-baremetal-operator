@@ -1,0 +1,16 @@
+# The following patch enables Lease management for leader election.
+- op: add
+  path: /rules/-
+  value:
+    apiGroups:
+    - coordination.k8s.io
+    resources:
+    - leases
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch

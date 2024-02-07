@@ -12,6 +12,8 @@ spec:
   selector:
     matchLabels:
       k8s-app: cluster-baremetal-operator
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:
@@ -26,6 +28,8 @@ spec:
         image: registry.ci.openshift.org/openshift:cluster-baremetal-operator
         command:
         - "/usr/bin/cluster-baremetal-operator"
+        args:
+        - --enable-leader-election
         env:
         - name: RELEASE_VERSION
           value: "0.0.1-snapshot"
