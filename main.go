@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -84,7 +85,7 @@ func main() {
 
 	config := ctrl.GetConfigOrDie()
 
-	mgr, err := ctrl.NewManager(config, ctrl.Options{
+	controllerOptions := ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		WebhookServer: webhook.NewServer(webhook.Options{
@@ -98,10 +99,31 @@ func main() {
 		}),
 		NewCache: cache.MultiNamespacedCacheBuilder(
 			[]string{controllers.ComponentNamespace, provisioning.OpenshiftConfigNamespace}),
-		LeaderElection:          enableLeaderElection,
-		LeaderElectionID:        "cluster-baremetal-operator",
-		LeaderElectionNamespace: controllers.ComponentNamespace,
-	})
+	}
+
+	if enableLeaderElection {
+		controllerOptions.LeaderElection = true
+		controllerOptions.LeaderElectionReleaseOnCancel = true
+		controllerOptions.LeaderElectionID = "cluster-baremetal-operator"
+		controllerOptions.LeaderElectionNamespace = controllers.ComponentNamespace
+
+		// these values match library-go LeaderElectionDefaulting, to produce this outcome
+		// see https://github.com/openshift/library-go/blob/release-4.15/pkg/config/leaderelection/leaderelection.go#L97-L105
+		// 1. clock skew tolerance is leaseDuration-renewDeadline == 30s
+		// 2. kube-apiserver downtime tolerance is == 78s
+		//      lastRetry=floor(renewDeadline/retryPeriod)*retryPeriod == 104
+		//      downtimeTolerance = lastRetry-retryPeriod == 78s
+		// 3. worst non-graceful lease acquisition is leaseDuration+retryPeriod == 163s
+		// 4. worst graceful lease acquisition is retryPeriod == 26s
+		leaseDuration := 137 * time.Second
+		renewDeadline := 107 * time.Second
+		retryPeriod := 26 * time.Second
+		controllerOptions.LeaseDuration = &leaseDuration
+		controllerOptions.RenewDeadline = &renewDeadline
+		controllerOptions.RetryPeriod = &retryPeriod
+	}
+
+	mgr, err := ctrl.NewManager(config, controllerOptions)
 	if err != nil {
 		klog.ErrorS(err, "unable to start manager")
 		os.Exit(1)
