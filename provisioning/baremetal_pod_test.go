@@ -188,19 +188,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			},
 		}
 	}
-	envWithSecret := func(name, secret, key string) corev1.EnvVar {
-		return corev1.EnvVar{
-			Name: name,
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: secret,
-					},
-					Key: key,
-				},
-			},
-		}
-	}
 	containers := map[string]corev1.Container{
 		"metal3-httpd": {
 			Name: "metal3-httpd",
@@ -211,8 +198,6 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_RAMDISK_SSH_KEY"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
 				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
-				envWithSecret("IRONIC_HTPASSWD", "metal3-ironic-password", "htpasswd"),
-				envWithSecret("INSPECTOR_HTPASSWD", "metal3-ironic-inspector-password", "htpasswd"),
 				{Name: "IRONIC_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "INSPECTOR_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "IRONIC_PRIVATE_PORT", Value: "unix"},
