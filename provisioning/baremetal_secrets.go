@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -132,38 +131,16 @@ func createRegistryPullSecret(info *ProvisioningInfo) error {
 		return fmt.Errorf("could not find key %q in secret %s/%s", openshiftConfigSecretKey, OpenshiftConfigNamespace, PullSecretName)
 	}
 
-	// Try to get the openshift-machine-api/pull-secret field .dockerconfigjson.
-	// The openshift-machine-api/pull-secret .dockerconfigjson field should be double encoded due to PR
-	// https://github.com/openshift/cluster-baremetal-operator/pull/184
-	// Attempt decoding this and use the decoded string for comparison.
-	// If any of the below steps fail, machineAPISecretKeyData will be the empty string and it will trigger an update
-	// action for applySecret (that is, if openshift-machine-api/pull-secret already exists).
 	machineAPINamespace := info.Namespace
-	var machineAPISecretKeyData string
-	if machineAPISecret, err := client.Secrets(machineAPINamespace).Get(context.TODO(), PullSecretName, metav1.GetOptions{}); err == nil {
-		if data, ok := machineAPISecret.Data[openshiftConfigSecretKey]; ok {
-			if decoded, err := base64.StdEncoding.DecodeString(string(data)); err == nil {
-				machineAPISecretKeyData = string(decoded)
-			}
-		}
-	}
-
-	shallUpdateData := func(*corev1.Secret) (bool, error) {
-		shallUpdate := string(openshiftConfigSecretKeyData) != machineAPISecretKeyData
-		if shallUpdate {
-			klog.Infof("content of secret %[1]s/%[3]s does not match content of secret %[2]s/%[3]s, reconciling %[2]s/%[3]s",
-				OpenshiftConfigNamespace, machineAPINamespace, PullSecretName)
-			reportRegistryPullSecretReconcile()
-		}
-		return shallUpdate, nil
-	}
-
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      PullSecretName,
 			Namespace: machineAPINamespace,
 		},
+		Type: corev1.SecretTypeOpaque,
 		StringData: map[string]string{
+			// The openshift-machine-api/pull-secret .dockerconfigjson field should be double encoded due to PR
+			// https://github.com/openshift/cluster-baremetal-operator/pull/184
 			openshiftConfigSecretKey: base64.StdEncoding.EncodeToString(openshiftConfigSecretKeyData),
 		},
 	}
@@ -171,8 +148,11 @@ func createRegistryPullSecret(info *ProvisioningInfo) error {
 	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
 		return err
 	}
-
-	return applySecret(client, info.EventRecorder, secret, shallUpdateData)
+	_, changed, err := resourceapply.ApplySecret(context.TODO(), client, info.EventRecorder, secret)
+	if changed {
+		reportRegistryPullSecretReconcile()
+	}
+	return err
 }
 
 // reportRegistryPullSecretReconcile is used for unit testing, to report that the reconciler was triggered.
