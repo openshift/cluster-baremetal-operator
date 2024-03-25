@@ -342,15 +342,9 @@ func TestRegistryPullSecret(t *testing.T) {
 				EventRecorder: events.NewLoggingEventRecorder("tests"),
 			}
 
-			// Overwrite the reportRegistryPullSecretReconcile callback. This allows us to track if applySecret deems
-			// that an update to the secret is necessary.
-			reconcilerTriggered := false
-			reportRegistryPullSecretReconcile = func() {
-				reconcilerTriggered = true
-			}
-
 			// Run the method under test.
-			if err := createRegistryPullSecret(info); err != nil {
+			reconcilerTriggered, err := createRegistryPullSecret(info)
+			if err != nil {
 				t.Fatalf("createRegistryPullSecret returned an error, err: %q", err)
 			}
 

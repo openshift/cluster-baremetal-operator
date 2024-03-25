@@ -120,15 +120,15 @@ password = %s
 
 // createRegistryPullSecret creates a copy of the pull-secret in the
 // openshift-config namespace for use with LocalObjectReference
-func createRegistryPullSecret(info *ProvisioningInfo) error {
+func createRegistryPullSecret(info *ProvisioningInfo) (bool, error) {
 	client := info.Client.CoreV1()
 	openshiftConfigSecret, err := client.Secrets(OpenshiftConfigNamespace).Get(context.TODO(), PullSecretName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("could not get secret %s/%s, err: %w", OpenshiftConfigNamespace, PullSecretName, err)
+		return false, fmt.Errorf("could not get secret %s/%s, err: %w", OpenshiftConfigNamespace, PullSecretName, err)
 	}
 	openshiftConfigSecretKeyData, ok := openshiftConfigSecret.Data[openshiftConfigSecretKey]
 	if !ok {
-		return fmt.Errorf("could not find key %q in secret %s/%s", openshiftConfigSecretKey, OpenshiftConfigNamespace, PullSecretName)
+		return false, fmt.Errorf("could not find key %q in secret %s/%s", openshiftConfigSecretKey, OpenshiftConfigNamespace, PullSecretName)
 	}
 
 	machineAPINamespace := info.Namespace
@@ -146,17 +146,11 @@ func createRegistryPullSecret(info *ProvisioningInfo) error {
 	}
 
 	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
-		return err
+		return false, err
 	}
 	_, changed, err := resourceapply.ApplySecret(context.TODO(), client, info.EventRecorder, secret)
-	if changed {
-		reportRegistryPullSecretReconcile()
-	}
-	return err
+	return changed, err
 }
-
-// reportRegistryPullSecretReconcile is used for unit testing, to report that the reconciler was triggered.
-var reportRegistryPullSecretReconcile = func() {}
 
 func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	// Create a Secret for the Ironic Password
@@ -172,7 +166,7 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 		return false, errors.Wrap(err, "failed to create TLS certificate")
 	}
 	// Create a Secret for the Registry Pull Secret
-	if err := createRegistryPullSecret(info); err != nil {
+	if _, err := createRegistryPullSecret(info); err != nil {
 		return false, errors.Wrap(err, "failed to create Registry pull secret")
 	}
 	return false, nil // ApplySecret does not use Generation, so just return false for updated
