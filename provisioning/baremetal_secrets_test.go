@@ -20,6 +20,7 @@ import (
 	fakekube "k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	faketesting "k8s.io/client-go/testing"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -250,13 +251,14 @@ func TestRegistryPullSecret(t *testing.T) {
 						Name:      PullSecretName,
 						Namespace: OpenshiftConfigNamespace,
 					},
+					Type: corev1.SecretTypeOpaque,
 					StringData: map[string]string{
 						openshiftConfigSecretKey: oldPullSecret,
 					},
 				},
 			},
 			expectedPullSecret: oldPullSecret,
-			expectUpdate:       false,
+			expectUpdate:       true,
 		},
 		{
 			name: "Update machine API secret if the contents are different",
@@ -266,6 +268,7 @@ func TestRegistryPullSecret(t *testing.T) {
 						Name:      PullSecretName,
 						Namespace: OpenshiftConfigNamespace,
 					},
+					Type: corev1.SecretTypeOpaque,
 					StringData: map[string]string{
 						openshiftConfigSecretKey: newPullSecret,
 					},
@@ -275,6 +278,7 @@ func TestRegistryPullSecret(t *testing.T) {
 						Name:      PullSecretName,
 						Namespace: testNamespace,
 					},
+					Type: corev1.SecretTypeOpaque,
 					StringData: map[string]string{
 						openshiftConfigSecretKey: base64.StdEncoding.EncodeToString([]byte(oldPullSecret)),
 					},
@@ -291,6 +295,7 @@ func TestRegistryPullSecret(t *testing.T) {
 						Name:      PullSecretName,
 						Namespace: OpenshiftConfigNamespace,
 					},
+					Type: corev1.SecretTypeOpaque,
 					StringData: map[string]string{
 						openshiftConfigSecretKey: newPullSecret,
 					},
@@ -300,6 +305,7 @@ func TestRegistryPullSecret(t *testing.T) {
 						Name:      PullSecretName,
 						Namespace: testNamespace,
 					},
+					Type: corev1.SecretTypeOpaque,
 					StringData: map[string]string{
 						openshiftConfigSecretKey: base64.StdEncoding.EncodeToString([]byte(newPullSecret)),
 					},
@@ -317,6 +323,11 @@ func TestRegistryPullSecret(t *testing.T) {
 			kubeClient.PrependReactor("create", "secrets", secretDataReactor)
 			kubeClient.PrependReactor("update", "secrets", secretDataReactor)
 			for _, secret := range tc.secrets {
+				if secret.Namespace == testNamespace {
+					if err := controllerutil.SetControllerReference(baremetalCR, secret, scheme); err != nil {
+						t.Fatalf("could not add controller reference to secret %s/%s, err: %q", secret.Namespace, secret.Name, err)
+					}
+				}
 				_, err := kubeClient.CoreV1().Secrets(secret.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 				if err != nil {
 					t.Fatalf("could not populate clientset with secret %s/%s, err: %q", secret.Namespace, secret.Name, err)
@@ -331,15 +342,9 @@ func TestRegistryPullSecret(t *testing.T) {
 				EventRecorder: events.NewLoggingEventRecorder("tests"),
 			}
 
-			// Overwrite the reportRegistryPullSecretReconcile callback. This allows us to track if applySecret deems
-			// that an update to the secret is necessary.
-			reconcilerTriggered := false
-			reportRegistryPullSecretReconcile = func() {
-				reconcilerTriggered = true
-			}
-
 			// Run the method under test.
-			if err := createRegistryPullSecret(info); err != nil {
+			reconcilerTriggered, err := createRegistryPullSecret(info)
+			if err != nil {
 				t.Fatalf("createRegistryPullSecret returned an error, err: %q", err)
 			}
 

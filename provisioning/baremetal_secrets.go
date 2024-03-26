@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -121,62 +120,37 @@ password = %s
 
 // createRegistryPullSecret creates a copy of the pull-secret in the
 // openshift-config namespace for use with LocalObjectReference
-func createRegistryPullSecret(info *ProvisioningInfo) error {
+func createRegistryPullSecret(info *ProvisioningInfo) (bool, error) {
 	client := info.Client.CoreV1()
 	openshiftConfigSecret, err := client.Secrets(OpenshiftConfigNamespace).Get(context.TODO(), PullSecretName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("could not get secret %s/%s, err: %w", OpenshiftConfigNamespace, PullSecretName, err)
+		return false, fmt.Errorf("could not get secret %s/%s, err: %w", OpenshiftConfigNamespace, PullSecretName, err)
 	}
 	openshiftConfigSecretKeyData, ok := openshiftConfigSecret.Data[openshiftConfigSecretKey]
 	if !ok {
-		return fmt.Errorf("could not find key %q in secret %s/%s", openshiftConfigSecretKey, OpenshiftConfigNamespace, PullSecretName)
+		return false, fmt.Errorf("could not find key %q in secret %s/%s", openshiftConfigSecretKey, OpenshiftConfigNamespace, PullSecretName)
 	}
 
-	// Try to get the openshift-machine-api/pull-secret field .dockerconfigjson.
-	// The openshift-machine-api/pull-secret .dockerconfigjson field should be double encoded due to PR
-	// https://github.com/openshift/cluster-baremetal-operator/pull/184
-	// Attempt decoding this and use the decoded string for comparison.
-	// If any of the below steps fail, machineAPISecretKeyData will be the empty string and it will trigger an update
-	// action for applySecret (that is, if openshift-machine-api/pull-secret already exists).
 	machineAPINamespace := info.Namespace
-	var machineAPISecretKeyData string
-	if machineAPISecret, err := client.Secrets(machineAPINamespace).Get(context.TODO(), PullSecretName, metav1.GetOptions{}); err == nil {
-		if data, ok := machineAPISecret.Data[openshiftConfigSecretKey]; ok {
-			if decoded, err := base64.StdEncoding.DecodeString(string(data)); err == nil {
-				machineAPISecretKeyData = string(decoded)
-			}
-		}
-	}
-
-	shallUpdateData := func(*corev1.Secret) (bool, error) {
-		shallUpdate := string(openshiftConfigSecretKeyData) != machineAPISecretKeyData
-		if shallUpdate {
-			klog.Infof("content of secret %[1]s/%[3]s does not match content of secret %[2]s/%[3]s, reconciling %[2]s/%[3]s",
-				OpenshiftConfigNamespace, machineAPINamespace, PullSecretName)
-			reportRegistryPullSecretReconcile()
-		}
-		return shallUpdate, nil
-	}
-
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      PullSecretName,
 			Namespace: machineAPINamespace,
 		},
+		Type: corev1.SecretTypeOpaque,
 		StringData: map[string]string{
+			// The openshift-machine-api/pull-secret .dockerconfigjson field should be double encoded due to PR
+			// https://github.com/openshift/cluster-baremetal-operator/pull/184
 			openshiftConfigSecretKey: base64.StdEncoding.EncodeToString(openshiftConfigSecretKeyData),
 		},
 	}
 
 	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
-		return err
+		return false, err
 	}
-
-	return applySecret(client, info.EventRecorder, secret, shallUpdateData)
+	_, changed, err := resourceapply.ApplySecret(context.TODO(), client, info.EventRecorder, secret)
+	return changed, err
 }
-
-// reportRegistryPullSecretReconcile is used for unit testing, to report that the reconciler was triggered.
-var reportRegistryPullSecretReconcile = func() {}
 
 func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	// Create a Secret for the Ironic Password
@@ -192,7 +166,7 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 		return false, errors.Wrap(err, "failed to create TLS certificate")
 	}
 	// Create a Secret for the Registry Pull Secret
-	if err := createRegistryPullSecret(info); err != nil {
+	if _, err := createRegistryPullSecret(info); err != nil {
 		return false, errors.Wrap(err, "failed to create Registry pull secret")
 	}
 	return false, nil // ApplySecret does not use Generation, so just return false for updated
