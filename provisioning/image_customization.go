@@ -47,6 +47,7 @@ const (
 	deployISOFile                    = imageSharedDir + "/ironic-python-agent.iso"
 	deployInitrdEnvVar               = "DEPLOY_INITRD"
 	deployInitrdFile                 = imageSharedDir + "/ironic-python-agent.initramfs"
+	imageCustomizationConfigName     = "metal3-image-customization-config"
 )
 
 var (
@@ -242,10 +243,44 @@ func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIPs []string,
 	}
 }
 
+func newImageCustomizationConfig(info *ProvisioningInfo, ironicIPs []string, inspectorIPs []string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        imageCustomizationConfigName,
+			Namespace:   info.Namespace,
+			Annotations: map[string]string{},
+			Labels: map[string]string{
+				"k8s-app":    metal3AppName,
+				cboLabelName: imageCustomizationService,
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			ironicAgentImage: info.Images.IronicAgent,
+			ironicBaseUrl:    getUrlFromIP(ironicIPs, baremetalIronicPort),
+			// TODO(dtantsur): when inspector is gone, we may be able to stop passing this URL
+			ironicInspectorBaseUrl: getUrlFromIP(inspectorIPs, baremetalIronicInspectorPort),
+			sshKeyEnvVar:           info.SSHKey,
+		},
+	}
+}
+
 func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, err error) {
 	ironicIPs, inspectorIPs, err := GetIronicIPs(info)
 	if err != nil {
 		return false, fmt.Errorf("unable to determine Ironic's IP to pass to the machine-image-customization-controller: %w", err)
+	}
+
+	configSecret := newImageCustomizationConfig(info, ironicIPs, inspectorIPs)
+	err = controllerutil.SetControllerReference(info.ProvConfig, configSecret, info.Scheme)
+	if err != nil {
+		err = fmt.Errorf("unable to set controllerReference on machine-image-customization config: %w", err)
+		return
+	}
+	_, _, err = resourceapply.ApplySecret(
+		context.Background(), info.Client.CoreV1(), info.EventRecorder, configSecret)
+	if err != nil {
+		return false, fmt.Errorf("failed to create the image customization config: %w", err)
 	}
 
 	imageCustomizationDeployment := newImageCustomizationDeployment(info, ironicIPs, inspectorIPs)
