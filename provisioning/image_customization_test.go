@@ -61,7 +61,6 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
-			pullSecret,
 		},
 	}
 
@@ -76,7 +75,6 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
-			pullSecret,
 		},
 	}
 
@@ -94,7 +92,6 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
-			pullSecret,
 		},
 	}
 
