@@ -64,6 +64,12 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			pullSecret,
 		},
 	}
+	secret1 := map[string]string{
+		"IRONIC_BASE_URL":           "https://192.168.0.2:6385",
+		"IRONIC_INSPECTOR_BASE_URL": "https://192.168.0.2:5050",
+		"IRONIC_AGENT_IMAGE":        "registry.ci.openshift.org/openshift:ironic-agent",
+		"IRONIC_RAMDISK_SSH_KEY":    "sshkey",
+	}
 
 	container2 := corev1.Container{
 		Name: "image-customization-controller",
@@ -78,6 +84,12 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 			pullSecret,
 		},
+	}
+	secret2 := map[string]string{
+		"IRONIC_BASE_URL":           "https://192.168.0.2:6385",
+		"IRONIC_INSPECTOR_BASE_URL": "https://192.168.0.3:5050",
+		"IRONIC_AGENT_IMAGE":        "registry.ci.openshift.org/openshift:ironic-agent",
+		"IRONIC_RAMDISK_SSH_KEY":    "sshkey",
 	}
 
 	container3 := corev1.Container{
@@ -97,6 +109,12 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			pullSecret,
 		},
 	}
+	secret3 := map[string]string{
+		"IRONIC_BASE_URL":           "https://192.168.0.2:6385,https://[2001:db8::2]:6385",
+		"IRONIC_INSPECTOR_BASE_URL": "",
+		"IRONIC_AGENT_IMAGE":        "registry.ci.openshift.org/openshift:ironic-agent",
+		"IRONIC_RAMDISK_SSH_KEY":    "sshkey",
+	}
 
 	tCases := []struct {
 		name              string
@@ -104,6 +122,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		inspectorIPs      []string
 		proxy             *v1.Proxy
 		expectedContainer corev1.Container
+		expectedSecret    map[string]string
 	}{
 		{
 			name:              "image customization container with proxy",
@@ -111,6 +130,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			inspectorIPs:      []string{ironicIP},
 			proxy:             testProxy,
 			expectedContainer: container1,
+			expectedSecret:    secret1,
 		},
 		{
 			name:              "image customization container without proxy",
@@ -118,18 +138,21 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			inspectorIPs:      []string{"192.168.0.3"},
 			proxy:             nil,
 			expectedContainer: container2,
+			expectedSecret:    secret2,
 		},
 		{
 			name:              "image customization container with proxy",
 			ironicIPs:         []string{ironicIP, ironicIP6},
 			proxy:             testProxy,
 			expectedContainer: container3,
+			expectedSecret:    secret3,
 		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			info := &ProvisioningInfo{
+				Images:       &images,
 				SSHKey:       "sshkey",
 				NetworkStack: NetworkStackV4,
 				Proxy:        tc.proxy,
@@ -138,6 +161,8 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			for e := range actualContainer.Env {
 				assert.EqualValues(t, tc.expectedContainer.Env[e], actualContainer.Env[e])
 			}
+			actualSecret := newImageCustomizationConfig(info, tc.ironicIPs, tc.inspectorIPs)
+			assert.Equal(t, tc.expectedSecret, actualSecret.StringData)
 		})
 	}
 }
