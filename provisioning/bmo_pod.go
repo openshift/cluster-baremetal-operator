@@ -175,6 +175,7 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 				corev1.ResourceMemory: resource.MustParse("50Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
 	if !info.BaremetalWebhookEnabled {

@@ -36,6 +36,7 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 	return container
 }
