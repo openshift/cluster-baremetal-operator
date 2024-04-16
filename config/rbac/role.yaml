@@ -146,6 +146,32 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
+  - dataimages
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - dataimages/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
+  - dataimages/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
   - firmwareschemas
   verbs:
   - create
@@ -167,6 +193,32 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwarecomponents
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwarecomponents/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwarecomponents/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - metal3.io
   resources:
