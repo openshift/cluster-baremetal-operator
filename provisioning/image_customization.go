@@ -151,6 +151,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 				corev1.ResourceMemory: resource.MustParse("50Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 	return container
 }

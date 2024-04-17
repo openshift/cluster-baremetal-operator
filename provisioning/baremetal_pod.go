@@ -367,6 +367,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 				corev1.ResourceMemory: resource.MustParse("50Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 	return initContainer
 }
@@ -393,6 +394,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 				corev1.ResourceMemory: resource.MustParse("50Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
 	return initContainer
@@ -475,6 +477,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 				corev1.ResourceMemory: resource.MustParse("5Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
 	return container
@@ -585,6 +588,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 				corev1.ResourceMemory: resource.MustParse("50Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
 	return container
@@ -652,6 +656,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 				corev1.ResourceMemory: resource.MustParse("500Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
 	return container
@@ -670,6 +675,7 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 				corev1.ResourceMemory: resource.MustParse("5Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 	return container
 }
@@ -717,6 +723,7 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 				corev1.ResourceMemory: resource.MustParse("100Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
 	return container
@@ -743,6 +750,7 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 				corev1.ResourceMemory: resource.MustParse("50Mi"),
 			},
 		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
 	return container
