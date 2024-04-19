@@ -33,7 +33,7 @@ func setUpSchemeForReconciler() *runtime.Scheme {
 
 func newFakeProvisioningReconciler(scheme *runtime.Scheme, object runtime.Object) *ProvisioningReconciler {
 	return &ProvisioningReconciler{
-		Client:   fakeclient.NewFakeClientWithScheme(scheme, object),
+		Client:   fakeclient.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(object).Build(),
 		Scheme:   scheme,
 		OSClient: fakeconfigclientset.NewSimpleClientset(),
 	}
@@ -310,7 +310,7 @@ func TestUpdateProvisioningMacAddresses(t *testing.T) {
 	objects = append(objects, &baremetalCR)
 	r := &ProvisioningReconciler{
 		Scheme: sc,
-		Client: fakeclient.NewFakeClientWithScheme(sc, objects...),
+		Client: fakeclient.NewClientBuilder().WithScheme(sc).WithRuntimeObjects(objects...).Build(),
 	}
 
 	want := []string{"00:3d:25:45:bf:e5", "00:3d:25:45:bf:e6", "00:3d:25:45:bf:e7"}
