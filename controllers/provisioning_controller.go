@@ -250,6 +250,10 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"unable to put %q ClusterOperator in Available state", clusterOperatorName)
 	}
 
+	if _, ok := baremetalConfig.Annotations["provisioning.metal3.io/paused"]; ok {
+		return ctrl.Result{RequeueAfter: time.Minute}, errors.New("provisioning CR paused")
+	}
+
 	// Read container images from Config Map
 	var containerImages provisioning.Images
 	if err := provisioning.GetContainerImages(&containerImages, r.ImagesFilename); err != nil {
