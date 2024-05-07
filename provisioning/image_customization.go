@@ -102,6 +102,9 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			imageRegistriesVolumeMount,
