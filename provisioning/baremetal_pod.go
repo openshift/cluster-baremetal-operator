@@ -30,6 +30,7 @@ import (
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -71,6 +72,10 @@ const (
 	pullSecretEnvVar                 = "IRONIC_AGENT_PULL_SECRET" // #nosec
 	forceInspectorEnvVar             = "USE_IRONIC_INSPECTOR"
 )
+
+var ironicUserID int64 = 1002
+var ironicGroupID int64 = 1003
+var inspectorGroupID int64 = 1004
 
 var podTemplateAnnotations = map[string]string{
 	"target.workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
@@ -694,6 +699,13 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 			},
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		SecurityContext: &corev1.SecurityContext{
+			RunAsUser:  ptr.To(ironicUserID),
+			RunAsGroup: ptr.To(ironicGroupID),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
+		},
 	}
 	return container
 }
@@ -742,6 +754,13 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 			},
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		SecurityContext: &corev1.SecurityContext{
+			RunAsUser:  ptr.To(ironicUserID),
+			RunAsGroup: ptr.To(inspectorGroupID),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
+		},
 	}
 
 	return container
