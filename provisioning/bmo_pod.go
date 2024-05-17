@@ -110,8 +110,24 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 				ContainerPort: int32(webhookPort),
 			},
 		},
-		Command:         []string{"/baremetal-operator"},
-		Args:            []string{"--health-addr", ":9446", "-build-preprov-image"},
+		Command: []string{"/baremetal-operator"},
+		Args: []string{
+			"--health-addr", ":9446",
+			"-build-preprov-image",
+			"-enable-leader-election",
+
+			// these values match library-go LeaderElectionDefaulting, to produce this outcome
+			// see https://github.com/openshift/library-go/blob/release-4.15/pkg/config/leaderelection/leaderelection.go#L97-L105
+			// 1. clock skew tolerance is leaseDuration-renewDeadline == 30s
+			// 2. kube-apiserver downtime tolerance is == 78s
+			//      lastRetry=floor(renewDeadline/retryPeriod)*retryPeriod == 104
+			//      downtimeTolerance = lastRetry-retryPeriod == 78s
+			// 3. worst non-graceful lease acquisition is leaseDuration+retryPeriod == 163s
+			// 4. worst graceful lease acquisition is retryPeriod == 26s
+			"-lease-duration-seconds", "137",
+			"-renew-deadline-seconds", "107",
+			"-retry-period-seconds", "26",
+		},
 		ImagePullPolicy: "IfNotPresent",
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
