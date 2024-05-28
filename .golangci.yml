@@ -19,7 +19,6 @@ linters:
     "whitespace",
     "unconvert",
     "ineffassign",
-    "nakedret",
     "nestif",
   ]
 
