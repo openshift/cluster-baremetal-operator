@@ -32,6 +32,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// +kubebuilder:scaffold:imports
@@ -86,8 +87,10 @@ func main() {
 	config := ctrl.GetConfigOrDie()
 
 	controllerOptions := ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
+		Scheme: scheme,
+		Metrics: server.Options{
+			BindAddress: metricsAddr,
+		},
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port: 9443,
 			TLSOpts: []func(*tls.Config){
@@ -97,8 +100,12 @@ func main() {
 			},
 			CertDir: "/etc/cluster-baremetal-operator/tls",
 		}),
-		NewCache: cache.MultiNamespacedCacheBuilder(
-			[]string{controllers.ComponentNamespace, provisioning.OpenshiftConfigNamespace}),
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				controllers.ComponentNamespace:        cache.Config{},
+				provisioning.OpenshiftConfigNamespace: cache.Config{},
+			},
+		},
 	}
 
 	if enableLeaderElection {
