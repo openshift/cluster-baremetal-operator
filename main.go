@@ -102,8 +102,8 @@ func main() {
 		}),
 		Cache: cache.Options{
 			DefaultNamespaces: map[string]cache.Config{
-				controllers.ComponentNamespace:        cache.Config{},
-				provisioning.OpenshiftConfigNamespace: cache.Config{},
+				controllers.ComponentNamespace:        {},
+				provisioning.OpenshiftConfigNamespace: {},
 			},
 		},
 	}
