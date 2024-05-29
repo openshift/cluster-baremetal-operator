@@ -9,17 +9,13 @@ linters:
     "gofmt",
     "gosec",
     "staticcheck",
-    "deadcode",
     "dupl",
     "errcheck",
-    "structcheck",
     "unparam",
     "unused",
-    "varcheck",
     "whitespace",
     "unconvert",
     "ineffassign",
-    "nakedret",
     "nestif",
   ]
 

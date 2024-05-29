@@ -71,7 +71,8 @@ func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
 		host = provisioningIP
 	}
 
-	config, err := ca.MakeServerCert(sets.NewString(host), tlsExpirationDays)
+	config, err := ca.MakeServerCert(sets.New(host), tlsExpirationDays)
+
 	if err != nil {
 		return TlsCertificate{}, err
 	}
