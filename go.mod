@@ -2,8 +2,6 @@ module github.com/openshift/cluster-baremetal-operator
 
 go 1.22.0
 
-toolchain go1.22.3
-
 require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
