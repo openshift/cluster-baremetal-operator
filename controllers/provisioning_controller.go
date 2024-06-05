@@ -31,6 +31,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -560,8 +561,14 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 	machines := machinev1beta1.MachineList{}
 	bmhNames := []string{}
 	labelReq, _ := labels.NewRequirement("machine.openshift.io/cluster-api-machine-role", selection.Equals, []string{"master"})
-	if err := r.Client.List(ctx, &machines, &client.ListOptions{LabelSelector: labels.NewSelector().Add(*labelReq)}); err != nil {
-		return errors.Wrap(err, "cannot list master machines")
+	err := r.Client.List(ctx, &machines, &client.ListOptions{LabelSelector: labels.NewSelector().Add(*labelReq)})
+	if err != nil {
+		if runtime.IsNotRegisteredError(err) || meta.IsNoMatchError(err) {
+			klog.Info("Machines CRD is not registered in the cluster, set provisioningMacAddresses if the metal3 pod fails to start")
+			return nil
+		} else {
+			return errors.Wrap(err, "cannot list master machines")
+		}
 	}
 	if len(machines.Items) < 1 {
 		klog.Info("No Machines with cluster-api-machine-role=master found, set provisioningMacAddresses if the metal3 pod fails to start")
@@ -655,7 +662,6 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Owns(&osconfigv1.Proxy{}).
-		Owns(&machinev1beta1.Machine{}).
 		Watches(&osconfigv1.ClusterOperator{}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(clusterOperatorFilter)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(watchOCPConfigPullSecret), builder.WithPredicates(secretFilter)).
 		Complete(r)
