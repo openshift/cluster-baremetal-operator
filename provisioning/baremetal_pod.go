@@ -74,7 +74,6 @@ const (
 )
 
 var ironicUserID int64 = 1002
-var ironicGroupID int64 = 1003
 var inspectorGroupID int64 = 1004
 
 var podTemplateAnnotations = map[string]string{
@@ -700,10 +699,11 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		SecurityContext: &corev1.SecurityContext{
-			RunAsUser:  ptr.To(ironicUserID),
-			RunAsGroup: ptr.To(ironicGroupID),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
+				Add: []corev1.Capability{
+					"CAP_DAC_OVERRIDE",
+				},
 			},
 		},
 	}
