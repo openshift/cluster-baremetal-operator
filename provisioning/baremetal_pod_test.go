@@ -188,19 +188,6 @@ func TestNewMetal3Containers(t *testing.T) {
 			},
 		}
 	}
-	envWithSecret := func(name, secret, key string) corev1.EnvVar {
-		return corev1.EnvVar{
-			Name: name,
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: secret,
-					},
-					Key: key,
-				},
-			},
-		}
-	}
 	containers := map[string]corev1.Container{
 		"metal3-httpd": {
 			Name: "metal3-httpd",
@@ -211,8 +198,6 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_RAMDISK_SSH_KEY"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
 				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
-				envWithSecret("IRONIC_HTPASSWD", "metal3-ironic-password", "htpasswd"),
-				envWithSecret("INSPECTOR_HTPASSWD", "metal3-ironic-inspector-password", "htpasswd"),
 				{Name: "IRONIC_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "INSPECTOR_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "IRONIC_PRIVATE_PORT", Value: "unix"},
@@ -220,6 +205,15 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_LISTEN_PORT", Value: "6385"},
 				{Name: "IRONIC_INSPECTOR_LISTEN_PORT", Value: "5050"},
 				{Name: "USE_IRONIC_INSPECTOR", Value: "true"},
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				sharedVolumeMount,
+				ironicCredentialsMount,
+				inspectorCredentialsMount,
+				imageVolumeMount,
+				ironicTlsMount,
+				inspectorTlsMount,
+				inspectorHtpasswdMount,
 			},
 		},
 		"metal3-ironic": {
@@ -239,10 +233,18 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "VMEDIA_TLS_PORT", Value: "6183"},
 				{Name: "USE_IRONIC_INSPECTOR", Value: "true"},
 			},
+			VolumeMounts: []corev1.VolumeMount{
+				sharedVolumeMount,
+				imageVolumeMount,
+				inspectorCredentialsMount,
+				ironicTlsMount,
+				inspectorTlsMount,
+			},
 		},
 		"metal3-ramdisk-logs": {
-			Name: "metal3-ramdisk-logs",
-			Env:  []corev1.EnvVar{},
+			Name:         "metal3-ramdisk-logs",
+			Env:          []corev1.EnvVar{},
+			VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
 		},
 		"metal3-ironic-inspector": {
 			Name: "metal3-ironic-inspector",
@@ -255,6 +257,12 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
 				{Name: "USE_IRONIC_INSPECTOR", Value: "true"},
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				sharedVolumeMount,
+				ironicCredentialsMount,
+				ironicTlsMount,
+				inspectorTlsMount,
 			},
 		},
 		"metal3-static-ip-manager": {
@@ -272,6 +280,10 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				{Name: "DHCP_RANGE", Value: "172.30.20.11,172.30.20.101,24"},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				sharedVolumeMount,
+				imageVolumeMount,
 			},
 		},
 	}
