@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	"github.com/openshift/api/annotations"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
@@ -29,6 +30,7 @@ const (
 	inspectorSecretName      = "metal3-ironic-inspector-password"
 	inspectorUsername        = "inspector-user"
 	tlsSecretName            = "metal3-ironic-tls" // #nosec
+	baremetalJiraComponent   = "Bare Metal Hardware Provisioning / cluster-baremetal-operator"
 	openshiftConfigSecretKey = ".dockerconfigjson" // #nosec
 	// NOTE(dtantsur): this is kept here to be able to remove the old
 	// secret when a Provisioning is removed.
@@ -194,6 +196,9 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      tlsSecretName,
 			Namespace: info.Namespace,
+			Annotations: map[string]string{
+				annotations.OpenShiftComponent: baremetalJiraComponent,
+			},
 		},
 		Data: map[string][]byte{
 			corev1.TLSCertKey:       cert.certificate,
