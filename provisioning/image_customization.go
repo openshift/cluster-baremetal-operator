@@ -48,12 +48,20 @@ const (
 	deployInitrdEnvVar               = "DEPLOY_INITRD"
 	deployInitrdFile                 = imageSharedDir + "/ironic-python-agent.initramfs"
 	imageCustomizationConfigName     = "metal3-image-customization-config"
+	ironicAgentPullSecret            = "ironic-agent-pull-secret" // #nosec G101
+	ironicAgentPullSecretPath        = "/run/secrets/pull-secret" // #nosec G101
 )
 
 var (
 	imageRegistriesVolumeMount = corev1.VolumeMount{
 		Name:      imageCustomizationVolume,
 		MountPath: containerRegistriesConfPath,
+	}
+	ironicAgentPullSecretMount = corev1.VolumeMount{
+		Name:      ironicAgentPullSecret,
+		MountPath: ironicAgentPullSecretPath,
+		SubPath:   PullSecretName,
+		ReadOnly:  true,
 	}
 )
 
@@ -67,6 +75,20 @@ func imageRegistriesVolume() corev1.Volume {
 			HostPath: &corev1.HostPathVolumeSource{
 				Path: containerRegistriesConfPath,
 				Type: &volType,
+			},
+		},
+	}
+}
+
+func ironicAgentPullSecretVolume() corev1.Volume {
+	return corev1.Volume{
+		Name: ironicAgentPullSecret,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: PullSecretName,
+				Items: []corev1.KeyToPath{
+					{Key: openshiftConfigSecretKey, Path: PullSecretName},
+				},
 			},
 		},
 	}
@@ -109,6 +131,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		VolumeMounts: []corev1.VolumeMount{
 			imageRegistriesVolumeMount,
 			imageVolumeMount,
+			ironicAgentPullSecretMount,
 		},
 		ImagePullPolicy: "IfNotPresent",
 		Env: append(envVars, corev1.EnvVar{
@@ -140,8 +163,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 				Name:  ipOptions,
 				Value: info.NetworkStack.IpOption(),
 			},
-			buildSSHKeyEnvVar(info.SSHKey),
-			pullSecret),
+			buildSSHKeyEnvVar(info.SSHKey)),
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "http",
@@ -212,6 +234,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 				imageRegistriesVolume(),
 				imageVolume(),
 				trustedCAVolume(),
+				ironicAgentPullSecretVolume(),
 			},
 		},
 	}
