@@ -47,6 +47,12 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 	ironicIP := "192.168.0.2"
 	ironicIP6 := "2001:db8::2"
 
+	expectedVolumeMounts := []corev1.VolumeMount{
+		imageRegistriesVolumeMount,
+		imageVolumeMount,
+		ironicAgentPullSecretMount,
+	}
+
 	container1 := corev1.Container{
 		Name: "image-customization-controller",
 		Env: []corev1.EnvVar{
@@ -61,8 +67,8 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
-			pullSecret,
 		},
+		VolumeMounts: expectedVolumeMounts,
 	}
 	secret1 := map[string]string{
 		"IRONIC_BASE_URL":           "https://192.168.0.2:6385",
@@ -82,8 +88,8 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
-			pullSecret,
 		},
+		VolumeMounts: expectedVolumeMounts,
 	}
 	secret2 := map[string]string{
 		"IRONIC_BASE_URL":           "https://192.168.0.2:6385",
@@ -106,8 +112,8 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
-			pullSecret,
 		},
+		VolumeMounts: expectedVolumeMounts,
 	}
 	secret3 := map[string]string{
 		"IRONIC_BASE_URL":           "https://192.168.0.2:6385,https://[2001:db8::2]:6385",
@@ -163,6 +169,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			}
 			actualSecret := newImageCustomizationConfig(info, tc.ironicIPs, tc.inspectorIPs)
 			assert.Equal(t, tc.expectedSecret, actualSecret.StringData)
+			assert.Equal(t, tc.expectedContainer.VolumeMounts, actualContainer.VolumeMounts)
 		})
 	}
 }
