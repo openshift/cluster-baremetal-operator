@@ -55,34 +55,12 @@ var bmoVolumes = []corev1.Volume{
 				Items: []corev1.KeyToPath{
 					{Key: ironicUsernameKey, Path: ironicUsernameKey},
 					{Key: ironicPasswordKey, Path: ironicPasswordKey},
-					{Key: ironicConfigKey, Path: ironicConfigKey},
-				},
-			},
-		},
-	},
-	{
-		Name: inspectorCredentialsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: inspectorSecretName,
-				Items: []corev1.KeyToPath{
-					{Key: ironicUsernameKey, Path: ironicUsernameKey},
-					{Key: ironicPasswordKey, Path: ironicPasswordKey},
-					{Key: ironicConfigKey, Path: ironicConfigKey},
 				},
 			},
 		},
 	},
 	{
 		Name: ironicTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
-			},
-		},
-	},
-	{
-		Name: inspectorTlsVolume,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: tlsSecretName,
@@ -98,7 +76,7 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		return corev1.Container{}, err
 	}
 
-	ironicURL, inspectorURL := getControlPlaneEndpoints(info)
+	ironicURL := getControlPlaneEndpoint(info)
 
 	container := corev1.Container{
 		Name:  "metal3-baremetal-operator",
@@ -131,7 +109,6 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		ImagePullPolicy: "IfNotPresent",
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
-			inspectorCredentialsMount,
 			ironicTlsMount,
 			baremetalWebhookCertMount,
 		},
@@ -169,10 +146,6 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 			{
 				Name:  ironicEndpoint,
 				Value: ironicURL,
-			},
-			{
-				Name:  ironicInspectorEndpoint,
-				Value: inspectorURL,
 			},
 			{
 				Name:  "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE",

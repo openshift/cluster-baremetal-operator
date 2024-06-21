@@ -89,10 +89,6 @@ func TestCreatePasswordSecret(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:          "new-inspector-secret",
-			expectedError: nil,
-		},
-		{
 			name:          "error-fetching-secret",
 			secretError:   errors.NewServiceUnavailable("an error"),
 			expectedError: errors.NewServiceUnavailable("an error"),
@@ -119,7 +115,7 @@ func TestCreatePasswordSecret(t *testing.T) {
 			}
 			switch tc.name {
 			case "new-ironic-secret":
-				err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic")
+				err := createIronicSecret(info, ironicSecretName, ironicUsername)
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return
@@ -130,18 +126,6 @@ func TestCreatePasswordSecret(t *testing.T) {
 					t.Errorf("Error creating Ironic secret.")
 				}
 				assert.True(t, strings.Compare(string(secret.(*v1.Secret).Data[ironicUsernameKey]), ironicUsername) == 0, "ironic password created incorrectly")
-			case "new-inspector-secret":
-				err := createIronicSecret(info, inspectorSecretName, inspectorUsername, "inspector")
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-					return
-				}
-				// Check if Ironic secret exits
-				secret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, inspectorSecretName)
-				if apierrors.IsNotFound(err) {
-					t.Errorf("Error creating Ironic secret.")
-				}
-				assert.True(t, strings.Compare(string(secret.(*v1.Secret).Data[ironicUsernameKey]), inspectorUsername) == 0, "inspector password created incorrectly")
 			}
 		})
 	}

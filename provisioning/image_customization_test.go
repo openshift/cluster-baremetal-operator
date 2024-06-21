@@ -58,11 +58,10 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Env: []corev1.EnvVar{
 			{Name: "HTTP_PROXY", Value: "https://172.2.0.1:3128"},
 			{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"},
-			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2,192.168.0.2"},
+			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
-			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: "https://192.168.0.2:5050"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
@@ -71,10 +70,9 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		VolumeMounts: expectedVolumeMounts,
 	}
 	secret1 := map[string]string{
-		"IRONIC_BASE_URL":           "https://192.168.0.2:6385",
-		"IRONIC_INSPECTOR_BASE_URL": "https://192.168.0.2:5050",
-		"IRONIC_AGENT_IMAGE":        "registry.ci.openshift.org/openshift:ironic-agent",
-		"IRONIC_RAMDISK_SSH_KEY":    "sshkey",
+		"IRONIC_BASE_URL":        "https://192.168.0.2:6385",
+		"IRONIC_AGENT_IMAGE":     "registry.ci.openshift.org/openshift:ironic-agent",
+		"IRONIC_RAMDISK_SSH_KEY": "sshkey",
 	}
 
 	container2 := corev1.Container{
@@ -83,7 +81,6 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
-			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: "https://192.168.0.3:5050"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
@@ -92,10 +89,9 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		VolumeMounts: expectedVolumeMounts,
 	}
 	secret2 := map[string]string{
-		"IRONIC_BASE_URL":           "https://192.168.0.2:6385",
-		"IRONIC_INSPECTOR_BASE_URL": "https://192.168.0.3:5050",
-		"IRONIC_AGENT_IMAGE":        "registry.ci.openshift.org/openshift:ironic-agent",
-		"IRONIC_RAMDISK_SSH_KEY":    "sshkey",
+		"IRONIC_BASE_URL":        "https://192.168.0.2:6385",
+		"IRONIC_AGENT_IMAGE":     "registry.ci.openshift.org/openshift:ironic-agent",
+		"IRONIC_RAMDISK_SSH_KEY": "sshkey",
 	}
 
 	container3 := corev1.Container{
@@ -107,7 +103,6 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385,https://[2001:db8::2]:6385"},
-			{Name: "IRONIC_INSPECTOR_BASE_URL", Value: ""},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
@@ -116,16 +111,14 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		VolumeMounts: expectedVolumeMounts,
 	}
 	secret3 := map[string]string{
-		"IRONIC_BASE_URL":           "https://192.168.0.2:6385,https://[2001:db8::2]:6385",
-		"IRONIC_INSPECTOR_BASE_URL": "",
-		"IRONIC_AGENT_IMAGE":        "registry.ci.openshift.org/openshift:ironic-agent",
-		"IRONIC_RAMDISK_SSH_KEY":    "sshkey",
+		"IRONIC_BASE_URL":        "https://192.168.0.2:6385,https://[2001:db8::2]:6385",
+		"IRONIC_AGENT_IMAGE":     "registry.ci.openshift.org/openshift:ironic-agent",
+		"IRONIC_RAMDISK_SSH_KEY": "sshkey",
 	}
 
 	tCases := []struct {
 		name              string
 		ironicIPs         []string
-		inspectorIPs      []string
 		proxy             *v1.Proxy
 		expectedContainer corev1.Container
 		expectedSecret    map[string]string
@@ -133,7 +126,6 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		{
 			name:              "image customization container with proxy",
 			ironicIPs:         []string{ironicIP},
-			inspectorIPs:      []string{ironicIP},
 			proxy:             testProxy,
 			expectedContainer: container1,
 			expectedSecret:    secret1,
@@ -141,7 +133,6 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		{
 			name:              "image customization container without proxy",
 			ironicIPs:         []string{ironicIP},
-			inspectorIPs:      []string{"192.168.0.3"},
 			proxy:             nil,
 			expectedContainer: container2,
 			expectedSecret:    secret2,
@@ -163,11 +154,11 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 				NetworkStack: NetworkStackV4,
 				Proxy:        tc.proxy,
 			}
-			actualContainer := createImageCustomizationContainer(&images, info, tc.ironicIPs, tc.inspectorIPs)
+			actualContainer := createImageCustomizationContainer(&images, info, tc.ironicIPs)
 			for e := range actualContainer.Env {
 				assert.EqualValues(t, tc.expectedContainer.Env[e], actualContainer.Env[e])
 			}
-			actualSecret := newImageCustomizationConfig(info, tc.ironicIPs, tc.inspectorIPs)
+			actualSecret := newImageCustomizationConfig(info, tc.ironicIPs)
 			assert.Equal(t, tc.expectedSecret, actualSecret.StringData)
 			assert.Equal(t, tc.expectedContainer.VolumeMounts, actualContainer.VolumeMounts)
 		})
