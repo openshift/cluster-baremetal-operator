@@ -22,16 +22,12 @@ const (
 func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
 	port, _ := strconv.Atoi(baremetalHttpPort)             // #nosec
 	httpsPort, _ := strconv.Atoi(baremetalVmediaHttpsPort) // #nosec
-	ironicPort, inspectorPort := getControlPlanePorts(info)
+	ironicPort := getControlPlanePort(info)
 
 	ports := []corev1.ServicePort{
 		{
 			Name: "ironic",
 			Port: int32(ironicPort),
-		},
-		{
-			Name: "inspector",
-			Port: int32(inspectorPort),
 		},
 		{
 			Name: httpPortName,
