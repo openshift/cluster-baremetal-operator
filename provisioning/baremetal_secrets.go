@@ -26,9 +26,8 @@ const (
 	ironicHtpasswdKey        = "htpasswd"
 	ironicConfigKey          = "auth-config"
 	ironicSecretName         = "metal3-ironic-password"
-	ironicUsername           = "ironic-user"
 	inspectorSecretName      = "metal3-ironic-inspector-password"
-	inspectorUsername        = "inspector-user"
+	ironicUsername           = "ironic-user"
 	tlsSecretName            = "metal3-ironic-tls" // #nosec
 	baremetalJiraComponent   = "Bare Metal Hardware Provisioning / cluster-baremetal-operator"
 	openshiftConfigSecretKey = ".dockerconfigjson" // #nosec
@@ -159,10 +158,6 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	if err := createIronicSecret(info, ironicSecretName, ironicUsername, "ironic"); err != nil {
 		return false, errors.Wrap(err, "failed to create Ironic password")
 	}
-	// Create a Secret for the Ironic Inspector Password
-	if err := createIronicSecret(info, inspectorSecretName, inspectorUsername, "inspector"); err != nil {
-		return false, errors.Wrap(err, "failed to create Inspector password")
-	}
 	// Generate/update TLS certificate
 	if err := createOrUpdateTlsSecret(info); err != nil {
 		return false, errors.Wrap(err, "failed to create TLS certificate")
@@ -170,6 +165,10 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	// Create a Secret for the Registry Pull Secret
 	if _, err := createRegistryPullSecret(info); err != nil {
 		return false, errors.Wrap(err, "failed to create Registry pull secret")
+	}
+	// Delete ironic-inspector Secret if it still exists
+	if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{})); err != nil {
+		return false, errors.Wrap(err, "Error occured while deleting Ironic Inspector Secret")
 	}
 	return false, nil // ApplySecret does not use Generation, so just return false for updated
 }
@@ -184,7 +183,7 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 	return utilerrors.NewAggregate(secretErrors)
 }
 
-// createOrUpdateTlsSecret creates a Secret for the Ironic and Inspector TLS.
+// createOrUpdateTlsSecret creates a Secret for the Ironic TLS.
 // It updates the secret if the existing certificate is close to expiration.
 func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 	cert, err := generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)

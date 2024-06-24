@@ -76,7 +76,7 @@ func getPodIPs(podClient coreclientv1.PodsGetter, targetNamespace string) (ips [
 }
 
 // getServerInternalIPs returns virtual IPs on which Kubernetes is accessible.
-// These are the IPs on which the proxied services (currently Ironic and Inspector) should be accessed by external consumers.
+// These are the IPs on which the proxied services (currently Ironic) should be accessed by external consumers.
 func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	infra, err := osclient.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if err != nil {
@@ -126,7 +126,7 @@ func GetRealIronicIPs(info *ProvisioningInfo) ([]string, error) {
 
 // GetIronicIPs returns Ironic IPs for external consumption, potentially behind an HA proxy.
 // Without a proxy, the provisioning IP is used when present and not disallowed for virtual media via configuration.
-func GetIronicIPs(info *ProvisioningInfo) (ironicIPs []string, inspectorIPs []string, err error) {
+func GetIronicIPs(info *ProvisioningInfo) (ironicIPs []string, err error) {
 	podIPs, err := GetRealIronicIPs(info)
 	if err != nil {
 		return
@@ -146,8 +146,7 @@ func GetIronicIPs(info *ProvisioningInfo) (ironicIPs []string, inspectorIPs []st
 		ironicIPs = podIPs
 	}
 
-	inspectorIPs = ironicIPs // keep returning separate variables for future enhancements
-	return ironicIPs, inspectorIPs, err
+	return ironicIPs, err
 }
 
 func IpOptionForProvisioning(config *metal3iov1alpha1.ProvisioningSpec, networkStack NetworkStackType) string {
