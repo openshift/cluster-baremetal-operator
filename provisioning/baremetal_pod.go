@@ -69,7 +69,6 @@ const (
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
-	pullSecretEnvVar                 = "IRONIC_AGENT_PULL_SECRET" // #nosec
 	forceInspectorEnvVar             = "USE_IRONIC_INSPECTOR"
 )
 
@@ -116,18 +115,6 @@ var vmediaTlsMount = corev1.VolumeMount{
 	Name:      vmediaTlsVolume,
 	MountPath: metal3TlsRootDir + "/vmedia",
 	ReadOnly:  true,
-}
-
-var pullSecret = corev1.EnvVar{
-	Name: pullSecretEnvVar,
-	ValueFrom: &corev1.EnvVarSource{
-		SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: PullSecretName,
-			},
-			Key: openshiftConfigSecretKey,
-		},
-	},
 }
 
 func trustedCAVolume() corev1.Volume {
