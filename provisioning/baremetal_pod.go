@@ -30,7 +30,6 @@ import (
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -47,33 +46,21 @@ const (
 	metal3AuthRootDir                = "/auth"
 	metal3TlsRootDir                 = "/certs"
 	ironicCredentialsVolume          = "metal3-ironic-basic-auth"
-	inspectorCredentialsVolume       = "metal3-inspector-basic-auth"
 	ironicTlsVolume                  = "metal3-ironic-tls"
-	inspectorTlsVolume               = "metal3-inspector-tls"
 	vmediaTlsVolume                  = "metal3-vmedia-tls"
-	inspectorHtpasswdVolume          = "inspector-htpasswd" // #nosec G101
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
-	inspectorInsecureEnvVar          = "IRONIC_INSPECTOR_INSECURE"
 	ironicKernelParamsEnvVar         = "IRONIC_KERNEL_PARAMS"
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
 	sshKeyEnvVar                     = "IRONIC_RAMDISK_SSH_KEY"
 	externalIpEnvVar                 = "IRONIC_EXTERNAL_IP"
 	externalUrlEnvVar                = "IRONIC_EXTERNAL_URL_V6"
 	ironicProxyEnvVar                = "IRONIC_REVERSE_PROXY_SETUP"
-	inspectorProxyEnvVar             = "INSPECTOR_REVERSE_PROXY_SETUP"
 	ironicPrivatePortEnvVar          = "IRONIC_PRIVATE_PORT"
-	inspectorPrivatePortEnvVar       = "IRONIC_INSPECTOR_PRIVATE_PORT"
 	ironicListenPortEnvVar           = "IRONIC_LISTEN_PORT"
-	inspectorListenPortEnvVar        = "IRONIC_INSPECTOR_LISTEN_PORT"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
-	forceInspectorEnvVar             = "USE_IRONIC_INSPECTOR"
-	inspectorHtpasswdPath            = "/auth/inspector/htpasswd" // #nosec G101
 )
-
-var ironicUserID int64 = 1002
-var inspectorGroupID int64 = 1004
 
 var podTemplateAnnotations = map[string]string{
 	"target.workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
@@ -93,34 +80,15 @@ var ironicCredentialsMount = corev1.VolumeMount{
 	ReadOnly:  true,
 }
 
-var inspectorCredentialsMount = corev1.VolumeMount{
-	Name:      inspectorCredentialsVolume,
-	MountPath: metal3AuthRootDir + "/ironic-inspector",
-	ReadOnly:  true,
-}
-
 var ironicTlsMount = corev1.VolumeMount{
 	Name:      ironicTlsVolume,
 	MountPath: metal3TlsRootDir + "/ironic",
 	ReadOnly:  true,
 }
 
-var inspectorTlsMount = corev1.VolumeMount{
-	Name:      inspectorTlsVolume,
-	MountPath: metal3TlsRootDir + "/ironic-inspector",
-	ReadOnly:  true,
-}
-
 var vmediaTlsMount = corev1.VolumeMount{
 	Name:      vmediaTlsVolume,
 	MountPath: metal3TlsRootDir + "/vmedia",
-	ReadOnly:  true,
-}
-
-var inspectorHtpasswdMount = corev1.VolumeMount{
-	Name:      inspectorHtpasswdVolume,
-	MountPath: inspectorHtpasswdPath,
-	SubPath:   ironicHtpasswdKey,
 	ReadOnly:  true,
 }
 
@@ -155,7 +123,6 @@ var metal3Volumes = []corev1.Volume{
 				Items: []corev1.KeyToPath{
 					{Key: ironicUsernameKey, Path: ironicUsernameKey},
 					{Key: ironicPasswordKey, Path: ironicPasswordKey},
-					{Key: ironicConfigKey, Path: ironicConfigKey},
 					{Key: ironicHtpasswdKey, Path: ironicHtpasswdKey},
 				},
 			},
@@ -169,30 +136,9 @@ var metal3Volumes = []corev1.Volume{
 			},
 		},
 	},
-	{
-		Name: inspectorCredentialsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: inspectorSecretName,
-				Items: []corev1.KeyToPath{
-					{Key: ironicUsernameKey, Path: ironicUsernameKey},
-					{Key: ironicPasswordKey, Path: ironicPasswordKey},
-					{Key: ironicConfigKey, Path: ironicConfigKey},
-				},
-			},
-		},
-	},
 	trustedCAVolume(),
 	{
 		Name: ironicTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
-			},
-		},
-	},
-	{
-		Name: inspectorTlsVolume,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: tlsSecretName,
@@ -204,17 +150,6 @@ var metal3Volumes = []corev1.Volume{
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: tlsSecretName,
-			},
-		},
-	},
-	{
-		Name: inspectorHtpasswdVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: inspectorSecretName,
-				Items: []corev1.KeyToPath{
-					{Key: ironicHtpasswdKey, Path: ironicHtpasswdKey},
-				},
 			},
 		},
 	},
@@ -405,7 +340,6 @@ func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3Ironic(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3RamdiskLogs(info.Images),
-		createContainerMetal3IronicInspector(info.Images, info, &info.ProvConfig.Spec),
 	}
 
 	// If the provisioning network is disabled, and the user hasn't requested a
@@ -496,34 +430,24 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	httpsPort, _ := strconv.Atoi(baremetalVmediaHttpsPort) // #nosec
 
 	ironicPort := baremetalIronicPort
-	inspectorPort := baremetalIronicInspectorPort
 	// In the proxy mode, the ironic API is served on the private port,
 	// while ironic-proxy, running as a DeamonSet on all nodes, serves on
-	// 6385 and proxies the traffic (same for inspector).
+	// 6385 and proxies the traffic.
 	if UseIronicProxy(config) {
 		ironicPort = ironicPrivatePort
-		inspectorPort = inspectorPrivatePort
 	}
 
 	volumeMounts := []corev1.VolumeMount{
 		sharedVolumeMount,
 		ironicCredentialsMount,
-		inspectorCredentialsMount,
 		imageVolumeMount,
 		ironicTlsMount,
-		inspectorTlsMount,
-		inspectorHtpasswdMount,
 	}
 	ports := []corev1.ContainerPort{
 		{
 			Name:          "ironic",
 			ContainerPort: int32(ironicPort),
 			HostPort:      int32(ironicPort),
-		},
-		{
-			Name:          "inspector",
-			ContainerPort: int32(inspectorPort),
-			HostPort:      int32(inspectorPort),
 		},
 		{
 			Name:          httpPortName,
@@ -566,29 +490,12 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 				Value: "true",
 			},
 			{
-				Name:  inspectorProxyEnvVar,
-				Value: "true",
-			},
-			{
 				Name:  ironicPrivatePortEnvVar,
-				Value: useUnixSocket,
-			},
-			{
-				Name:  inspectorPrivatePortEnvVar,
 				Value: useUnixSocket,
 			},
 			{
 				Name:  ironicListenPortEnvVar,
 				Value: fmt.Sprint(ironicPort),
-			},
-			{
-				Name:  inspectorListenPortEnvVar,
-				Value: fmt.Sprint(inspectorPort),
-			},
-			// TODO(dtantsur): remove when removing inspector
-			{
-				Name:  forceInspectorEnvVar,
-				Value: "true",
 			},
 		},
 		Ports: ports,
@@ -608,9 +515,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 	volumes := []corev1.VolumeMount{
 		sharedVolumeMount,
 		imageVolumeMount,
-		inspectorCredentialsMount,
 		ironicTlsMount,
-		inspectorTlsMount,
 	}
 	if !config.DisableVirtualMediaTLS {
 		volumes = append(volumes, vmediaTlsMount)
@@ -635,10 +540,6 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 				Value: "true",
 			},
 			{
-				Name:  inspectorInsecureEnvVar,
-				Value: "true",
-			},
-			{
 				Name:  ironicKernelParamsEnvVar,
 				Value: getKernelParams(&info.ProvConfig.Spec, info.NetworkStack),
 			},
@@ -657,11 +558,6 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			setIronicExternalIp(externalIpEnvVar, config),
 			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
-			// TODO(dtantsur): remove when removing inspector
-			{
-				Name:  forceInspectorEnvVar,
-				Value: "true",
-			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -698,62 +594,6 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 			},
 		},
 	}
-	return container
-}
-
-func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
-	container := corev1.Container{
-		Name:            "metal3-ironic-inspector",
-		Image:           images.Ironic,
-		ImagePullPolicy: "IfNotPresent",
-		Command:         []string{"/bin/runironic-inspector"},
-		VolumeMounts: []corev1.VolumeMount{
-			sharedVolumeMount,
-			ironicCredentialsMount,
-			ironicTlsMount,
-			inspectorTlsMount,
-		},
-		Env: []corev1.EnvVar{
-			{
-				Name:  ironicInsecureEnvVar,
-				Value: "true",
-			},
-			{
-				Name:  ironicKernelParamsEnvVar,
-				Value: getKernelParams(&info.ProvConfig.Spec, info.NetworkStack),
-			},
-			{
-				Name:  inspectorProxyEnvVar,
-				Value: "true",
-			},
-			{
-				Name:  inspectorPrivatePortEnvVar,
-				Value: useUnixSocket,
-			},
-			buildEnvVar(provisioningIP, config),
-			buildEnvVar(provisioningInterface, config),
-			buildEnvVar(provisioningMacAddresses, config),
-			{
-				Name:  forceInspectorEnvVar,
-				Value: "true",
-			},
-		},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("40m"),
-				corev1.ResourceMemory: resource.MustParse("100Mi"),
-			},
-		},
-		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-		SecurityContext: &corev1.SecurityContext{
-			RunAsUser:  ptr.To(ironicUserID),
-			RunAsGroup: ptr.To(inspectorGroupID),
-			Capabilities: &corev1.Capabilities{
-				Drop: []corev1.Capability{"ALL"},
-			},
-		},
-	}
-
 	return container
 }
 

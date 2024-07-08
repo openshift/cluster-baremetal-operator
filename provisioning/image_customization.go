@@ -35,7 +35,6 @@ import (
 
 const (
 	ironicBaseUrl                    = "IRONIC_BASE_URL"
-	ironicInspectorBaseUrl           = "IRONIC_INSPECTOR_BASE_URL"
 	ironicAgentImage                 = "IRONIC_AGENT_IMAGE"
 	imageCustomizationDeploymentName = "metal3-image-customization"
 	imageCustomizationVolume         = "metal3-image-customization-volume"
@@ -106,8 +105,8 @@ func getUrlFromIP(ipAddrs []string, port int) string {
 	return strings.Join(result, ",")
 }
 
-func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIPs []string, inspectorIPs []string) corev1.Container {
-	noProxy := append(ironicIPs, inspectorIPs...)
+func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIPs []string) corev1.Container {
+	noProxy := ironicIPs
 	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{}, noProxy)
 
 	container := corev1.Container{
@@ -147,11 +146,6 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 				Value: getUrlFromIP(ironicIPs, baremetalIronicPort),
 			},
 			corev1.EnvVar{
-				Name: ironicInspectorBaseUrl,
-				// TODO(dtantsur): when inspector is gone, we may be able to stop passing this URL
-				Value: getUrlFromIP(inspectorIPs, baremetalIronicInspectorPort),
-			},
-			corev1.EnvVar{
 				Name:  ironicAgentImage,
 				Value: images.IronicAgent,
 			},
@@ -181,9 +175,9 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 	return container
 }
 
-func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string, ironicIPs []string, inspectorIPs []string) *corev1.PodTemplateSpec {
+func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string, ironicIPs []string) *corev1.PodTemplateSpec {
 	containers := []corev1.Container{
-		createImageCustomizationContainer(info.Images, info, ironicIPs, inspectorIPs),
+		createImageCustomizationContainer(info.Images, info, ironicIPs),
 	}
 
 	// Extract the pre-provisioning images from a container in the payload
@@ -240,7 +234,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 	}
 }
 
-func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIPs []string, inspectorIPs []string) *appsv1.Deployment {
+func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIPs []string) *appsv1.Deployment {
 	selector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"k8s-app":    metal3AppName,
@@ -251,7 +245,7 @@ func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIPs []string,
 		"k8s-app":    metal3AppName,
 		cboLabelName: imageCustomizationService,
 	}
-	template := newImageCustomizationPodTemplateSpec(info, &podSpecLabels, ironicIPs, inspectorIPs)
+	template := newImageCustomizationPodTemplateSpec(info, &podSpecLabels, ironicIPs)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        imageCustomizationDeploymentName,
@@ -270,7 +264,7 @@ func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIPs []string,
 	}
 }
 
-func newImageCustomizationConfig(info *ProvisioningInfo, ironicIPs []string, inspectorIPs []string) *corev1.Secret {
+func newImageCustomizationConfig(info *ProvisioningInfo, ironicIPs []string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        imageCustomizationConfigName,
@@ -285,20 +279,18 @@ func newImageCustomizationConfig(info *ProvisioningInfo, ironicIPs []string, ins
 		StringData: map[string]string{
 			ironicAgentImage: info.Images.IronicAgent,
 			ironicBaseUrl:    getUrlFromIP(ironicIPs, baremetalIronicPort),
-			// TODO(dtantsur): when inspector is gone, we may be able to stop passing this URL
-			ironicInspectorBaseUrl: getUrlFromIP(inspectorIPs, baremetalIronicInspectorPort),
-			sshKeyEnvVar:           info.SSHKey,
+			sshKeyEnvVar:     info.SSHKey,
 		},
 	}
 }
 
 func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, err error) {
-	ironicIPs, inspectorIPs, err := GetIronicIPs(info)
+	ironicIPs, err := GetIronicIPs(info)
 	if err != nil {
 		return false, fmt.Errorf("unable to determine Ironic's IP to pass to the machine-image-customization-controller: %w", err)
 	}
 
-	configSecret := newImageCustomizationConfig(info, ironicIPs, inspectorIPs)
+	configSecret := newImageCustomizationConfig(info, ironicIPs)
 	err = controllerutil.SetControllerReference(info.ProvConfig, configSecret, info.Scheme)
 	if err != nil {
 		err = fmt.Errorf("unable to set controllerReference on machine-image-customization config: %w", err)
@@ -310,7 +302,7 @@ func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, e
 		return false, fmt.Errorf("failed to create the image customization config: %w", err)
 	}
 
-	imageCustomizationDeployment := newImageCustomizationDeployment(info, ironicIPs, inspectorIPs)
+	imageCustomizationDeployment := newImageCustomizationDeployment(info, ironicIPs)
 	expectedGeneration := resourcemerge.ExpectedDeploymentGeneration(imageCustomizationDeployment, info.ProvConfig.Status.Generations)
 	err = controllerutil.SetControllerReference(info.ProvConfig, imageCustomizationDeployment, info.Scheme)
 	if err != nil {

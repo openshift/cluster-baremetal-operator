@@ -30,7 +30,6 @@ var (
 	baremetalVmediaHttpsPort       = "6183"
 	baremetalWebhookPort           = "9447"
 	baremetalIronicPort            = 6385
-	baremetalIronicInspectorPort   = 5050
 	baremetalKernelSubPath         = "ironic-python-agent.kernel"
 	baremetalIronicEndpointSubpath = "v1/"
 	provisioningIP                 = "PROVISIONING_IP"
@@ -38,7 +37,6 @@ var (
 	provisioningMacAddresses       = "PROVISIONING_MACS"
 	deployKernelUrl                = "DEPLOY_KERNEL_URL"
 	ironicEndpoint                 = "IRONIC_ENDPOINT"
-	ironicInspectorEndpoint        = "IRONIC_INSPECTOR_ENDPOINT"
 	httpPort                       = "HTTP_PORT"
 	vmediaHttpsPort                = "VMEDIA_TLS_PORT"
 	dnsIP                          = "DNS_IP"
@@ -79,33 +77,18 @@ func getDeployKernelUrl() *string {
 	return &deployKernelUrl
 }
 
-// TODO(dtantsur): these two can be removed once we no longer have ironic/inspector split
-
-func getIronicEndpoint() *string {
-	ironicEndpoint := fmt.Sprintf("https://localhost:%d/%s", baremetalIronicPort, baremetalIronicEndpointSubpath)
-	return &ironicEndpoint
-}
-
-func getIronicInspectorEndpoint() *string {
-	ironicInspectorEndpoint := fmt.Sprintf("https://localhost:%d/%s", baremetalIronicInspectorPort, baremetalIronicEndpointSubpath)
-	return &ironicInspectorEndpoint
-}
-
-func getControlPlanePorts(info *ProvisioningInfo) (ironicPort int, inspectorPort int) {
+func getControlPlanePort(info *ProvisioningInfo) (ironicPort int) {
 	ironicPort = baremetalIronicPort
-	inspectorPort = baremetalIronicInspectorPort
 	if UseIronicProxy(&info.ProvConfig.Spec) {
 		// Direct access to real services behind the proxy.
 		ironicPort = ironicPrivatePort
-		inspectorPort = inspectorPrivatePort
 	}
 	return
 }
 
-func getControlPlaneEndpoints(info *ProvisioningInfo) (ironicEndpoint string, inspectorEndpoint string) {
-	ironicPort, inspectorPort := getControlPlanePorts(info)
+func getControlPlaneEndpoint(info *ProvisioningInfo) (ironicEndpoint string) {
+	ironicPort := getControlPlanePort(info)
 	ironicEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, ironicPort, baremetalIronicEndpointSubpath)
-	inspectorEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, inspectorPort, baremetalIronicEndpointSubpath)
 	return
 }
 
@@ -133,10 +116,6 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 		return pointer.StringPtr(strings.Join(baremetalConfig.ProvisioningMacAddresses, ","))
 	case deployKernelUrl:
 		return getDeployKernelUrl()
-	case ironicEndpoint:
-		return getIronicEndpoint()
-	case ironicInspectorEndpoint:
-		return getIronicInspectorEndpoint()
 	case httpPort:
 		return pointer.StringPtr(baremetalHttpPort)
 	case vmediaHttpsPort:
