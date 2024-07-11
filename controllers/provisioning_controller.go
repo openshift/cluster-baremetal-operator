@@ -41,14 +41,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -212,6 +207,14 @@ func getSuccessStatus(imageCacheState appsv1.DaemonSetConditionType, ironicProxy
 // Reconcile updates the cluster settings when the Provisioning
 // resource changes
 func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// provisioning.metal3.io is a singleton
+	// Note: this check is here to make sure that the early startup configuration
+	// is correct. For day 2 operatations the webhook will validate this.
+	if req.Name != metal3iov1alpha1.ProvisioningSingletonName {
+		klog.Info("ignoring invalid CR", "name", req.Name)
+		return ctrl.Result{}, nil
+	}
+
 	// Make sure ClusterOperator exists
 	err := r.ensureClusterOperator()
 	if err != nil {
@@ -610,8 +613,33 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	ctx := context.Background()
+	err := r.ensureClusterOperator()
+	if err != nil {
+		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
+	}
 
-	var err error
+	// Check the Platform Type to determine the state of the CO
+	enabled := IsEnabled(r.EnabledFeatures)
+	if !enabled {
+		//Set ClusterOperator status to disabled=true, available=true
+		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")
+		if err != nil {
+			return fmt.Errorf("unable to put %q ClusterOperator in Disabled state: %w", clusterOperatorName, err)
+		}
+		return nil
+	}
+
+	// If Platform is BareMetal, we could still be missing the Provisioning CR
+	if enabled {
+		baremetalConfig, err := r.readProvisioningCR(context.Background())
+		if err != nil || baremetalConfig == nil {
+			err = r.updateCOStatus(ReasonProvisioningCRNotFound, "Waiting for Provisioning CR on BareMetal Platform", "")
+			if err != nil {
+				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
+			}
+		}
+	}
+
 	r.NetworkStack, err = r.networkStackFromServiceNetwork(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to determine network stack from service network: %w", err)
@@ -619,50 +647,14 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	klog.InfoS("Network stack calculation", "NetworkStack", r.NetworkStack)
 
-	provisioningFilter := predicate.NewPredicateFuncs(func(object client.Object) bool {
-		if object.GetName() == metal3iov1alpha1.ProvisioningSingletonName {
-			return true
-		}
-		klog.Info("ignoring provisioning config with unexpected name", "name", object.GetName(), "expected-name", metal3iov1alpha1.ProvisioningSingletonName)
-		return false
-	})
-
-	clusterOperatorsWatched := []string{clusterOperatorName, "service-ca"}
-	clusterOperatorFilter := predicate.NewPredicateFuncs(func(object client.Object) bool {
-		return slices.Contains(clusterOperatorsWatched, object.GetName())
-	})
-
-	// Watch Secret openshift-config/pull-secret. If this secret changes, we must requeue the provisioning Singleton,
-	// if it exists.
-	watchOCPConfigPullSecret := func(ctx context.Context, object client.Object) []reconcile.Request {
-		prov, err := r.readProvisioningCR(ctx)
-		// readProvisioningCR can return nil, nil upon IsNotFound, account for this as well.
-		if err != nil || prov == nil {
-			return []reconcile.Request{}
-		}
-		return []reconcile.Request{
-			{
-				NamespacedName: types.NamespacedName{
-					Namespace: prov.Namespace,
-					Name:      prov.Name,
-				},
-			},
-		}
-	}
-	secretFilter := predicate.NewPredicateFuncs(func(object client.Object) bool {
-		return object.GetNamespace() == provisioning.OpenshiftConfigNamespace &&
-			object.GetName() == provisioning.PullSecretName
-	})
-
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&metal3iov1alpha1.Provisioning{}, builder.WithPredicates(provisioningFilter)).
+		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&osconfigv1.ClusterOperator{}).
 		Owns(&osconfigv1.Proxy{}).
-		Watches(&osconfigv1.ClusterOperator{}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(clusterOperatorFilter)).
-		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(watchOCPConfigPullSecret), builder.WithPredicates(secretFilter)).
+		Owns(&machinev1beta1.Machine{}).
 		Complete(r)
 }
