@@ -357,11 +357,13 @@ func TestNewMetal3Containers(t *testing.T) {
 				withEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
 					envWithValue("IRONIC_LISTEN_PORT", "6388"),
 				),
 				withEnv(
 					containers["metal3-ironic"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
 					envWithValue("IRONIC_KERNEL_PARAMS", "rd.net.timeout.carrier=30 ip=dhcp6"),
 				),
 				containers["metal3-ramdisk-logs"],
