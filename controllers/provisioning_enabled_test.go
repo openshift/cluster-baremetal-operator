@@ -74,6 +74,12 @@ func TestIsEnabled(t *testing.T) {
 			isEnabled:     true,
 		},
 		{
+			name:          "kubevirt",
+			infra:         withPlatformType(infra, configv1.KubevirtPlatformType),
+			expectedError: false,
+			isEnabled:     true,
+		},
+		{
 			name:          "NoPlatform",
 			infra:         withPlatformType(infra, ""),
 			expectedError: false,

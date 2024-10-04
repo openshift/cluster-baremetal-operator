@@ -105,6 +105,8 @@ func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 		return nil, nil
 	case osconfigv1.GCPPlatformType:
 		return nil, nil
+	case osconfigv1.KubevirtPlatformType:
+		return nil, nil
 	case osconfigv1.NonePlatformType:
 		return nil, nil
 	default:
