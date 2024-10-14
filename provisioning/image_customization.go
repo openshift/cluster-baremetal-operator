@@ -49,6 +49,7 @@ const (
 	imageCustomizationConfigName     = "metal3-image-customization-config"
 	ironicAgentPullSecret            = "ironic-agent-pull-secret" // #nosec G101
 	ironicAgentPullSecretPath        = "/run/secrets/pull-secret" // #nosec G101
+	additionalNTPServers             = "ADDITIONAL_NTP_SERVERS"
 )
 
 var (
@@ -156,6 +157,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			corev1.EnvVar{
 				Name:  ipOptions,
 				Value: info.NetworkStack.IpOption(),
+			},
+			corev1.EnvVar{
+				Name:  additionalNTPServers,
+				Value: strings.Join(info.ProvConfig.Spec.AdditionalNTPServers, ","),
 			},
 			buildSSHKeyEnvVar(info.SSHKey)),
 		Ports: []corev1.ContainerPort{

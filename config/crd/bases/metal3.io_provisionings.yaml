@@ -47,6 +47,13 @@ spec:
           spec:
             description: ProvisioningSpec defines the desired state of Provisioning
             properties:
+              additionalNTPServers:
+                description: |-
+                  AdditionalNTPServers is a list of NTP Servers to be used by the
+                  provisioning service
+                items:
+                  type: string
+                type: array
               bootIsoSource:
                 description: |-
                   BootIsoSource provides a way to set the location where the iso image

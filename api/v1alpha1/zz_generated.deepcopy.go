@@ -127,6 +127,11 @@ func (in *ProvisioningSpec) DeepCopyInto(out *ProvisioningSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.AdditionalNTPServers != nil {
+		in, out := &in.AdditionalNTPServers, &out.AdditionalNTPServers
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	out.PreProvisioningOSDownloadURLs = in.PreProvisioningOSDownloadURLs
 }
 
