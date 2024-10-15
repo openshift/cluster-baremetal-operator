@@ -42,11 +42,11 @@ func EnabledFeatures(ctx context.Context, osClient osclientset.Interface) (v1alp
 
 	//NOTE(dtantsur/janders) if the code below is updated, GetServerInternalIP() function in provisioning/utils.go needs to be updated to match.
 	switch infra.Status.PlatformStatus.Type {
-	case osconfigv1.BareMetalPlatformType:
+	case osconfigv1.BareMetalPlatformType, osconfigv1.NonePlatformType:
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkDisabled] = true
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkUnmanaged] = true
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkManaged] = true
-	case osconfigv1.OpenStackPlatformType, osconfigv1.NonePlatformType, osconfigv1.VSpherePlatformType, osconfigv1.AWSPlatformType, osconfigv1.AzurePlatformType,
+	case osconfigv1.OpenStackPlatformType, osconfigv1.VSpherePlatformType, osconfigv1.AWSPlatformType, osconfigv1.AzurePlatformType,
 		osconfigv1.GCPPlatformType, osconfigv1.KubevirtPlatformType:
 		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkDisabled] = true
 	}
