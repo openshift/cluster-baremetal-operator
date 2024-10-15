@@ -162,3 +162,66 @@ each master node so that the metal3 deployment is able to access a local copy of
 CBO reports its own state using the “baremetal” CO as mentioned earlier. It is also designed to provide alerts and metrics regarding its own
 deployment. It is also capable of reporting metrics gathered by BMO regarding the baremetal servers being provisioned. These metrics can then be
 scraped by Prometheus and can be viewed on the Prometheus dashboard.
+
+## Testing CBO patches
+
+If you want to test a CBO change on your cluster, you need to stop
+cluster-version-operator from enforcing its version. This is a rough idea of
+what needs to be done:
+
+**NEVER DO THIS IN PRODUCTION**
+
+Create an override for the CBO deployment:
+
+```
+$ oc patch clusterversion version --namespace openshift-cluster-version --type merge \
+    -p '{"spec":{"overrides":[{"kind":"Deployment","group":"apps","name":"cluster-baremetal-operator","namespace":"openshift-machine-api","unmanaged":true}]}}'
+```
+
+Now you can edit the deployment, e.g.
+
+```
+$ oc edit deployment -n openshift-machine-api cluster-baremetal-operator
+```
+
+To be on the safe side, you can wait 3 minutes to make sure your override works
+correctly. The deployment will make sure the CBO pod is updated.
+
+Once finished with the testing, remove the override and wait for CVO to
+reconfigure the deployment.
+
+## Testing different images for managed components
+
+The process to test a new image for any managed component, e.g. Ironic, is
+similar to testing a new CBO image, except that you will be modifying the
+`cluster-baremetal-operator-images` ConfigMap.
+
+**NEVER DO THIS IN PRODUCTION**
+
+Create a version override for the ConfigMap:
+
+```
+$ oc patch clusterversion version --namespace openshift-cluster-version --type merge \
+    -p '{"spec":{"overrides":[{"kind":"ConfigMap","group":"","name":"cluster-baremetal-operator-images","namespace":"openshift-machine-api","unmanaged":true}]}}'
+```
+
+Now edit the ConfigMap:
+
+```
+oc edit ConfigMap -n openshift-machine-api cluster-baremetal-operator-images
+```
+
+To be on the safe side, you can wait 3 minutes to make sure your override works
+correctly.
+
+Finally, find and delete the CBO pod:
+
+```
+oc delete pod cluster-baremetal-operator-67d4b9c45c-sp242
+```
+
+This will cause the pod to be restarted with the new configuration. CBO will,
+in turn, update any modified components.
+
+Once finished with the testing, remove the override, wait for CVO to
+reconfigure the ConfigMap, and restart the pod again.
