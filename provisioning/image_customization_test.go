@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
 func TestNewImageCustomizationContainer(t *testing.T) {
@@ -53,6 +54,8 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		ironicAgentPullSecretMount,
 	}
 
+	ntpServers := []string{"192.168.1.252", "192.168.1.253"}
+
 	container1 := corev1.Container{
 		Name: "image-customization-controller",
 		Env: []corev1.EnvVar{
@@ -65,6 +68,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
+			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -84,6 +88,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
+			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -106,6 +111,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
+			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -116,12 +122,33 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		"IRONIC_RAMDISK_SSH_KEY": "sshkey",
 	}
 
+	container4 := corev1.Container{
+		Name: "image-customization-controller",
+		Env: []corev1.EnvVar{
+			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
+			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
+			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
+			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
+			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
+			{Name: "ADDITIONAL_NTP_SERVERS", Value: "192.168.1.252,192.168.1.253"},
+			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
+		},
+		VolumeMounts: expectedVolumeMounts,
+	}
+	secret4 := map[string]string{
+		"IRONIC_BASE_URL":        "https://192.168.0.2:6385",
+		"IRONIC_AGENT_IMAGE":     "registry.ci.openshift.org/openshift:ironic-agent",
+		"IRONIC_RAMDISK_SSH_KEY": "sshkey",
+	}
+
 	tCases := []struct {
 		name              string
 		ironicIPs         []string
 		proxy             *v1.Proxy
 		expectedContainer corev1.Container
 		expectedSecret    map[string]string
+		ntpServers        []string
 	}{
 		{
 			name:              "image customization container with proxy",
@@ -129,6 +156,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			proxy:             testProxy,
 			expectedContainer: container1,
 			expectedSecret:    secret1,
+			ntpServers:        []string{},
 		},
 		{
 			name:              "image customization container without proxy",
@@ -136,6 +164,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			proxy:             nil,
 			expectedContainer: container2,
 			expectedSecret:    secret2,
+			ntpServers:        []string{},
 		},
 		{
 			name:              "image customization container with proxy",
@@ -143,6 +172,15 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			proxy:             testProxy,
 			expectedContainer: container3,
 			expectedSecret:    secret3,
+			ntpServers:        []string{},
+		},
+		{
+			name:              "image customization container with additional NTP servers",
+			ironicIPs:         []string{ironicIP},
+			proxy:             nil,
+			expectedContainer: container4,
+			expectedSecret:    secret4,
+			ntpServers:        ntpServers,
 		},
 	}
 	for _, tc := range tCases {
@@ -153,6 +191,11 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 				SSHKey:       "sshkey",
 				NetworkStack: NetworkStackV4,
 				Proxy:        tc.proxy,
+				ProvConfig: &v1alpha1.Provisioning{
+					Spec: v1alpha1.ProvisioningSpec{
+						AdditionalNTPServers: tc.ntpServers,
+					},
+				},
 			}
 			actualContainer := createImageCustomizationContainer(&images, info, tc.ironicIPs)
 			for e := range actualContainer.Env {

@@ -147,6 +147,10 @@ type ProvisioningSpec struct {
 	// for layered products (e.g. ZTP).
 	ProvisioningDNS bool `json:"provisioningDNS,omitempty"`
 
+	// AdditionalNTPServers is a list of NTP Servers to be used by the
+	// provisioning service
+	AdditionalNTPServers []string `json:"additionalNTPServers,omitempty"`
+
 	// WatchAllNamespaces provides a way to explicitly allow use of this
 	// Provisioning configuration across all Namespaces. It is an
 	// optional configuration which defaults to false and in that state
