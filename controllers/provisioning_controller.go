@@ -42,8 +42,12 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	baremetalv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	osconfigv1 "github.com/openshift/api/config/v1"
@@ -650,14 +654,36 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	klog.InfoS("Network stack calculation", "NetworkStack", r.NetworkStack)
 
+	// Watch Secret openshift-config/pull-secret. If this secret changes, we must requeue the provisioning Singleton,
+	// if it exists.
+	mapToProvisioningSingleton := func(ctx context.Context, object client.Object) []reconcile.Request {
+		prov, err := r.readProvisioningCR(ctx)
+		// readProvisioningCR can return nil, nil upon IsNotFound, account for this as well.
+		if err != nil || prov == nil {
+			return []reconcile.Request{}
+		}
+		return []reconcile.Request{
+			{
+				NamespacedName: types.NamespacedName{
+					Namespace: prov.Namespace,
+					Name:      prov.Name,
+				},
+			},
+		}
+	}
+	pullSecretFilter := predicate.NewPredicateFuncs(func(object client.Object) bool {
+		return object.GetNamespace() == provisioning.OpenshiftConfigNamespace &&
+			object.GetName() == provisioning.PullSecretName
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.DaemonSet{}).
-		Owns(&osconfigv1.ClusterOperator{}).
-		Owns(&osconfigv1.Proxy{}).
-		Owns(&machinev1beta1.Machine{}).
+		Watches(&osconfigv1.ClusterOperator{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
+		Watches(&osconfigv1.Proxy{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton), builder.WithPredicates(pullSecretFilter)).
 		Complete(r)
 }
