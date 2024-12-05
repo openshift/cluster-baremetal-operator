@@ -41,6 +41,9 @@ const (
 	imageCustomizationPort           = 8084
 	containerRegistriesConfPath      = "/etc/containers/registries.conf"
 	containerRegistriesEnvVar        = "REGISTRIES_CONF_PATH"
+	containerUserCaBundlePath        = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
+	containerUserCaBundleVolume      = "user-ca-bundle"
+	containerUserCaBundleEnvVar      = "CA_BUNDLE"
 	imageSharedDir                   = "/shared/html/images"
 	deployISOEnvVar                  = "DEPLOY_ISO"
 	deployISOFile                    = imageSharedDir + "/ironic-python-agent.iso"
@@ -56,6 +59,10 @@ var (
 	imageRegistriesVolumeMount = corev1.VolumeMount{
 		Name:      imageCustomizationVolume,
 		MountPath: containerRegistriesConfPath,
+	}
+	userCaBundleVolumeMount = corev1.VolumeMount{
+		Name:      containerUserCaBundleVolume,
+		MountPath: containerUserCaBundlePath,
 	}
 	ironicAgentPullSecretMount = corev1.VolumeMount{
 		Name:      ironicAgentPullSecret,
@@ -89,6 +96,19 @@ func ironicAgentPullSecretVolume() corev1.Volume {
 				Items: []corev1.KeyToPath{
 					{Key: openshiftConfigSecretKey, Path: PullSecretName},
 				},
+			},
+		},
+	}
+}
+
+func userCABundleVolume() corev1.Volume {
+	volType := corev1.HostPathFile
+	return corev1.Volume{
+		Name: containerUserCaBundleVolume,
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: containerUserCaBundlePath,
+				Type: &volType,
 			},
 		},
 	}
@@ -132,6 +152,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			imageRegistriesVolumeMount,
 			imageVolumeMount,
 			ironicAgentPullSecretMount,
+			userCaBundleVolumeMount,
 		},
 		ImagePullPolicy: "IfNotPresent",
 		Env: append(envVars, corev1.EnvVar{
@@ -161,6 +182,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			corev1.EnvVar{
 				Name:  additionalNTPServers,
 				Value: strings.Join(info.ProvConfig.Spec.AdditionalNTPServers, ","),
+			},
+			corev1.EnvVar{
+				Name:  containerUserCaBundleEnvVar,
+				Value: containerUserCaBundlePath,
 			},
 			buildSSHKeyEnvVar(info.SSHKey)),
 		Ports: []corev1.ContainerPort{
@@ -234,6 +259,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 				imageVolume(),
 				trustedCAVolume(),
 				ironicAgentPullSecretVolume(),
+				userCABundleVolume(),
 			},
 		},
 	}
