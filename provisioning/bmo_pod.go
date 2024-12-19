@@ -219,9 +219,16 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 
 	containers := injectProxyAndCA([]corev1.Container{container}, info.Proxy)
 
+	podAnnotations := make(map[string]string)
+	for key, val := range podTemplateAnnotations {
+		podAnnotations[key] = val
+	}
+
+	podAnnotations["openshift.io/required-scc"] = "hostnetwork-v2"
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: podTemplateAnnotations,
+			Annotations: podAnnotations,
 			Labels:      *labels,
 		},
 		Spec: corev1.PodSpec{
