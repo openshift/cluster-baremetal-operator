@@ -570,7 +570,7 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 
 	machines := machinev1beta1.MachineList{}
 	bmhNames := []string{}
-	labelReq, _ := labels.NewRequirement("machine.openshift.io/cluster-api-machine-role", selection.Equals, []string{"master"})
+	labelReq, _ := labels.NewRequirement("machine.openshift.io/cluster-api-machine-role", selection.Equals, []string{"master", "arbiter"})
 	err := r.Client.List(ctx, &machines, &client.ListOptions{LabelSelector: labels.NewSelector().Add(*labelReq)})
 	if err != nil {
 		if runtime.IsNotRegisteredError(err) || meta.IsNoMatchError(err) {
