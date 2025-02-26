@@ -3,7 +3,6 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   annotations:
-    exclude.release.openshift.io/internal-openshift-hosted: "true"
     capability.openshift.io/name: baremetal
   labels:
     k8s-app: cluster-baremetal-operator
