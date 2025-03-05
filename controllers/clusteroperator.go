@@ -116,6 +116,24 @@ func relatedObjects() []osconfigv1.ObjectReference {
 			Name:      "",
 			Namespace: ComponentNamespace,
 		},
+		{
+			Group:     "metal3.io",
+			Resource:  "hostfirmwarecomponents",
+			Name:      "",
+			Namespace: ComponentNamespace,
+		},
+		{
+			Group:     "metal3.io",
+			Resource:  "dataimages",
+			Name:      "",
+			Namespace: ComponentNamespace,
+		},
+		{
+			Group:     "metal3.io",
+			Resource:  "hostupdatepolicies",
+			Name:      "",
+			Namespace: ComponentNamespace,
+		},
 	}
 }
 
