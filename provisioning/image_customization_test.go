@@ -52,6 +52,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		imageRegistriesVolumeMount,
 		imageVolumeMount,
 		ironicAgentPullSecretMount,
+		userCaBundleVolumeMount,
 	}
 
 	ntpServers := []string{"192.168.1.252", "192.168.1.253"}
@@ -69,6 +70,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
+			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -89,6 +91,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
+			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -112,6 +115,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
+			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -132,6 +136,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: "192.168.1.252,192.168.1.253"},
+			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
