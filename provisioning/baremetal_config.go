@@ -49,6 +49,9 @@ var (
 )
 
 func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
+	if config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled {
+		return nil
+	}
 	var dhcpRange string
 	if config.ProvisioningDHCPRange != "" {
 		_, net, err := net.ParseCIDR(config.ProvisioningNetworkCIDR)
@@ -61,9 +64,6 @@ func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
 }
 
 func getProvisioningIPCIDR(config *metal3iov1alpha1.ProvisioningSpec) *string {
-	if config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled {
-		return nil
-	}
 	if config.ProvisioningNetworkCIDR != "" && config.ProvisioningIP != "" {
 		_, net, err := net.ParseCIDR(config.ProvisioningNetworkCIDR)
 		if err == nil {
