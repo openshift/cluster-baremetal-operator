@@ -39,3 +39,7 @@ status:
     name: ""
     resource: "bmceventsubscriptions"
     namespace: openshift-machine-api
+  - group: "metal3.io"
+    name: ""
+    resource: "hostfirmwarecomponents"
+    namespace: openshift-machine-api
