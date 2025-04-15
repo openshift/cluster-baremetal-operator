@@ -228,7 +228,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	if !IsEnabled(r.EnabledFeatures) {
+	if !IsProvNetworkEnabled(r.EnabledFeatures) {
 		// set ClusterOperator status to disabled=true, available=true
 		// We're disabled; don't requeue
 		return ctrl.Result{}, errors.Wrapf(
@@ -626,7 +626,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	// Check the Platform Type to determine the state of the CO
-	enabled := IsEnabled(r.EnabledFeatures)
+	enabled := IsProvNetworkEnabled(r.EnabledFeatures)
 	if !enabled {
 		//Set ClusterOperator status to disabled=true, available=true
 		err = r.updateCOStatus(ReasonUnsupported, "Nothing to do on this Platform", "")

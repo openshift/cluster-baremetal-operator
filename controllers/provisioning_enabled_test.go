@@ -102,7 +102,7 @@ func TestIsEnabled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 
-			ef, err := EnabledFeatures(context.TODO(), fakeconfigclientset.NewSimpleClientset(tc.infra))
+			ef, err := EnabledFeatures(context.TODO(), fakeconfigclientset.NewSimpleClientset(tc.infra), false)
 			if tc.expectedError && err == nil {
 				t.Error("should have produced an error")
 				return
@@ -111,7 +111,7 @@ func TestIsEnabled(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			assert.Equal(t, tc.isEnabled, IsEnabled(ef), "enabled results did not match")
+			assert.Equal(t, tc.isEnabled, IsProvNetworkEnabled(ef), "enabled results did not match")
 		})
 	}
 }

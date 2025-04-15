@@ -12,7 +12,7 @@ import (
 )
 
 // IsEnabled returns true if there is at least one feature enabled.
-func IsEnabled(enabledFeatures v1alpha1.EnabledFeatures) bool {
+func IsProvNetworkEnabled(enabledFeatures v1alpha1.EnabledFeatures) bool {
 	for _, f := range enabledFeatures.ProvisioningNetwork {
 		if f {
 			return true
@@ -22,13 +22,22 @@ func IsEnabled(enabledFeatures v1alpha1.EnabledFeatures) bool {
 }
 
 // EnabledFeatures returns the features that are enabled on the current platform.
-func EnabledFeatures(ctx context.Context, osClient osclientset.Interface) (v1alpha1.EnabledFeatures, error) {
+func EnabledFeatures(ctx context.Context, osClient osclientset.Interface, hypershiftEnabled bool) (v1alpha1.EnabledFeatures, error) {
 	features := v1alpha1.EnabledFeatures{
 		ProvisioningNetwork: map[v1alpha1.ProvisioningNetwork]bool{
 			v1alpha1.ProvisioningNetworkDisabled:  false,
 			v1alpha1.ProvisioningNetworkUnmanaged: false,
 			v1alpha1.ProvisioningNetworkManaged:   false,
 		},
+		HypershiftEnabled: false,
+	}
+
+	if hypershiftEnabled {
+		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkDisabled] = true
+		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkUnmanaged] = true
+		features.ProvisioningNetwork[v1alpha1.ProvisioningNetworkManaged] = true
+		features.HypershiftEnabled = true
+		return features, nil
 	}
 
 	infra, err := osClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
