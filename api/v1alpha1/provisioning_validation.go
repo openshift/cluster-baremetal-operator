@@ -28,6 +28,7 @@ import (
 
 type EnabledFeatures struct {
 	ProvisioningNetwork map[ProvisioningNetwork]bool
+	HypershiftEnabled bool
 }
 
 var (

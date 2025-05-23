@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -84,6 +85,11 @@ func main() {
 		klog.Info("Environment variable RELEASE_VERSION not provided")
 	}
 
+	hypershiftEnabled := false
+	if strings.ToLower(os.Getenv("HYPERSHIFT_ENABLED")) == "true" {
+		hypershiftEnabled = true
+	}
+
 	config := ctrl.GetConfigOrDie()
 
 	controllerOptions := ctrl.Options{
@@ -139,7 +145,7 @@ func main() {
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
-	enabledFeatures, err := controllers.EnabledFeatures(context.Background(), osClient)
+	enabledFeatures, err := controllers.EnabledFeatures(context.Background(), osClient, hypershiftEnabled)
 	if err != nil {
 		klog.ErrorS(err, "unable to get enabled features")
 		os.Exit(1)
@@ -162,7 +168,7 @@ func main() {
 		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
 		os.Exit(1)
 	}
-	if controllers.IsEnabled(enabledFeatures) && enableWebhook {
+	if controllers.IsProvNetworkEnabled(enabledFeatures) && enableWebhook {
 		info := &provisioning.ProvisioningInfo{
 			Client:        kubeClient,
 			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),

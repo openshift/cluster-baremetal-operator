@@ -175,6 +175,10 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 
 // ensureClusterOperator makes sure that the CO exists
 func (r *ProvisioningReconciler) ensureClusterOperator() error {
+	if r.EnabledFeatures.HypershiftEnabled {
+		return nil
+	}
+
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if k8serrors.IsNotFound(err) {
 		co, err = r.createClusterOperator()
@@ -232,6 +236,10 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 }
 
 func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
+	if r.EnabledFeatures.HypershiftEnabled {
+		return fmt.Errorf("Not updating CO status, as hypershift is enabled. Reason: %s, processMessage: %s, message: %s", string(newReason), progressMsg, msg)
+	}
+
 	klog.InfoS("new CO status", "reason", newReason, "processMessage", progressMsg, "message", msg)
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if err != nil {
