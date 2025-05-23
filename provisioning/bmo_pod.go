@@ -157,6 +157,10 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 			},
 			setIronicExternalIp(externalIpEnvVar, &info.ProvConfig.Spec),
 			externalUrlVar,
+			{
+				Name:  "PROVISIONING_NETWORK_DISABLED",
+				Value: strconv.FormatBool(info.ProvConfig.Spec.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled),
+			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
