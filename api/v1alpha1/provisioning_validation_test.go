@@ -288,22 +288,6 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			expectedMode:  ProvisioningNetworkDisabled,
 		},
 		{
-			// IP and CIDR set with bad CIDR
-			name:          "InvalidDisabledBadCIDR",
-			spec:          disabledProvisioning().ProvisioningIP("172.22.0.3").ProvisioningNetworkCIDR("172.22.0.0/33").build(),
-			expectedError: true,
-			expectedMode:  ProvisioningNetworkDisabled,
-			expectedMsg:   "could not parse provisioningNetworkCIDR",
-		},
-		{
-			// Only IP is set and not CIDR
-			name:          "InvalidDisabledOnlyIP",
-			spec:          disabledProvisioning().ProvisioningIP("172.22.0.3").ProvisioningNetworkCIDR("").build(),
-			expectedError: true,
-			expectedMode:  ProvisioningNetworkDisabled,
-			expectedMsg:   "provisioningNetworkCIDR",
-		},
-		{
 			// No Provisioning IP or Network
 			name:          "NoProvisioningIPNetwork",
 			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),

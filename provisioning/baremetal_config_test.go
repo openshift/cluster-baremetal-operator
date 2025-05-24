@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/ptr"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
@@ -30,69 +31,78 @@ func TestGetMetal3DeploymentConfig(t *testing.T) {
 		name          string
 		configName    string
 		spec          *metal3iov1alpha1.ProvisioningSpec
-		expectedValue string
+		expectedValue *string
 	}{
 		{
 			name:          "Managed ProvisioningIPCIDR",
 			configName:    provisioningIP,
 			spec:          managedProvisioning().build(),
-			expectedValue: "172.30.20.3/24",
+			expectedValue: ptr.To("172.30.20.3/24"),
 		},
 		{
 			name:          "Managed ProvisioningInterface",
 			configName:    provisioningInterface,
 			spec:          managedProvisioning().build(),
-			expectedValue: "eth0",
+			expectedValue: ptr.To("eth0"),
 		},
 		{
 			name:          "Unmanaged DeployKernelUrl",
 			configName:    deployKernelUrl,
 			spec:          unmanagedProvisioning().build(),
-			expectedValue: "file:///shared/html/images/ironic-python-agent.kernel",
+			expectedValue: ptr.To("file:///shared/html/images/ironic-python-agent.kernel"),
 		},
 		{
 			name:          "Disabled DeployKernelUrl",
 			configName:    deployKernelUrl,
 			spec:          disabledProvisioning().build(),
-			expectedValue: "file:///shared/html/images/ironic-python-agent.kernel",
+			expectedValue: ptr.To("file:///shared/html/images/ironic-python-agent.kernel"),
 		},
 		{
 			name:          "Unmanaged HttpPort",
 			configName:    httpPort,
 			spec:          unmanagedProvisioning().build(),
-			expectedValue: "6180",
+			expectedValue: ptr.To("6180"),
 		},
 		{
 			name:          "Managed DHCPRange",
 			configName:    dhcpRange,
 			spec:          managedProvisioning().build(),
-			expectedValue: "172.30.20.11,172.30.20.101,24",
+			expectedValue: ptr.To("172.30.20.11,172.30.20.101,24"),
 		},
 		{
 			name:          "Managed IPv6 DHCPRange",
 			configName:    dhcpRange,
 			spec:          managedIPv6Provisioning().build(),
-			expectedValue: "fd2e:6f44:5dd8:b856::10,fd2e:6f44:5dd8:b856::ff,80",
+			expectedValue: ptr.To("fd2e:6f44:5dd8:b856::10,fd2e:6f44:5dd8:b856::ff,80"),
 		},
 		{
 			name:          "Disabled DHCPRange",
 			configName:    dhcpRange,
 			spec:          disabledProvisioning().build(),
-			expectedValue: "",
+			expectedValue: nil,
 		},
 		{
 			name:          "Disabled RhcosImageUrl",
 			configName:    machineImageUrl,
 			spec:          disabledProvisioning().build(),
-			expectedValue: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
+			expectedValue: ptr.To("http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234"),
 		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			actualValue := getMetal3DeploymentConfig(tc.configName, tc.spec)
-			assert.NotNil(t, actualValue)
-			assert.Equal(t, tc.expectedValue, *actualValue, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, tc.expectedValue, *actualValue))
+
+			if tc.expectedValue == nil {
+				assert.Nil(t, actualValue)
+				return
+			}
+
+			if actualValue == nil {
+				t.Fatal("actual value was nil")
+			}
+
+			assert.Equal(t, tc.expectedValue, actualValue, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, *tc.expectedValue, *actualValue))
 			return
 		})
 	}
