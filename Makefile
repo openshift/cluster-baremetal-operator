@@ -21,12 +21,12 @@ VERBOSE ?= ""
 
 all: generate lint build
 
-# Run tests
-test: generate lint manifests
+# Run unit tests
+unit:
 	go test $(VERBOSE) ./... -coverprofile cover.out
 
-# Alias for CI
-unit: test
+# Run tests
+test: generate lint manifests unit
 
 # Build cluster-baremetal-operator binary
 build:
