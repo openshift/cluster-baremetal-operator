@@ -288,9 +288,9 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			expectedMode:  ProvisioningNetworkDisabled,
 		},
 		{
-			// No Provisioning IP or Network
-			name:          "NoProvisioningIPNetwork",
-			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
+			// No Provisioning IP or Network but interface provided
+			name:          "WithProvisioningInterfaceNoIP",
+			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").ProvisioningInterface("em1").build(),
 			expectedError: false,
 			expectedMode:  ProvisioningNetworkDisabled,
 		},
