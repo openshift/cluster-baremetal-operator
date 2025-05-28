@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/utils/ptr"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -98,10 +99,7 @@ func TestGetMetal3DeploymentConfig(t *testing.T) {
 				return
 			}
 
-			if actualValue == nil {
-				t.Fatal("actual value was nil")
-			}
-
+			require.NotNil(t, actualValue, "actual value was nil")
 			assert.Equal(t, tc.expectedValue, actualValue, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, *tc.expectedValue, *actualValue))
 			return
 		})
