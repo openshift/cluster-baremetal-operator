@@ -321,7 +321,6 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 		Env: []corev1.EnvVar{
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
-			buildEnvVar(provisioningMacAddresses, config),
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -383,7 +382,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		buildEnvVar(httpPort, config),
 		buildEnvVar(provisioningInterface, config),
 		buildEnvVar(dhcpRange, config),
-		buildEnvVar(provisioningMacAddresses, config),
+		buildEnvVar(provisioningIP, config),
 	}
 	if config.ProvisioningDNS {
 		envVars = append(envVars, corev1.EnvVar{
@@ -483,7 +482,6 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
 			buildSSHKeyEnvVar(sshKey),
-			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
 			{
 				Name:  ironicProxyEnvVar,
@@ -556,7 +554,6 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			buildEnvVar(provisioningInterface, config),
 			buildSSHKeyEnvVar(sshKey),
 			setIronicExternalIp(externalIpEnvVar, config),
-			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
 		},
 		Resources: corev1.ResourceRequirements{
@@ -617,7 +614,6 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		Env: []corev1.EnvVar{
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
-			buildEnvVar(provisioningMacAddresses, config),
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
