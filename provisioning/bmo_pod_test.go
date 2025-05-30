@@ -47,6 +47,7 @@ func TestNewBMOContainers(t *testing.T) {
 				{Name: "METAL3_AUTH_ROOT_DIR", Value: "/auth"},
 				{Name: "IRONIC_EXTERNAL_IP", Value: ""},
 				{Name: "IRONIC_EXTERNAL_URL_V6", Value: ""},
+				{Name: "PROVISIONING_NETWORK_DISABLED", Value: "false"},
 			},
 		},
 	}
@@ -126,6 +127,7 @@ func TestNewBMOContainers(t *testing.T) {
 					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
 					// Private ports because of the proxy
 					envWithValue("IRONIC_ENDPOINT", "https://metal3-state.openshift-machine-api.svc.cluster.local:6388/v1/"),
+					envWithValue("PROVISIONING_NETWORK_DISABLED", "true"),
 				),
 			},
 			sshkey: "",
