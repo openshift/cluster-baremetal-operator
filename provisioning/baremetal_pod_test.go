@@ -390,6 +390,26 @@ func TestNewMetal3Containers(t *testing.T) {
 			},
 			sshkey: "",
 		},
+		{
+			name:   "DisabledSpecWithProvisioningInterface",
+			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").ProvisioningInterface("em1").build(),
+			expectedContainers: []corev1.Container{
+				withEnv(
+					containers["metal3-httpd"],
+					envWithValue("PROVISIONING_INTERFACE", "em1"),
+					envWithValue("PROVISIONING_IP", ""),
+					envWithValue("IRONIC_LISTEN_PORT", "6388"),
+				),
+				withEnv(
+					containers["metal3-ironic"],
+					envWithValue("PROVISIONING_INTERFACE", "em1"),
+					envWithValue("PROVISIONING_IP", ""),
+					envWithValue("IRONIC_KERNEL_PARAMS", "rd.net.timeout.carrier=30 ip=dhcp6"),
+				),
+				containers["metal3-ramdisk-logs"],
+			},
+			sshkey: "",
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -162,7 +162,8 @@ func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.Prov
 			Name:  name,
 			Value: *value,
 		}
-	} else if name == provisioningIP && baremetalProvisioningConfig.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled {
+	} else if name == provisioningIP && baremetalProvisioningConfig.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled &&
+		baremetalProvisioningConfig.ProvisioningInterface == "" {
 		return corev1.EnvVar{
 			Name: name,
 			ValueFrom: &corev1.EnvVarSource{
