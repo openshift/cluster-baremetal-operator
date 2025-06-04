@@ -6,6 +6,7 @@ metadata:
     controller-gen.kubebuilder.io/version: (unknown)
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    include.release.openshift.io/ibm-cloud-managed: "true"
   name: provisionings.metal3.io
 spec:
   group: metal3.io
