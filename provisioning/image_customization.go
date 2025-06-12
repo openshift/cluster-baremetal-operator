@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -346,6 +347,7 @@ func EnsureImageCustomizationDeployment(info *ProvisioningInfo) (updated bool, e
 		return updated, err
 	}
 	if updated {
+		klog.Infof("image customization deployment %s has been updated", deployment.Name)
 		resourcemerge.SetDeploymentGeneration(&info.ProvConfig.Status.Generations, deployment)
 	}
 	return updated, nil

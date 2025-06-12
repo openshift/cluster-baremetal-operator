@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -69,6 +70,9 @@ func EnsureMetal3StateService(info *ProvisioningInfo) (updated bool, err error) 
 		info.Client.CoreV1(), info.EventRecorder, metal3StateService)
 	if err != nil {
 		err = fmt.Errorf("unable to apply Metal3-state service: %w", err)
+	}
+	if updated {
+		klog.Infof("metal3-state service %s has been updated", metal3StateService.Name)
 	}
 	return
 }

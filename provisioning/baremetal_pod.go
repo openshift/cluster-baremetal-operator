@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -808,6 +809,7 @@ func EnsureMetal3Deployment(info *ProvisioningInfo) (updated bool, err error) {
 		}
 	}
 	if updated {
+		klog.Infof("Metal3 deployment %s has been updated", deployment.Name)
 		resourcemerge.SetDeploymentGeneration(&info.ProvConfig.Status.Generations, deployment)
 	}
 	return updated, nil

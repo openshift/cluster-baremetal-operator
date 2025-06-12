@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -53,6 +54,9 @@ func EnsureImageCustomizationService(info *ProvisioningInfo) (updated bool, err 
 		info.Client.CoreV1(), info.EventRecorder, imageCustomizationService)
 	if err != nil {
 		err = fmt.Errorf("unable to apply %s service: %w", imageCustomizationService, err)
+	}
+	if updated {
+		klog.Infof("image customization service %s has been updated", imageCustomizationService.Name)
 	}
 	return
 }

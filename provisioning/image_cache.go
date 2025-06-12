@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -275,6 +276,9 @@ func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
 	if err != nil {
 		err = fmt.Errorf("unable to apply image cache daemonset: %w", err)
 		return
+	}
+	if updated {
+		klog.Infof("image cache daemonset %s has been updated", daemonSet.Name)
 	}
 
 	resourcemerge.SetDaemonSetGeneration(&info.ProvConfig.Status.Generations, daemonSet)
