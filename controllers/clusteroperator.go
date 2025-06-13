@@ -6,6 +6,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -216,8 +217,41 @@ func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 	}
 }
 
+// getStatusConditionsDiff this is based on v1helpers.GetStatusDiff except it
+// is focused on comparing the conditions better and nothing else.
+func getStatusConditionsDiff(oldConditions []osconfigv1.ClusterOperatorStatusCondition, newConditions []osconfigv1.ClusterOperatorStatusCondition) string {
+	messages := []string{}
+	for _, newCondition := range newConditions {
+		existingStatusCondition := v1helpers.FindStatusCondition(oldConditions, newCondition.Type)
+		if existingStatusCondition == nil {
+			messages = append(messages, fmt.Sprintf("%s set to %s (%q)", newCondition.Type, newCondition.Status, newCondition.Message))
+			continue
+		}
+		if existingStatusCondition.Status != newCondition.Status {
+			messages = append(messages, fmt.Sprintf("%s changed from %s to %s (%q)", existingStatusCondition.Type, existingStatusCondition.Status, newCondition.Status, newCondition.Message))
+			continue
+		}
+		if existingStatusCondition.Message != newCondition.Message {
+			messages = append(messages, fmt.Sprintf("%s message changed from %q to %q", existingStatusCondition.Type, existingStatusCondition.Message, newCondition.Message))
+		}
+		if existingStatusCondition.Reason != newCondition.Reason {
+			messages = append(messages, fmt.Sprintf("%s reason changed from %q to %q", existingStatusCondition.Type, existingStatusCondition.Reason, newCondition.Reason))
+		}
+	}
+	for _, oldCondition := range oldConditions {
+		// This should not happen. It means we removed old condition entirely instead of just changing its status
+		if c := v1helpers.FindStatusCondition(newConditions, oldCondition.Type); c == nil {
+			messages = append(messages, fmt.Sprintf("%s was removed", oldCondition.Type))
+		}
+	}
+
+	return strings.Join(messages, ",")
+}
+
 // syncStatus applies the new condition to the CBO ClusterOperator object.
 func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, conds []osconfigv1.ClusterOperatorStatusCondition) error {
+	diff := getStatusConditionsDiff(co.Status.Conditions, conds)
+
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
 	}
@@ -227,12 +261,15 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 
+	if diff != "" {
+		klog.InfoS("new CO status", "diff", diff)
+	}
+
 	_, err := r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
 	return err
 }
 
 func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
-	klog.InfoS("new CO status", "reason", newReason, "processMessage", progressMsg, "message", msg)
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if err != nil {
 		klog.ErrorS(err, "failed to get or create ClusterOperator")
