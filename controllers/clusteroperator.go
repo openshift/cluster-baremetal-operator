@@ -6,6 +6,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -217,9 +218,15 @@ func setStatusCondition(conditionType osconfigv1.ClusterStatusConditionType,
 }
 
 // syncStatus applies the new condition to the CBO ClusterOperator object.
-func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, conds []osconfigv1.ClusterOperatorStatusCondition) error {
+func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, conds []osconfigv1.ClusterOperatorStatusCondition, logMessage string) error {
+	var newConditions []string
+	updated := !equality.Semantic.DeepEqual(co.Status.Conditions, conds)
+
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
+		if updated {
+			newConditions = append(newConditions, fmt.Sprintf("%s=%s (%s)", c.Type, c.Status, c.Reason))
+		}
 	}
 
 	if len(co.Status.Versions) < 1 {
@@ -227,12 +234,15 @@ func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, cond
 		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 
+	if updated {
+		klog.InfoS("new CO status", "newConditions", strings.Join(newConditions, ", "), "message", logMessage)
+	}
+
 	_, err := r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
 	return err
 }
 
 func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, progressMsg string) error {
-	klog.InfoS("new CO status", "reason", newReason, "processMessage", progressMsg, "message", msg)
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if err != nil {
 		klog.ErrorS(err, "failed to get or create ClusterOperator")
@@ -259,5 +269,8 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg))
 	}
 
-	return r.syncStatus(co, conds)
+	if progressMsg == "" {
+		progressMsg = msg
+	}
+	return r.syncStatus(co, conds, progressMsg)
 }
