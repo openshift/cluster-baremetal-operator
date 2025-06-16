@@ -187,6 +187,25 @@ spec:
                   Image used to boot baremetal host machines can be downloaded
                   by the metal3 cluster.
                 type: string
+              unsupportedConfigOverrides:
+                description: |-
+                  UnsupportedConfigOverrides are site-specific overrides that are not
+                  officially supported in the Metal platform and may cause the
+                  deployment to fail. Carefully check the description of each field
+                  you modify to understand its implications for stability and
+                  upgradability of your cluster.
+                  When reporting a bug, please make sure to reproduce it with
+                  UnsupportedConfigOverrides set to nil.
+                properties:
+                  ironicAgentImage:
+                    description: |-
+                      Override for the IPA container image.
+                      The image must be based on openshift/ironic-agent-image of the same
+                      release as the cluster. After each cluster upgrade, it must be
+                      rebased and updated immediately, before any BareMetalHosts are
+                      enrolled, provisioned or deprovisioned.
+                    type: string
+                type: object
               virtualMediaViaExternalNetwork:
                 description: |-
                   VirtualMediaViaExternalNetwork flag when set to "true" allows for workers

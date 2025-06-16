@@ -147,6 +147,24 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		"IRONIC_RAMDISK_SSH_KEY": "sshkey",
 	}
 
+	imageOverride := "example.com/image:latest"
+	container5 := corev1.Container{
+		Name: "image-customization-controller",
+		Env: []corev1.EnvVar{
+			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
+			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
+			{Name: "IRONIC_AGENT_IMAGE", Value: imageOverride},
+			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
+			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
+			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
+			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
+		},
+		VolumeMounts: expectedVolumeMounts,
+	}
+	secret5 := secret2
+
 	tCases := []struct {
 		name              string
 		ironicIPs         []string
@@ -154,6 +172,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		expectedContainer corev1.Container
 		expectedSecret    map[string]string
 		ntpServers        []string
+		ironicAgentImage  string
 	}{
 		{
 			name:              "image customization container with proxy",
@@ -187,10 +206,23 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			expectedSecret:    secret4,
 			ntpServers:        ntpServers,
 		},
+		{
+			name:              "image customization container with agent override",
+			ironicIPs:         []string{ironicIP},
+			expectedContainer: container5,
+			expectedSecret:    secret5,
+			ironicAgentImage:  imageOverride,
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
+			var overrides *v1alpha1.UnsupportedConfigOverrides
+			if tc.ironicAgentImage != "" {
+				overrides = &v1alpha1.UnsupportedConfigOverrides{
+					IronicAgentImage: tc.ironicAgentImage,
+				}
+			}
 			info := &ProvisioningInfo{
 				Images:       &images,
 				SSHKey:       "sshkey",
@@ -198,7 +230,8 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 				Proxy:        tc.proxy,
 				ProvConfig: &v1alpha1.Provisioning{
 					Spec: v1alpha1.ProvisioningSpec{
-						AdditionalNTPServers: tc.ntpServers,
+						AdditionalNTPServers:       tc.ntpServers,
+						UnsupportedConfigOverrides: overrides,
 					},
 				},
 			}
