@@ -33,6 +33,11 @@ func New(settings *config.GoSecSettings) *goanalysis.Linter {
 	var ruleFilters []rules.RuleFilter
 	var analyzerFilters []analyzers.AnalyzerFilter
 	if settings != nil {
+		// TODO(ldez) to remove when the problem will be fixed by gosec.
+		// https://github.com/securego/gosec/issues/1211
+		// https://github.com/securego/gosec/issues/1209
+		settings.Excludes = append(settings.Excludes, "G407")
+
 		ruleFilters = createRuleFilters(settings.Includes, settings.Excludes)
 		analyzerFilters = createAnalyzerFilters(settings.Includes, settings.Excludes)
 		conf = toGosecConfig(settings)
@@ -179,7 +184,15 @@ func convertGosecGlobals(globalOptionFromConfig any, conf gosec.Config) {
 	}
 
 	for k, v := range globalOptionMap {
-		conf.SetGlobal(gosec.GlobalOption(k), fmt.Sprintf("%v", v))
+		option := gosec.GlobalOption(k)
+
+		// Set nosec global option only if the value is true
+		// https://github.com/securego/gosec/blob/v2.21.4/analyzer.go#L572
+		if option == gosec.Nosec && v == false {
+			continue
+		}
+
+		conf.SetGlobal(option, fmt.Sprintf("%v", v))
 	}
 }
 
