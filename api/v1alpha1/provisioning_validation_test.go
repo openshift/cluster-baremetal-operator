@@ -158,7 +158,6 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 					t.Errorf("unexpected errors: %v", err)
 				}
 			}
-			return
 		})
 	}
 }
@@ -236,7 +235,6 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 			if tc.expectedError {
 				assert.True(t, strings.Contains(err.Error(), tc.expectedMsg))
 			}
-			return
 		})
 	}
 }
@@ -315,7 +313,6 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 					t.Errorf("Non-matching errors: %v", err)
 				}
 			}
-			return
 		})
 	}
 }
@@ -398,7 +395,6 @@ func TestValidateSupportedFeatures(t *testing.T) {
 					t.Errorf("Non-matching errors: %v", err)
 				}
 			}
-			return
 		})
 	}
 }

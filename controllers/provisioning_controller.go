@@ -53,7 +53,6 @@ import (
 	osconfigv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
-	"github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -85,7 +84,7 @@ type ProvisioningReconciler struct {
 	ImagesFilename  string
 	WebHookEnabled  bool
 	NetworkStack    provisioning.NetworkStackType
-	EnabledFeatures v1alpha1.EnabledFeatures
+	EnabledFeatures metal3iov1alpha1.EnabledFeatures
 	ResourceCache   resourceapply.ResourceCache
 }
 
@@ -437,11 +436,11 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 // delete resources and remove Finalizer when it is
 func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *provisioning.ProvisioningInfo) (bool, error) {
 	// examine DeletionTimestamp to determine if object is under deletion
-	if info.ProvConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+	if info.ProvConfig.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// to registering our finalizer.
-		if slice.Contains(info.ProvConfig.ObjectMeta.Finalizers,
+		if slice.Contains(info.ProvConfig.Finalizers,
 			metal3iov1alpha1.ProvisioningFinalizer) {
 			return false, nil
 		}
@@ -454,7 +453,7 @@ func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *p
 			"failed to update Provisioning CR with its finalizer")
 	} else {
 		// The Provisioning object is being deleted
-		if !slice.Contains(info.ProvConfig.ObjectMeta.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
+		if !slice.Contains(info.ProvConfig.Finalizers, metal3iov1alpha1.ProvisioningFinalizer) {
 			return false, nil
 		}
 

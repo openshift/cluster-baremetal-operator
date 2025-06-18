@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
-	v1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 
@@ -80,7 +79,6 @@ func TestBuildEnvVar(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			actualEnvVar := buildEnvVar(tc.configName, tc.spec)
 			assert.Equal(t, tc.expectedEnvVar, actualEnvVar, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, tc.expectedEnvVar, actualEnvVar))
-			return
 		})
 	}
 }
@@ -442,10 +440,10 @@ func TestNewMetal3Containers(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "cluster",
 						},
-						Status: v1.InfrastructureStatus{
-							PlatformStatus: &v1.PlatformStatus{
-								Type: v1.BareMetalPlatformType,
-								BareMetal: &v1.BareMetalPlatformStatus{
+						Status: osconfigv1.InfrastructureStatus{
+							PlatformStatus: &osconfigv1.PlatformStatus{
+								Type: osconfigv1.BareMetalPlatformType,
+								BareMetal: &osconfigv1.BareMetalPlatformStatus{
 									APIServerInternalIPs: []string{
 										"192.168.1.1",
 										"fd2e:6f44:5dd8:c956::16",
@@ -477,11 +475,11 @@ func TestProxyAndCAInjection(t *testing.T) {
 			StaticIpManager:     expectedIronicStaticIpManager,
 		},
 		ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
-		Proxy: &v1.Proxy{
+		Proxy: &osconfigv1.Proxy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "cluster",
 			},
-			Status: v1.ProxyStatus{
+			Status: osconfigv1.ProxyStatus{
 				HTTPProxy:  "https://172.2.0.1:3128",
 				HTTPSProxy: "https://172.2.0.1:3128",
 				NoProxy:    ".example.com",
@@ -496,10 +494,10 @@ func TestProxyAndCAInjection(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
 				},
-				Status: v1.InfrastructureStatus{
-					PlatformStatus: &v1.PlatformStatus{
-						Type: v1.BareMetalPlatformType,
-						BareMetal: &v1.BareMetalPlatformStatus{
+				Status: osconfigv1.InfrastructureStatus{
+					PlatformStatus: &osconfigv1.PlatformStatus{
+						Type: osconfigv1.BareMetalPlatformType,
+						BareMetal: &osconfigv1.BareMetalPlatformStatus{
 							APIServerInternalIPs: []string{
 								"192.168.1.1",
 								"fd2e:6f44:5dd8:c956::16",

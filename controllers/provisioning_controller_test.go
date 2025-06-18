@@ -78,7 +78,6 @@ func TestProvisioning(t *testing.T) {
 				return
 			}
 			assert.Equal(t, tc.expectedConfig, baremetalconfig != nil, "baremetal config results did not match")
-			return
 		})
 	}
 }
@@ -179,7 +178,6 @@ func TestNetworkStackFromServiceNetwork(t *testing.T) {
 				return
 			}
 			assert.Equal(t, tc.expectedNetworkStack, ns, "network stack results did not match")
-			return
 		})
 	}
 }
