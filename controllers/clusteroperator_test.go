@@ -2,8 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -11,12 +9,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	configv1 "github.com/openshift/api/config/v1"
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	"github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
-	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
 func TestUpdateCOStatus(t *testing.T) {
@@ -235,37 +231,6 @@ func normalizeTransitionTimes(got, expected osconfigv1.ClusterOperatorStatus) {
 	for i := range expected.Conditions {
 		expected.Conditions[i].LastTransitionTime = now
 	}
-}
-
-// getStatusConditionsDiff this is based on v1helpers.GetStatusDiff except it
-// is focused on comparing the conditions better and nothing else.
-func getStatusConditionsDiff(oldConditions []configv1.ClusterOperatorStatusCondition, newConditions []configv1.ClusterOperatorStatusCondition) string {
-	messages := []string{}
-	for _, newCondition := range newConditions {
-		existingStatusCondition := v1helpers.FindStatusCondition(oldConditions, newCondition.Type)
-		if existingStatusCondition == nil {
-			messages = append(messages, fmt.Sprintf("%s set to %s (%q)", newCondition.Type, newCondition.Status, newCondition.Message))
-			continue
-		}
-		if existingStatusCondition.Status != newCondition.Status {
-			messages = append(messages, fmt.Sprintf("%s changed from %s to %s (%q)", existingStatusCondition.Type, existingStatusCondition.Status, newCondition.Status, newCondition.Message))
-			continue
-		}
-		if existingStatusCondition.Message != newCondition.Message {
-			messages = append(messages, fmt.Sprintf("%s message changed from %q to %q", existingStatusCondition.Type, existingStatusCondition.Message, newCondition.Message))
-		}
-		if existingStatusCondition.Reason != newCondition.Reason {
-			messages = append(messages, fmt.Sprintf("%s reason changed from %q to %q", existingStatusCondition.Type, existingStatusCondition.Reason, newCondition.Reason))
-		}
-	}
-	for _, oldCondition := range oldConditions {
-		// This should not happen. It means we removed old condition entirely instead of just changing its status
-		if c := v1helpers.FindStatusCondition(newConditions, oldCondition.Type); c == nil {
-			messages = append(messages, fmt.Sprintf("%s was removed", oldCondition.Type))
-		}
-	}
-
-	return strings.Join(messages, ",")
 }
 
 func TestUpdateCOStatusDegraded(t *testing.T) {
