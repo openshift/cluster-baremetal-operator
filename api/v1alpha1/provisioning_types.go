@@ -67,6 +67,17 @@ type PreProvisioningOSDownloadURLs struct {
 	RootfsURL string `json:"rootfsURL,omitempty"`
 }
 
+// UnsupportedConfigOverrides define possible overrides that are not officially
+// supported and may break the deployment
+type UnsupportedConfigOverrides struct {
+	// Override for the IPA container image.
+	// The image must be based on openshift/ironic-agent-image of the same
+	// release as the cluster. After each cluster upgrade, it must be
+	// rebased and updated immediately, before any BareMetalHosts are
+	// enrolled, provisioned or deprovisioned.
+	IronicAgentImage string `json:"ironicAgentImage,omitempty"`
+}
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface
@@ -187,6 +198,15 @@ type ProvisioningSpec struct {
 	// DisableVirtualMediaTLS turns off TLS on the virtual media server,
 	// which may be required for hardware that cannot accept HTTPS links.
 	DisableVirtualMediaTLS bool `json:"disableVirtualMediaTLS,omitempty"`
+
+	// UnsupportedConfigOverrides are site-specific overrides that are not
+	// officially supported in the Metal platform and may cause the
+	// deployment to fail. Carefully check the description of each field
+	// you modify to understand its implications for stability and
+	// upgradability of your cluster.
+	// When reporting a bug, please make sure to reproduce it with
+	// UnsupportedConfigOverrides set to nil.
+	UnsupportedConfigOverrides *UnsupportedConfigOverrides `json:"unsupportedConfigOverrides,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning

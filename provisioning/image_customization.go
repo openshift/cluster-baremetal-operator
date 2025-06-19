@@ -130,6 +130,11 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 	noProxy := ironicIPs
 	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{}, noProxy)
 
+	agentImage := images.IronicAgent
+	if info.ProvConfig.Spec.UnsupportedConfigOverrides != nil && info.ProvConfig.Spec.UnsupportedConfigOverrides.IronicAgentImage != "" {
+		agentImage = info.ProvConfig.Spec.UnsupportedConfigOverrides.IronicAgentImage
+	}
+
 	container := corev1.Container{
 		Name:  "machine-image-customization-controller",
 		Image: images.ImageCustomizationController,
@@ -169,7 +174,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			},
 			corev1.EnvVar{
 				Name:  ironicAgentImage,
-				Value: images.IronicAgent,
+				Value: agentImage,
 			},
 			corev1.EnvVar{
 				Name:  containerRegistriesEnvVar,

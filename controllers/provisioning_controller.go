@@ -302,6 +302,10 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
 	if specChanged {
+		if baremetalConfig.Spec.UnsupportedConfigOverrides != nil {
+			klog.Warningf("using unsupportedConfigOverrides in the configuration: %+v", *baremetalConfig.Spec.UnsupportedConfigOverrides)
+		}
+
 		err = r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, err)

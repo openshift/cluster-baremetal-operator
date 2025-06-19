@@ -155,6 +155,14 @@ either using virtual media or PXE.
 - DisableVirtualMediaTLS turns off TLS on the virtual media server,
 which may be required for hardware that cannot accept HTTPS links.
 
+- UnsupportedConfigOverrides are site-specific overrides that are not
+officially supported in the Metal platform and may cause the
+deployment to fail. Carefully check the description of each field
+you modify to understand its implications for stability and
+upgradability of your cluster.
+When reporting a bug, please make sure to reproduce it with
+UnsupportedConfigOverrides set to nil.
+
 
 ## What are its outputs?
 
@@ -228,3 +236,4 @@ in turn, update any modified components.
 
 Once finished with the testing, remove the override, wait for CVO to
 reconfigure the ConfigMap, and restart the pod again.
+
