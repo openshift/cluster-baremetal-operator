@@ -48,6 +48,7 @@ const (
 	ironicCredentialsVolume          = "metal3-ironic-basic-auth"
 	ironicTlsVolume                  = "metal3-ironic-tls"
 	vmediaTlsVolume                  = "metal3-vmedia-tls"
+	ironicPrometheusExporterName     = "metal3-ironic-prometheus-exporter"
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
 	ironicKernelParamsEnvVar         = "IRONIC_KERNEL_PARAMS"
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
@@ -354,6 +355,10 @@ func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 		containers = append(containers, createContainerMetal3Dnsmasq(info.Images, &info.ProvConfig.Spec))
 	}
 
+	if info.ProvConfig.Spec.EnableSensorMetrics {
+		containers = append(containers, createContainerIronicPrometheusExporter(info.Images))
+	}
+
 	return injectProxyAndCA(containers, info.Proxy)
 }
 
@@ -569,6 +574,20 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
+	// Append SEND_SENSOR_DATA and SENSOR_DATA_INTERVAL env vars only when requested
+	if config.EnableSensorMetrics {
+		container.Env = append(container.Env,
+			corev1.EnvVar{
+				Name:  sendSensorData,
+				Value: "true",
+			},
+			corev1.EnvVar{
+				Name:  sensorDataInterval,
+				Value: "60",
+			},
+		)
+	}
+
 	return container
 }
 
@@ -596,6 +615,38 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 		},
 	}
 	return container
+}
+
+// createContainerIronicPrometheusExporter creates IPE container that services the /metrics endpoint
+// which Prometheus can scrape to collect generated metrics from sensors
+func createContainerIronicPrometheusExporter(images *Images) corev1.Container {
+	return corev1.Container{
+		Name:            ironicPrometheusExporterName,
+		Image:           images.Ironic,
+		ImagePullPolicy: "IfNotPresent",
+		Command:         []string{"/bin/runironic-exporter"},
+		VolumeMounts:    []corev1.VolumeMount{sharedVolumeMount},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          metricsPortName,
+				ContainerPort: int32(baremetalMetricsPort),
+				Protocol:      corev1.ProtocolTCP,
+			},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("20m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		},
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: pointer.BoolPtr(true),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
+		},
+	}
 }
 
 func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alpha1.ProvisioningSpec) corev1.Container {
