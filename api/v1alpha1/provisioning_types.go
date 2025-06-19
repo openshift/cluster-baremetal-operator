@@ -207,6 +207,10 @@ type ProvisioningSpec struct {
 	// When reporting a bug, please make sure to reproduce it with
 	// UnsupportedConfigOverrides set to nil.
 	UnsupportedConfigOverrides *UnsupportedConfigOverrides `json:"unsupportedConfigOverrides,omitempty"`
+
+	// EnableSensorMetrics enables sensor data collection with Ironic
+	// and deploys ironic-prometheus-exporter (and supporting resources) to expose the metric.
+	EnableSensorMetrics bool `json:"enableSensorMetrics,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning
