@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -77,6 +78,7 @@ type ProvisioningReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	Client          client.Client
+	DynamicClient   dynamic.Interface
 	Scheme          *runtime.Scheme
 	OSClient        osclientset.Interface
 	KubeClient      kubernetes.Interface
@@ -94,7 +96,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors,verbs=create;watch;get;list;patch
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors,verbs=create;watch;get;list;patch;delete;update
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
@@ -332,6 +334,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureImageCustomizationService,
 		provisioning.EnsureImageCustomizationDeployment,
 		provisioning.EnsureIronicProxy,
+		provisioning.EnsureIronicServiceMonitor,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -426,6 +429,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 
 	return &provisioning.ProvisioningInfo{
 		Client:                  r.KubeClient,
+		DynamicClient:           r.DynamicClient,
 		EventRecorder:           events.NewLoggingEventRecorder(ComponentName),
 		ProvConfig:              provConfig,
 		Scheme:                  r.Scheme,
@@ -503,6 +507,9 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteIronicProxy(info); err != nil {
 		return errors.Wrap(err, "failed to delete ironic proxy")
+	}
+	if err := provisioning.DeleteIronicServiceMonitor(info); err != nil {
+		return errors.Wrap(err, "failed to delete ironic service monitor")
 	}
 	return nil
 }

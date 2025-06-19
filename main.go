@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -138,6 +139,7 @@ func main() {
 
 	osClient := osclientset.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
+	dynamicClient := dynamic.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
 	enabledFeatures, err := controllers.EnabledFeatures(context.Background(), osClient)
 	if err != nil {
@@ -150,6 +152,7 @@ func main() {
 
 	if err = (&controllers.ProvisioningReconciler{
 		Client:          mgr.GetClient(),
+		DynamicClient:   dynamicClient,
 		Scheme:          mgr.GetScheme(),
 		OSClient:        osClient,
 		KubeClient:      kubeClient,
