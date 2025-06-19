@@ -90,6 +90,11 @@ type PrometheusExporter struct {
 	// +kubebuilder:default=60
 	// +kubebuilder:validation:Minimum=60
 	SensorCollectionInterval int `json:"sensorCollectionInterval,omitempty"`
+
+	// IncludeDefaultPromRules controls whether default hardware health
+	// alerting rules are deployed alongside the prometheus exporter.
+	// +kubebuilder:default=true
+	IncludeDefaultPromRules bool `json:"includeDefaultPromRules"`
 }
 
 // ProvisioningSpec defines the desired state of Provisioning
