@@ -33,8 +33,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
@@ -96,7 +98,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors,verbs=create;watch;get;list;patch;delete;update
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors;prometheusrules,verbs=create;watch;get;list;patch;delete;update
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
@@ -335,6 +337,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureImageCustomizationDeployment,
 		provisioning.EnsureIronicProxy,
 		provisioning.EnsureIronicServiceMonitor,
+		provisioning.EnsureIronicPrometheusRule,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -510,6 +513,9 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteIronicServiceMonitor(info); err != nil {
 		return errors.Wrap(err, "failed to delete ironic service monitor")
+	}
+	if err := provisioning.DeleteIronicPrometheusRule(info); err != nil {
+		return fmt.Errorf("failed to delete ironic prometheus rule: %w", err)
 	}
 	return nil
 }
@@ -691,12 +697,29 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			object.GetName() == provisioning.PullSecretName
 	})
 
+	// Own unstructured resources for IPE monitoring components
+	serviceMonitor := &unstructured.Unstructured{}
+	serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "monitoring.coreos.com",
+		Version: "v1",
+		Kind:    "ServiceMonitor",
+	})
+
+	prometheusRule := &unstructured.Unstructured{}
+	prometheusRule.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "monitoring.coreos.com",
+		Version: "v1",
+		Kind:    "PrometheusRule",
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metal3iov1alpha1.Provisioning{}).
 		Owns(&corev1.Secret{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.DaemonSet{}).
+		Owns(serviceMonitor).
+		Owns(prometheusRule).
 		Watches(&osconfigv1.ClusterOperator{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&osconfigv1.Proxy{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton), builder.WithPredicates(pullSecretFilter)).

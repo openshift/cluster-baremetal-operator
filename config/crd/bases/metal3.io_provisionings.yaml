@@ -99,6 +99,12 @@ spec:
                   ironic-prometheus-exporter container, and creates supporting resources
                   (ServiceMonitor, Service ports) to expose hardware sensor metrics for Prometheus.
                 properties:
+                  disableDefaultPrometheusRules:
+                    description: |-
+                      DisableDefaultPrometheusRules controls whether default hardware health
+                      alerting rules should NOT be deployed alongside the prometheus exporter.
+                      When false (default), default prometheus rules are deployed.
+                    type: boolean
                   enabled:
                     description: |-
                       Enabled controls whether sensor data collection is active.

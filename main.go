@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/dynamic"
@@ -33,6 +34,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -105,6 +107,28 @@ func main() {
 			DefaultNamespaces: map[string]cache.Config{
 				controllers.ComponentNamespace:        {},
 				provisioning.OpenshiftConfigNamespace: {},
+			},
+			ByObject: map[client.Object]cache.ByObject{
+				&unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"apiVersion": "monitoring.coreos.com/v1",
+						"kind":       "ServiceMonitor",
+					},
+				}: {
+					Namespaces: map[string]cache.Config{
+						controllers.ComponentNamespace: {},
+					},
+				},
+				&unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"apiVersion": "monitoring.coreos.com/v1",
+						"kind":       "PrometheusRule",
+					},
+				}: {
+					Namespaces: map[string]cache.Config{
+						controllers.ComponentNamespace: {},
+					},
+				},
 			},
 		},
 	}
