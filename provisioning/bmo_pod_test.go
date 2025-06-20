@@ -10,7 +10,6 @@ import (
 	fakekube "k8s.io/client-go/kubernetes/fake"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
-	v1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
@@ -165,10 +164,10 @@ func TestNewBMOContainers(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "cluster",
 						},
-						Status: v1.InfrastructureStatus{
-							PlatformStatus: &v1.PlatformStatus{
-								Type: v1.BareMetalPlatformType,
-								BareMetal: &v1.BareMetalPlatformStatus{
+						Status: osconfigv1.InfrastructureStatus{
+							PlatformStatus: &osconfigv1.PlatformStatus{
+								Type: osconfigv1.BareMetalPlatformType,
+								BareMetal: &osconfigv1.BareMetalPlatformStatus{
 									APIServerInternalIPs: []string{
 										primaryIP,
 										"fd2e:6f44:5dd8:c956::16",

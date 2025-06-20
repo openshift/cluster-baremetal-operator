@@ -11,10 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	configv1 "github.com/openshift/api/config/v1"
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
-	"github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
@@ -239,7 +237,7 @@ func normalizeTransitionTimes(got, expected osconfigv1.ClusterOperatorStatus) {
 
 // getStatusConditionsDiff this is based on v1helpers.GetStatusDiff except it
 // is focused on comparing the conditions better and nothing else.
-func getStatusConditionsDiff(oldConditions []configv1.ClusterOperatorStatusCondition, newConditions []configv1.ClusterOperatorStatusCondition) string {
+func getStatusConditionsDiff(oldConditions []osconfigv1.ClusterOperatorStatusCondition, newConditions []osconfigv1.ClusterOperatorStatusCondition) string {
 	messages := []string{}
 	for _, newCondition := range newConditions {
 		existingStatusCondition := v1helpers.FindStatusCondition(oldConditions, newCondition.Type)
@@ -310,11 +308,11 @@ func TestUpdateCOStatusDegraded(t *testing.T) {
 
 	for _, tc := range tCases {
 		baremetalCR.Spec = tc.spec
-		if err := baremetalCR.ValidateBaremetalProvisioningConfig(v1alpha1.EnabledFeatures{
-			ProvisioningNetwork: map[v1alpha1.ProvisioningNetwork]bool{
-				v1alpha1.ProvisioningNetworkDisabled:  true,
-				v1alpha1.ProvisioningNetworkUnmanaged: true,
-				v1alpha1.ProvisioningNetworkManaged:   true,
+		if err := baremetalCR.ValidateBaremetalProvisioningConfig(metal3iov1alpha1.EnabledFeatures{
+			ProvisioningNetwork: map[metal3iov1alpha1.ProvisioningNetwork]bool{
+				metal3iov1alpha1.ProvisioningNetworkDisabled:  true,
+				metal3iov1alpha1.ProvisioningNetworkUnmanaged: true,
+				metal3iov1alpha1.ProvisioningNetworkManaged:   true,
 			},
 		}); err != nil {
 			err = reconciler.updateCOStatus(ReasonInvalidConfiguration, err.Error(), "Unable to apply Provisioning CR: invalid configuration")

@@ -11,8 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,7 +78,7 @@ func TestCreatePasswordSecret(t *testing.T) {
 
 	cases := []struct {
 		name          string
-		secretError   *errors.StatusError
+		secretError   *apierrors.StatusError
 		expectedError error
 		testRecreate  bool
 	}{
@@ -90,8 +88,8 @@ func TestCreatePasswordSecret(t *testing.T) {
 		},
 		{
 			name:          "error-fetching-secret",
-			secretError:   errors.NewServiceUnavailable("an error"),
-			expectedError: errors.NewServiceUnavailable("an error"),
+			secretError:   apierrors.NewServiceUnavailable("an error"),
+			expectedError: apierrors.NewServiceUnavailable("an error"),
 		},
 	}
 	for _, tc := range cases {
@@ -101,8 +99,8 @@ func TestCreatePasswordSecret(t *testing.T) {
 			kubeClient := fakekube.NewSimpleClientset(nil...)
 
 			if tc.secretError != nil {
-				kubeClient.Fake.PrependReactor("get", "secrets", func(action faketesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, &v1.Secret{}, tc.secretError
+				kubeClient.PrependReactor("get", "secrets", func(action faketesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &corev1.Secret{}, tc.secretError
 				})
 			}
 
@@ -125,7 +123,7 @@ func TestCreatePasswordSecret(t *testing.T) {
 				if apierrors.IsNotFound(err) {
 					t.Errorf("Error creating Ironic secret.")
 				}
-				assert.True(t, strings.Compare(string(secret.(*v1.Secret).Data[ironicUsernameKey]), ironicUsername) == 0, "ironic password created incorrectly")
+				assert.True(t, strings.Compare(string(secret.(*corev1.Secret).Data[ironicUsernameKey]), ironicUsername) == 0, "ironic password created incorrectly")
 			}
 		})
 	}
@@ -178,12 +176,12 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 			if apierrors.IsNotFound(err) {
 				t.Errorf("Error creating TLS secret.")
 			}
-			original := secret.(*v1.Secret).Data[corev1.TLSCertKey]
+			original := secret.(*corev1.Secret).Data[corev1.TLSCertKey]
 			assert.NotEmpty(t, original)
 
 			if tc.expire {
 				// Inject an expired certificate
-				secret.(*v1.Secret).Data[corev1.TLSCertKey] = []byte(expiredTlsCertificate)
+				secret.(*corev1.Secret).Data[corev1.TLSCertKey] = []byte(expiredTlsCertificate)
 				err = kubeClient.Tracker().Update(secretsResource, secret, testNamespace)
 				if err != nil {
 					t.Errorf("unexpected error when faking expirted certificate: %v", err)
@@ -202,10 +200,10 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 			if apierrors.IsNotFound(err) {
 				t.Errorf("Error creating TLS secret.")
 			}
-			recreated := newSecret.(*v1.Secret).Data[corev1.TLSCertKey]
+			recreated := newSecret.(*corev1.Secret).Data[corev1.TLSCertKey]
 
 			// In case of expiration, the certificate must be re-created
-			assert.Equal(t, tc.expire, bytes.Compare(original, recreated) != 0, "re-created Tls certificate is invalid")
+			assert.Equal(t, tc.expire, !bytes.Equal(original, recreated), "re-created Tls certificate is invalid")
 		})
 	}
 }

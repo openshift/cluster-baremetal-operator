@@ -101,7 +101,6 @@ func TestGetMetal3DeploymentConfig(t *testing.T) {
 
 			require.NotNil(t, actualValue, "actual value was nil")
 			assert.Equal(t, tc.expectedValue, actualValue, fmt.Sprintf("%s : Expected : %s Actual : %s", tc.configName, *tc.expectedValue, *actualValue))
-			return
 		})
 	}
 }
@@ -294,7 +293,6 @@ func TestWatchAllNamespaces(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			assert.NotNil(t, tc.spec.WatchAllNamespaces)
 			assert.Equal(t, tc.expectedValue, tc.spec.WatchAllNamespaces, fmt.Sprintf("WatchAllNamespaces : Expected : %s Actual : %s", strconv.FormatBool(tc.expectedValue), strconv.FormatBool(tc.spec.WatchAllNamespaces)))
-			return
 		})
 	}
 }

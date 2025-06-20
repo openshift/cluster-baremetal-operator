@@ -80,7 +80,7 @@ func getPodIPs(podClient coreclientv1.PodsGetter, targetNamespace string) (ips [
 func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	infra, err := osclient.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if err != nil {
-		err = fmt.Errorf("Cannot get the 'cluster' object from infrastructure API: %w", err)
+		err = fmt.Errorf("cannot get the 'cluster' object from infrastructure API: %w", err)
 		return nil, err
 	}
 	switch infra.Status.PlatformStatus.Type {
@@ -110,7 +110,7 @@ func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 	case osconfigv1.NonePlatformType:
 		return nil, nil
 	default:
-		err = fmt.Errorf("Cannot detect server API VIP: Attribute not supported on platform: %v", infra.Status.PlatformStatus.Type)
+		err = fmt.Errorf("cannot detect server API VIP: attribute not supported on platform: %v", infra.Status.PlatformStatus.Type)
 		return nil, err
 	}
 }
