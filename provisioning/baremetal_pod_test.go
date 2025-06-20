@@ -337,6 +337,35 @@ func TestNewMetal3Containers(t *testing.T) {
 			sshkey: "sshkey",
 		},
 		{
+			name:   "ManagedSpec with sensor metrics enabled",
+			config: managedProvisioning().EnableSensorMetrics(true).build(),
+			expectedContainers: []corev1.Container{
+				withEnv(containers["metal3-httpd"], sshkey),
+				withEnv(containers["metal3-ironic"], sshkey, envWithValue("SEND_SENSOR_DATA", "true"), envWithValue("SENSOR_DATA_INTERVAL", "60")),
+				containers["metal3-ramdisk-logs"],
+				containers["metal3-static-ip-manager"],
+				containers["metal3-dnsmasq"],
+				{
+					Name:         "metal3-ironic-prometheus-exporter",
+					Env:          []corev1.EnvVar{},
+					VolumeMounts: []corev1.VolumeMount{sharedVolumeMount},
+				},
+			},
+			sshkey: "sshkey",
+		},
+		{
+			name:   "ManagedSpec with sensor metrics disabled",
+			config: managedProvisioning().EnableSensorMetrics(false).build(),
+			expectedContainers: []corev1.Container{
+				withEnv(containers["metal3-httpd"], sshkey),
+				withEnv(containers["metal3-ironic"], sshkey),
+				containers["metal3-ramdisk-logs"],
+				containers["metal3-static-ip-manager"],
+				containers["metal3-dnsmasq"],
+			},
+			sshkey: "sshkey",
+		},
+		{
 			name:   "UnmanagedSpec",
 			config: unmanagedProvisioning().build(),
 			expectedContainers: []corev1.Container{

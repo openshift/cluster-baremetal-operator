@@ -163,6 +163,9 @@ upgradability of your cluster.
 When reporting a bug, please make sure to reproduce it with
 UnsupportedConfigOverrides set to nil.
 
+- EnableSensorMetrics enables sensor data collection with Ironic
+and deploys ironic-prometheus-exporter (and supporting resources) to expose the metric.
+
 
 ## What are its outputs?
 
@@ -236,4 +239,5 @@ in turn, update any modified components.
 
 Once finished with the testing, remove the override, wait for CVO to
 reconfigure the ConfigMap, and restart the pod again.
+
 
