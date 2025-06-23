@@ -151,7 +151,6 @@ func TestEnsureClusterOperator(t *testing.T) {
 					Name: clusterOperatorName,
 					Annotations: map[string]string{
 						"capability.openshift.io/name":                                "baremetal",
-						"include.release.openshift.io/ibm-cloud-managed":              "true",
 						"include.release.openshift.io/self-managed-high-availability": "true",
 						"include.release.openshift.io/single-node-developer":          "true",
 					},

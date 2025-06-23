@@ -4,9 +4,8 @@ metadata:
   name: baremetal-kube-rbac-proxy
   namespace: openshift-machine-api
   annotations:
-    capability.openshift.io/name: baremetal
-    include.release.openshift.io/ibm-cloud-managed: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
+    capability.openshift.io/name: baremetal
 data:
   config-file.yaml: |+
     authorization:

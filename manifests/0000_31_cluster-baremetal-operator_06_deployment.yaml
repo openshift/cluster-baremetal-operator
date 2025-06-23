@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   annotations:
     capability.openshift.io/name: baremetal
-    include.release.openshift.io/ibm-cloud-managed: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
   labels:
@@ -21,7 +20,6 @@ spec:
     metadata:
       annotations:
         capability.openshift.io/name: baremetal
-        include.release.openshift.io/ibm-cloud-managed: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
         include.release.openshift.io/single-node-developer: "true"
         openshift.io/required-scc: anyuid
