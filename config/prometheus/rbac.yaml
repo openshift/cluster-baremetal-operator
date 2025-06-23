@@ -4,9 +4,8 @@ metadata:
   name: prometheus-k8s-cluster-baremetal-operator
   namespace: openshift-machine-api
   annotations:
-    capability.openshift.io/name: baremetal
-    include.release.openshift.io/ibm-cloud-managed: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
+    capability.openshift.io/name: baremetal
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -24,9 +23,8 @@ metadata:
   name: prometheus-k8s-cluster-baremetal-operator
   namespace: openshift-machine-api
   annotations:
-    capability.openshift.io/name: baremetal
-    include.release.openshift.io/ibm-cloud-managed: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
+    capability.openshift.io/name: baremetal
 rules:
   - apiGroups:
       - ""
