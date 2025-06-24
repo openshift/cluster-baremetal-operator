@@ -25,7 +25,7 @@ import (
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
 
-var (
+const (
 	baremetalHttpPort              = "6180"
 	baremetalVmediaHttpsPort       = "6183"
 	baremetalWebhookPort           = "9447"
@@ -49,6 +49,9 @@ var (
 )
 
 func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
+	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkManaged {
+		return nil
+	}
 	var dhcpRange string
 	if config.ProvisioningDHCPRange != "" {
 		_, net, err := net.ParseCIDR(config.ProvisioningNetworkCIDR)
@@ -60,10 +63,7 @@ func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {
 	return &dhcpRange
 }
 
-func getProvisioningIPCIDR(config *metal3iov1alpha1.ProvisioningSpec) *string {
-	if config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled {
-		return nil
-	}
+func getProvisioningIPWithPrefix(config *metal3iov1alpha1.ProvisioningSpec) *string {
 	if config.ProvisioningNetworkCIDR != "" && config.ProvisioningIP != "" {
 		_, net, err := net.ParseCIDR(config.ProvisioningNetworkCIDR)
 		if err == nil {
@@ -71,6 +71,18 @@ func getProvisioningIPCIDR(config *metal3iov1alpha1.ProvisioningSpec) *string {
 			ipCIDR := fmt.Sprintf("%s/%d", config.ProvisioningIP, cidr)
 			return &ipCIDR
 		}
+	}
+
+	return nil
+}
+
+func getProvisioningIP(config *metal3iov1alpha1.ProvisioningSpec) *string {
+	if config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkManaged {
+		return getProvisioningIPWithPrefix(config)
+	}
+
+	if config.ProvisioningIP != "" {
+		return &config.ProvisioningIP
 	}
 	return nil
 }
@@ -112,7 +124,7 @@ func getBootIsoSource(config *metal3iov1alpha1.ProvisioningSpec) *string {
 func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.ProvisioningSpec) *string {
 	switch name {
 	case provisioningIP:
-		return getProvisioningIPCIDR(baremetalConfig)
+		return getProvisioningIP(baremetalConfig)
 	case provisioningInterface:
 		return &baremetalConfig.ProvisioningInterface
 	case provisioningMacAddresses:
