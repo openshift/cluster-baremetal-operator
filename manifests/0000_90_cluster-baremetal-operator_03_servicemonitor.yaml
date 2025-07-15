@@ -3,6 +3,7 @@ kind: ServiceMonitor
 metadata:
   annotations:
     capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
   labels:
     k8s-app: cluster-baremetal-operator
   name: cluster-baremetal-operator-servicemonitor

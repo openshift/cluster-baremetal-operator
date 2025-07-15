@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-baremetal-operator-hostedcluster
+  namespace: openshift-machine-api
+spec:
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        openshift.io/required-scc: anyuid
+    spec:
+      containers:
+      - name: cluster-baremetal-operator
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /etc/cluster-baremetal-operator/tls
+          name: cert
+          readOnly: true
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: cluster-baremetal-webhook-server-cert
