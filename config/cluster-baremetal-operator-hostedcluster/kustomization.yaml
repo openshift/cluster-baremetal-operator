@@ -5,7 +5,4 @@ commonAnnotations:
   capability.openshift.io/name: baremetal
 
 resources:
-- service.yaml
-
-configurations:
-- kustomizeconfig.yaml
+- cluster-baremetal-operator-hostedcluster.yaml
