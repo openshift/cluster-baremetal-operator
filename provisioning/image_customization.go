@@ -245,6 +245,11 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 		},
 	}
 
+	nodeSelector := map[string]string{}
+	if !info.IsHyperShift {
+		nodeSelector = map[string]string{"node-role.kubernetes.io/master": ""}
+	}
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: podTemplateAnnotations,
@@ -256,7 +261,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			HostNetwork:        false,
 			DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName:  "system-node-critical",
-			NodeSelector:       map[string]string{"node-role.kubernetes.io/master": ""},
+			NodeSelector:       nodeSelector,
 			ServiceAccountName: "cluster-baremetal-operator",
 			Tolerations:        tolerations,
 			Volumes: []corev1.Volume{

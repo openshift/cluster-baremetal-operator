@@ -338,7 +338,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 
 func newMetal3Containers(info *ProvisioningInfo) []corev1.Container {
 	containers := []corev1.Container{
-		createContainerMetal3Httpd(info.Images, &info.ProvConfig.Spec, info.SSHKey),
+		createContainerMetal3Httpd(info.Images, info),
 		createContainerMetal3Ironic(info.Images, info, &info.ProvConfig.Spec, info.SSHKey),
 		createContainerMetal3RamdiskLogs(info.Images),
 	}
@@ -426,7 +426,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 	return container
 }
 
-func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
+func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.Container {
 	port, _ := strconv.Atoi(baremetalHttpPort)             // #nosec
 	httpsPort, _ := strconv.Atoi(baremetalVmediaHttpsPort) // #nosec
 
@@ -434,9 +434,10 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 	// In the proxy mode, the ironic API is served on the private port,
 	// while ironic-proxy, running as a DeamonSet on all nodes, serves on
 	// 6385 and proxies the traffic.
-	if UseIronicProxy(config) {
+	if UseIronicProxy(info) {
 		ironicPort = ironicPrivatePort
 	}
+	config := &info.ProvConfig.Spec
 
 	volumeMounts := []corev1.VolumeMount{
 		sharedVolumeMount,
@@ -483,7 +484,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
 			buildEnvVar(provisioningInterface, config),
-			buildSSHKeyEnvVar(sshKey),
+			buildSSHKeyEnvVar(info.SSHKey),
 			buildEnvVar(provisioningMacAddresses, config),
 			buildEnvVar(vmediaHttpsPort, config),
 			{
@@ -659,6 +660,11 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 		},
 	}
 
+	nodeSelector := map[string]string{}
+	if !info.IsHyperShift {
+		nodeSelector = map[string]string{"node-role.kubernetes.io/master": ""}
+	}
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: podTemplateAnnotations,
@@ -671,7 +677,7 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 			HostNetwork:       true,
 			DNSPolicy:         corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName: "system-node-critical",
-			NodeSelector:      map[string]string{"node-role.kubernetes.io/master": ""},
+			NodeSelector:      nodeSelector,
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: pointer.BoolPtr(false),
 			},

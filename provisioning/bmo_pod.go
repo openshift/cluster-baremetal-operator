@@ -220,6 +220,11 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 
 	podAnnotations["openshift.io/required-scc"] = "hostnetwork-v2"
 
+	nodeSelector := map[string]string{}
+	if !info.IsHyperShift {
+		nodeSelector = map[string]string{"node-role.kubernetes.io/master": ""}
+	}
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: podAnnotations,
@@ -231,7 +236,7 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 			HostNetwork:        false,
 			DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName:  "system-node-critical",
-			NodeSelector:       map[string]string{"node-role.kubernetes.io/master": ""},
+			NodeSelector:       nodeSelector,
 			ServiceAccountName: "cluster-baremetal-operator",
 			Tolerations:        tolerations,
 		},

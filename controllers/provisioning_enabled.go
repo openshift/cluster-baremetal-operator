@@ -36,10 +36,6 @@ func EnabledFeatures(ctx context.Context, osClient osclientset.Interface) (v1alp
 		return features, errors.Wrap(err, "unable to determine Platform")
 	}
 
-	if infra.Status.ControlPlaneTopology == osconfigv1.ExternalTopologyMode {
-		return features, nil
-	}
-
 	//NOTE(dtantsur/janders) if the code below is updated, GetServerInternalIP() function in provisioning/utils.go needs to be updated to match.
 	switch infra.Status.PlatformStatus.Type {
 	case osconfigv1.BareMetalPlatformType, osconfigv1.NonePlatformType:

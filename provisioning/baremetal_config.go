@@ -94,7 +94,7 @@ func getDeployKernelUrl() *string {
 
 func getControlPlanePort(info *ProvisioningInfo) (ironicPort int) {
 	ironicPort = baremetalIronicPort
-	if UseIronicProxy(&info.ProvConfig.Spec) {
+	if UseIronicProxy(info) {
 		// Direct access to real services behind the proxy.
 		ironicPort = ironicPrivatePort
 	}
