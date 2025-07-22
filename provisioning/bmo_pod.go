@@ -185,6 +185,28 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		container.Args = append(container.Args, "--webhook-port", baremetalWebhookPort)
 	}
 
+	// Add switch management secret names if enabled
+	if info.ProvConfig.Spec.IsSwitchManagementEnabled() {
+		container.Env = append(container.Env,
+			corev1.EnvVar{
+				Name:  ironicNetworkingEnabledEnvVar,
+				Value: "true",
+			},
+			corev1.EnvVar{
+				Name:  switchConfigsSecretEnvVar,
+				Value: switchConfigsSecretName,
+			},
+			corev1.EnvVar{
+				Name:  switchCredentialsSecretEnvVar,
+				Value: switchCredentialsSecretName,
+			},
+			corev1.EnvVar{
+				Name:  switchCredentialsMountPathEnvVar,
+				Value: switchCredentialsMountPath,
+			},
+		)
+	}
+
 	return container, nil
 }
 

@@ -603,6 +603,45 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 	return container
 }
 
+func buildProviderNetworkEnvVarValue(cfg *metal3iov1alpha1.ProviderNetworkConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	val := fmt.Sprintf("%s/native_vlan=%d", cfg.Mode, cfg.NativeVLAN)
+	if (cfg.Mode == metal3iov1alpha1.SwitchPortModeTrunk || cfg.Mode == metal3iov1alpha1.SwitchPortModeHybrid) && len(cfg.AllowedVLANs) > 0 {
+		val += "/allowed_vlans=" + strings.Join(cfg.AllowedVLANs, ",")
+	}
+	if cfg.MTU > 0 {
+		val += fmt.Sprintf("/mtu=%d", cfg.MTU)
+	}
+	return val
+}
+
+var providerNetworkTypes = []string{
+	"idle", "inspection", "cleaning", "rescuing", "servicing", "provisioning",
+}
+
+func appendProviderNetworkConfigEnvVars(cfg *metal3iov1alpha1.ProviderNetworkConfig, provisionOnTenantNetwork bool, envVars []corev1.EnvVar) []corev1.EnvVar {
+	if cfg == nil {
+		return envVars
+	}
+	value := buildProviderNetworkEnvVarValue(cfg)
+	for _, netType := range providerNetworkTypes {
+		if netType == "provisioning" && provisionOnTenantNetwork {
+			// Omit the provisioning network so Ironic falls back to the tenant
+			// network already configured on the port via host network attachments,
+			// since some use cases assume that the node is set up on the tenant
+			// network during the provisioning step.
+			continue
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "IRONIC_NETWORKING_" + strings.ToUpper(netType) + "_NETWORK",
+			Value: value,
+		})
+	}
+	return envVars
+}
+
 func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config *metal3iov1alpha1.ProvisioningSpec, sshKey string) corev1.Container {
 	volumes := []corev1.VolumeMount{
 		sharedVolumeMount,
@@ -615,6 +654,9 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 	}
 	if !config.DisableVirtualMediaTLS {
 		volumes = append(volumes, vmediaTlsMount)
+	}
+	if config.IsSwitchManagementEnabled() {
+		volumes = append(volumes, ironicRPCCredentialsMount)
 	}
 
 	container := corev1.Container{
@@ -677,6 +719,35 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 				Value: strconv.Itoa(config.PrometheusExporter.SensorCollectionInterval),
 			},
 		)
+	}
+
+	if config.IsSwitchManagementEnabled() {
+		container.Env = append(container.Env,
+			corev1.EnvVar{
+				Name:  ironicNetworkingEnabledEnvVar,
+				Value: "true",
+			},
+			corev1.EnvVar{
+				Name:  ironicForceDhcpEnvVar,
+				Value: "true",
+			},
+			corev1.EnvVar{
+				Name:  "IRONIC_DEFAULT_NETWORK_INTERFACE",
+				Value: "ironic-networking",
+			},
+			corev1.EnvVar{
+				Name:  "IRONIC_NETWORKING_JSON_RPC_HOST",
+				Value: fmt.Sprintf("%s.%s.svc.cluster.local", ironicNetworkingServiceName, info.Namespace),
+			},
+			corev1.EnvVar{
+				Name:  "IRONIC_NETWORKING_JSON_RPC_PORT",
+				Value: fmt.Sprintf("%d", ironicNetworkingRPCPort),
+			},
+		)
+
+		if config.SwitchManagement.ProviderNetwork != nil {
+			container.Env = appendProviderNetworkConfigEnvVars(config.SwitchManagement.ProviderNetwork, config.SwitchManagement.ProvisionOnTenantNetwork, container.Env)
+		}
 	}
 
 	if info.TLSProfileSpec != nil {
@@ -780,10 +851,8 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 	return container
 }
 
-func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) *corev1.PodTemplateSpec {
-	initContainers := newMetal3InitContainers(info)
-	containers := newMetal3Containers(info)
-	tolerations := []corev1.Toleration{
+func metal3Tolerations() []corev1.Toleration {
+	return []corev1.Toleration{
 		{
 			Key:      "node-role.kubernetes.io/master",
 			Effect:   corev1.TaintEffectNoSchedule,
@@ -806,6 +875,11 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 			TolerationSeconds: ptr.To[int64](120),
 		},
 	}
+}
+
+func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) *corev1.PodTemplateSpec {
+	initContainers := newMetal3InitContainers(info)
+	containers := newMetal3Containers(info)
 
 	nodeSelector := map[string]string{}
 	if !info.IsHyperShift {
@@ -837,7 +911,7 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 				RunAsNonRoot: ptr.To(false),
 			},
 			ServiceAccountName: "cluster-baremetal-operator",
-			Tolerations:        tolerations,
+			Tolerations:        metal3Tolerations(),
 		},
 	}
 }
