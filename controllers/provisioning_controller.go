@@ -341,8 +341,16 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	for _, ensureResource := range []ensureFunc{
-		provisioning.EnsureAllSecrets,
+		func(info *provisioning.ProvisioningInfo) (bool, error) {
+			return provisioning.EnsureAllSecrets(ctx, info)
+		},
 		provisioning.EnsureMirrorConfig,
+		func(info *provisioning.ProvisioningInfo) (bool, error) {
+			return provisioning.EnsureIronicNetworkingDeployment(ctx, info)
+		},
+		func(info *provisioning.ProvisioningInfo) (bool, error) {
+			return provisioning.EnsureIronicNetworkingService(ctx, info)
+		},
 		provisioning.EnsureMetal3Deployment,
 		provisioning.EnsureBaremetalOperatorDeployment,
 		provisioning.EnsureMetal3StateService,
@@ -404,6 +412,22 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
+	// Determine the status of the ironic-networking deployment
+	networkingState, err := provisioning.GetIronicNetworkingDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	if err != nil {
+		statusErr := r.updateCOStatus(ReasonResourceNotFound, "ironic-networking deployment inaccessible", "")
+		if statusErr != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, statusErr)
+		}
+		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of ironic-networking deployment")
+	}
+	if networkingState == appsv1.DeploymentReplicaFailure {
+		err = r.updateCOStatus(ReasonDeployTimedOut, "ironic-networking deployment rollout taking too long", "")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+		}
+	}
+
 	// Determine the status of the image cache DaemonSet
 	imageCacheState, err := provisioning.GetImageCacheState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
 	err = r.checkDaemonSet(imageCacheState, err, "metal3 image cache", func() error { return provisioning.DeleteImageCache(info) })
@@ -417,7 +441,9 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	if deploymentState == appsv1.DeploymentAvailable && bmoState == appsv1.DeploymentAvailable {
+	if deploymentState == appsv1.DeploymentAvailable &&
+		bmoState == appsv1.DeploymentAvailable &&
+		networkingState == appsv1.DeploymentAvailable {
 		msg := getSuccessStatus(imageCacheState, ironicProxyState)
 		if msg != "" {
 			err = r.updateCOStatus(ReasonComplete, msg, "")
@@ -507,7 +533,7 @@ func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *p
 			return false, nil
 		}
 
-		if err := r.deleteMetal3Resources(info); err != nil {
+		if err := r.deleteMetal3Resources(ctx, info); err != nil {
 			return false, errors.Wrap(err, "failed to delete metal3 resource")
 		}
 		// Remove our finalizer from the list and update it.
@@ -520,7 +546,7 @@ func (r *ProvisioningReconciler) checkForCRDeletion(ctx context.Context, info *p
 }
 
 // Delete Secrets and the Metal3 Deployment objects
-func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.ProvisioningInfo) error {
+func (r *ProvisioningReconciler) deleteMetal3Resources(ctx context.Context, info *provisioning.ProvisioningInfo) error {
 	if err := provisioning.DeleteAllSecrets(info); err != nil {
 		return errors.Wrap(err, "failed to delete one or more metal3 secrets")
 	}
@@ -529,6 +555,12 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteMetal3Deployment(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 deployment")
+	}
+	if err := provisioning.DeleteIronicNetworkingDeployment(ctx, info); err != nil {
+		return errors.Wrap(err, "failed to delete ironic-networking deployment")
+	}
+	if err := provisioning.DeleteIronicNetworkingService(ctx, info); err != nil {
+		return errors.Wrap(err, "failed to delete ironic-networking service")
 	}
 	if err := provisioning.DeleteMetal3StateService(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 service")
