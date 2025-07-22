@@ -494,12 +494,56 @@ func TestNewMetal3Containers(t *testing.T) {
 			},
 			sshkey: "",
 		},
+		{
+			name:   "ManagedSpecWithIronicNetworking",
+			config: managedProvisioning().SwitchManagementEnabled(true).build(),
+			expectedContainers: []corev1.Container{
+				withTLSEnv(containers["metal3-httpd"], sshkey),
+				withTLSEnv(containers["metal3-ironic"], sshkey,
+					envWithValue("IRONIC_NETWORKING_ENABLED", "true"),
+					envWithValue("IRONIC_FORCE_DHCP", "true"),
+					envWithValue("IRONIC_DEFAULT_NETWORK_INTERFACE", "ironic-networking"),
+					envWithValue("IRONIC_NETWORKING_JSON_RPC_HOST", "metal3-ironic-networking-service.openshift-machine-api.svc.cluster.local"),
+					envWithValue("IRONIC_NETWORKING_JSON_RPC_PORT", "6190"),
+				),
+				containers["metal3-ramdisk-logs"],
+				containers["metal3-static-ip-manager"],
+				containers["metal3-dnsmasq"],
+			},
+			sshkey: "sshkey",
+		},
+		{
+			name:   "DisabledSpecWithIronicNetworking",
+			config: disabledProvisioning().SwitchManagementEnabled(true).build(),
+			expectedContainers: []corev1.Container{
+				withTLSEnv(
+					containers["metal3-httpd"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithValue("IRONIC_LISTEN_PORT", "6388"),
+					envWithValue("PROVISIONING_IP", "172.30.20.3"),
+				),
+				withTLSEnv(
+					containers["metal3-ironic"],
+					envWithValue("PROVISIONING_INTERFACE", ""),
+					envWithValue("IRONIC_KERNEL_PARAMS", "rd.net.timeout.carrier=30 ip=dhcp6"),
+					envWithValue("PROVISIONING_IP", "172.30.20.3"),
+					envWithValue("IRONIC_NETWORKING_ENABLED", "true"),
+					envWithValue("IRONIC_FORCE_DHCP", "true"),
+					envWithValue("IRONIC_DEFAULT_NETWORK_INTERFACE", "ironic-networking"),
+					envWithValue("IRONIC_NETWORKING_JSON_RPC_HOST", "metal3-ironic-networking-service.openshift-machine-api.svc.cluster.local"),
+					envWithValue("IRONIC_NETWORKING_JSON_RPC_PORT", "6190"),
+				),
+				containers["metal3-ramdisk-logs"],
+			},
+			sshkey: "",
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			info := &ProvisioningInfo{
 				Images:         &images,
+				Namespace:      "openshift-machine-api",
 				ProvConfig:     &metal3iov1alpha1.Provisioning{Spec: *tc.config},
 				SSHKey:         tc.sshkey,
 				TLSProfileSpec: &osconfigv1.TLSProfileSpec{},
@@ -1152,6 +1196,276 @@ func TestOperandImagesMatch(t *testing.T) {
 			result, err := OperandImagesMatch(kubeClient.AppsV1(), namespace, desiredImages)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestSwitchVolumesNotInStaticMetal3Volumes(t *testing.T) {
+	// Switch volumes should NOT be in the static metal3Volumes slice;
+	// they are conditionally added in newMetal3PodTemplateSpec.
+	for _, volume := range metal3Volumes {
+		assert.NotEqual(t, switchConfigsVolume, volume.Name, "Switch configs volume should not be in static metal3Volumes")
+		assert.NotEqual(t, switchCredentialsVolume, volume.Name, "Switch credentials volume should not be in static metal3Volumes")
+	}
+}
+
+func TestSwitchVolumesNotInMetal3Pod(t *testing.T) {
+	images := Images{
+		Ironic:              expectedIronic,
+		MachineOsDownloader: expectedMachineOsDownloader,
+		StaticIpManager:     expectedIronicStaticIpManager,
+	}
+
+	// Switch volumes should not be in the metal3 pod template regardless
+	// of networking flag, since the networking container now runs in its
+	// own deployment.
+	for _, networkingEnabled := range []bool{true, false} {
+		info := &ProvisioningInfo{
+			Images: &images,
+			ProvConfig: &metal3iov1alpha1.Provisioning{
+				Spec: *managedProvisioning().SwitchManagementEnabled(networkingEnabled).build(),
+			},
+			NetworkStack: NetworkStackV6,
+			Client: fakekube.NewSimpleClientset(&corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "openshift-machine-api",
+					Labels: map[string]string{
+						"k8s-app":    metal3AppName,
+						cboLabelName: stateService,
+					},
+				},
+				Status: corev1.PodStatus{
+					PodIPs: []corev1.PodIP{
+						{IP: "192.168.111.22"},
+					},
+				},
+			}),
+		}
+		labels := map[string]string{"k8s-app": metal3AppName}
+		template := newMetal3PodTemplateSpec(info, &labels)
+		for _, volume := range template.Spec.Volumes {
+			assert.NotEqual(t, switchConfigsVolume, volume.Name, "Switch configs volume should not be in metal3 pod (networking=%v)", networkingEnabled)
+			assert.NotEqual(t, switchCredentialsVolume, volume.Name, "Switch credentials volume should not be in metal3 pod (networking=%v)", networkingEnabled)
+		}
+	}
+}
+
+func TestIronicNetworkingEnvVarInIronicContainer(t *testing.T) {
+	images := Images{
+		Ironic: expectedIronic,
+	}
+
+	// Test with SwitchManagement enabled (default network driver)
+	info := &ProvisioningInfo{
+		Images:    &images,
+		Namespace: "openshift-machine-api",
+		ProvConfig: &metal3iov1alpha1.Provisioning{
+			Spec: metal3iov1alpha1.ProvisioningSpec{
+				SwitchManagement: &metal3iov1alpha1.SwitchManagement{Enabled: true},
+			},
+		},
+		NetworkStack: NetworkStackV4,
+	}
+
+	config := &info.ProvConfig.Spec
+	sshKey := "test-ssh-key"
+
+	container := createContainerMetal3Ironic(&images, info, config, sshKey)
+
+	assertEnvVar(t, container.Env, ironicNetworkingEnabledEnvVar, "true")
+	assertEnvVar(t, container.Env, "IRONIC_DEFAULT_NETWORK_INTERFACE", "ironic-networking")
+	assertEnvVar(t, container.Env, "IRONIC_NETWORKING_JSON_RPC_HOST", "metal3-ironic-networking-service.openshift-machine-api.svc.cluster.local")
+	assertEnvVar(t, container.Env, "IRONIC_NETWORKING_JSON_RPC_PORT", "6190")
+	assert.Contains(t, container.VolumeMounts, ironicRPCCredentialsMount,
+		"ironicRPCCredentialsMount should be present when SwitchManagement is enabled")
+
+	// Test with SwitchManagement disabled
+	info.ProvConfig.Spec.SwitchManagement = nil
+	container = createContainerMetal3Ironic(&images, info, config, sshKey)
+
+	assertNoEnvVar(t, container.Env, ironicNetworkingEnabledEnvVar)
+	assertNoEnvVar(t, container.Env, "IRONIC_DEFAULT_NETWORK_INTERFACE")
+	assertNoEnvVar(t, container.Env, "IRONIC_NETWORKING_JSON_RPC_HOST")
+	assertNoEnvVar(t, container.Env, "IRONIC_NETWORKING_JSON_RPC_PORT")
+	assert.NotContains(t, container.VolumeMounts, ironicRPCCredentialsMount,
+		"ironicRPCCredentialsMount should be absent when SwitchManagement is disabled")
+}
+
+func TestBuildNetworkEnvVarValue(t *testing.T) {
+	tCases := []struct {
+		name     string
+		cfg      *metal3iov1alpha1.ProviderNetworkConfig
+		expected string
+	}{
+		{
+			name:     "nil config",
+			cfg:      nil,
+			expected: "",
+		},
+		{
+			name: "access mode",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:       metal3iov1alpha1.SwitchPortModeAccess,
+				NativeVLAN: 100,
+			},
+			expected: "access/native_vlan=100",
+		},
+		{
+			name: "trunk mode with allowed VLANs",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:         metal3iov1alpha1.SwitchPortModeTrunk,
+				NativeVLAN:   100,
+				AllowedVLANs: []string{"200", "300", "400"},
+			},
+			expected: "trunk/native_vlan=100/allowed_vlans=200,300,400",
+		},
+		{
+			name: "hybrid mode with allowed VLANs",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:         metal3iov1alpha1.SwitchPortModeHybrid,
+				NativeVLAN:   50,
+				AllowedVLANs: []string{"10"},
+			},
+			expected: "hybrid/native_vlan=50/allowed_vlans=10",
+		},
+		{
+			name: "trunk mode with empty allowed VLANs",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:         metal3iov1alpha1.SwitchPortModeTrunk,
+				NativeVLAN:   100,
+				AllowedVLANs: []string{},
+			},
+			expected: "trunk/native_vlan=100",
+		},
+		{
+			name: "access mode ignores allowed VLANs",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:         "access",
+				NativeVLAN:   100,
+				AllowedVLANs: []string{"200", "300"},
+			},
+			expected: "access/native_vlan=100",
+		},
+		{
+			name: "access mode with MTU",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:       metal3iov1alpha1.SwitchPortModeAccess,
+				NativeVLAN: 100,
+				MTU:        9000,
+			},
+			expected: "access/native_vlan=100/mtu=9000",
+		},
+		{
+			name: "trunk mode with allowed VLANs and MTU",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:         metal3iov1alpha1.SwitchPortModeTrunk,
+				NativeVLAN:   100,
+				AllowedVLANs: []string{"200", "300"},
+				MTU:          1500,
+			},
+			expected: "trunk/native_vlan=100/allowed_vlans=200,300/mtu=1500",
+		},
+		{
+			name: "trunk mode with VLAN ranges",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:         metal3iov1alpha1.SwitchPortModeTrunk,
+				NativeVLAN:   100,
+				AllowedVLANs: []string{"200-210", "300", "400-500"},
+			},
+			expected: "trunk/native_vlan=100/allowed_vlans=200-210,300,400-500",
+		},
+		{
+			name: "MTU zero is omitted",
+			cfg: &metal3iov1alpha1.ProviderNetworkConfig{
+				Mode:       metal3iov1alpha1.SwitchPortModeAccess,
+				NativeVLAN: 100,
+				MTU:        0,
+			},
+			expected: "access/native_vlan=100",
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := buildProviderNetworkEnvVarValue(tc.cfg)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestSetupSwitchConfigsEnvVars(t *testing.T) {
+	tCases := []struct {
+		name           string
+		networks       []metal3iov1alpha1.ProviderNetworkConfig
+		existingEnvs   []corev1.EnvVar
+		expectedEnvs   int
+		expectedNames  []string
+		expectedValues []string
+	}{
+		{
+			name:         "nil config returns existing envs unchanged",
+			networks:     nil,
+			existingEnvs: []corev1.EnvVar{{Name: "EXISTING", Value: "val"}},
+			expectedEnvs: 1,
+		},
+		{
+			name: "derives env var name from Type field",
+			networks: []metal3iov1alpha1.ProviderNetworkConfig{
+				{
+					Type:       "idle",
+					Mode:       metal3iov1alpha1.SwitchPortModeAccess,
+					NativeVLAN: 100,
+				},
+				{
+					Type:       "inspection",
+					Mode:       metal3iov1alpha1.SwitchPortModeAccess,
+					NativeVLAN: 100,
+				},
+			},
+			existingEnvs:   []corev1.EnvVar{},
+			expectedEnvs:   2,
+			expectedNames:  []string{"IRONIC_NETWORKING_IDLE_NETWORK", "IRONIC_NETWORKING_INSPECTION_NETWORK"},
+			expectedValues: []string{"access/native_vlan=100", "access/native_vlan=100"},
+		},
+		{
+			name: "each network gets its own config",
+			networks: []metal3iov1alpha1.ProviderNetworkConfig{
+				{
+					Type:       "idle",
+					Mode:       metal3iov1alpha1.SwitchPortModeAccess,
+					NativeVLAN: 100,
+				},
+				{
+					Type:       "cleaning",
+					Mode:       metal3iov1alpha1.SwitchPortModeTrunk,
+					NativeVLAN: 50,
+				},
+			},
+			existingEnvs:   []corev1.EnvVar{{Name: "EXISTING", Value: "val"}},
+			expectedEnvs:   3,
+			expectedNames:  []string{"IRONIC_NETWORKING_IDLE_NETWORK", "IRONIC_NETWORKING_CLEANING_NETWORK"},
+			expectedValues: []string{"access/native_vlan=100", "trunk/native_vlan=50"},
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := appendProviderNetworkConfigEnvVars(tc.networks, tc.existingEnvs)
+			assert.Len(t, result, tc.expectedEnvs)
+			for _, existing := range tc.existingEnvs {
+				assert.Contains(t, result, existing)
+			}
+			for i, name := range tc.expectedNames {
+				found := false
+				for _, env := range result {
+					if env.Name == name {
+						found = true
+						assert.Equal(t, tc.expectedValues[i], env.Value)
+						break
+					}
+				}
+				assert.True(t, found, "Expected env var %s not found", name)
+			}
 		})
 	}
 }

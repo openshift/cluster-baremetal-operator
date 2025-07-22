@@ -1,6 +1,8 @@
 package provisioning
 
 import (
+	"context"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -34,6 +36,7 @@ func (ns NetworkStackType) IpOption() string {
 }
 
 type ProvisioningInfo struct {
+	Context       context.Context //nolint:containedctx
 	Client        kubernetes.Interface
 	DynamicClient dynamic.Interface
 	EventRecorder events.Recorder

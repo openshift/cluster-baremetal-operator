@@ -592,3 +592,158 @@ func (pb *provisioningBuilder) ProvisioningNetworkGateway(value string) *provisi
 	pb.ProvisioningSpec.ProvisioningNetworkGateway = value
 	return pb
 }
+
+func TestValidateVLANID(t *testing.T) {
+	tCases := []struct {
+		name        string
+		input       string
+		expectError bool
+		expectedMsg string
+		expectedVal int
+	}{
+		{name: "valid", input: "100", expectedVal: 100},
+		{name: "min", input: "1", expectedVal: 1},
+		{name: "max", input: "4094", expectedVal: 4094},
+		{name: "below min", input: "0", expectError: true, expectedMsg: "out of range"},
+		{name: "above max", input: "4095", expectError: true, expectedMsg: "out of range"},
+		{name: "not a number", input: "abc", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "leading plus", input: "+100", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "leading zero", input: "0100", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "leading whitespace", input: " 100", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "trailing whitespace", input: "100 ", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "negative", input: "-1", expectError: true, expectedMsg: "out of range"},
+		{name: "empty", input: "", expectError: true, expectedMsg: "not a valid VLAN ID"},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := validateVLANID(tc.input)
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedVal, v)
+			}
+		})
+	}
+}
+
+func TestValidateAllowedVLANEntry(t *testing.T) {
+	tCases := []struct {
+		name        string
+		input       string
+		expectError bool
+		expectedMsg string
+	}{
+		{name: "single valid", input: "100"},
+		{name: "valid range", input: "100-200"},
+		{name: "single with plus", input: "+100", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "single with leading zero", input: "0100", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "single with whitespace", input: " 100 ", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "range with whitespace", input: "100 - 200", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "range start equals end", input: "100-100", expectError: true, expectedMsg: "start (100) must be less than end (100)"},
+		{name: "range reversed", input: "200-100", expectError: true, expectedMsg: "start (200) must be less than end (100)"},
+		{name: "range with plus in start", input: "+100-200", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "range with plus in end", input: "100-+200", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAllowedVLANEntry(tc.input)
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateProviderNetworks(t *testing.T) {
+	tCases := []struct {
+		name        string
+		sm          *SwitchManagement
+		expectError bool
+		expectedMsg string
+	}{
+		{
+			name: "nil switch management",
+			sm:   nil,
+		},
+		{
+			name: "disabled with no networks",
+			sm:   &SwitchManagement{Enabled: false},
+		},
+		{
+			name:        "disabled with networks",
+			sm:          &SwitchManagement{Enabled: false, ProviderNetworks: []ProviderNetworkConfig{{Type: "idle", Mode: SwitchPortModeAccess, NativeVLAN: 100}}},
+			expectError: true,
+			expectedMsg: "providerNetworks cannot be set when switchManagement is not enabled",
+		},
+		{
+			name: "valid access mode",
+			sm:   &SwitchManagement{Enabled: true, ProviderNetworks: []ProviderNetworkConfig{{Type: "idle", Mode: SwitchPortModeAccess, NativeVLAN: 100}}},
+		},
+		{
+			name: "valid trunk mode",
+			sm:   &SwitchManagement{Enabled: true, ProviderNetworks: []ProviderNetworkConfig{{Type: "idle", Mode: SwitchPortModeTrunk, NativeVLAN: 100, AllowedVLANs: []string{"200", "300"}}}},
+		},
+		{
+			name:        "access mode with allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetworks: []ProviderNetworkConfig{{Type: "idle", Mode: SwitchPortModeAccess, NativeVLAN: 100, AllowedVLANs: []string{"200"}}}},
+			expectError: true,
+			expectedMsg: "allowedVLANs cannot be set in access mode",
+		},
+		{
+			name:        "trunk mode without allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetworks: []ProviderNetworkConfig{{Type: "idle", Mode: SwitchPortModeTrunk, NativeVLAN: 100}}},
+			expectError: true,
+			expectedMsg: "allowedVLANs required for trunk mode",
+		},
+		{
+			name:        "hybrid mode without allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetworks: []ProviderNetworkConfig{{Type: "idle", Mode: SwitchPortModeHybrid, NativeVLAN: 100}}},
+			expectError: true,
+			expectedMsg: "allowedVLANs required for hybrid mode",
+		},
+		{
+			name: "duplicate types",
+			sm: &SwitchManagement{Enabled: true, ProviderNetworks: []ProviderNetworkConfig{
+				{Type: "idle", Mode: SwitchPortModeAccess, NativeVLAN: 100},
+				{Type: "idle", Mode: SwitchPortModeAccess, NativeVLAN: 200},
+			}},
+			expectError: true,
+			expectedMsg: "duplicate type",
+		},
+		{
+			name:        "non-canonical VLAN in allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetworks: []ProviderNetworkConfig{{Type: "idle", Mode: SwitchPortModeTrunk, NativeVLAN: 100, AllowedVLANs: []string{"+200"}}}},
+			expectError: true,
+			expectedMsg: "not a canonical VLAN ID",
+		},
+		{
+			name:        "whitespace in allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetworks: []ProviderNetworkConfig{{Type: "idle", Mode: SwitchPortModeTrunk, NativeVLAN: 100, AllowedVLANs: []string{" 200 "}}}},
+			expectError: true,
+			expectedMsg: "not a valid VLAN ID",
+		},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := validateProviderNetworks(tc.sm)
+			if tc.expectError {
+				assert.NotEmpty(t, errs)
+				found := false
+				for _, err := range errs {
+					if strings.Contains(err.Error(), tc.expectedMsg) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "expected error containing %q, got %v", tc.expectedMsg, errs)
+			} else {
+				assert.Empty(t, errs)
+			}
+		})
+	}
+}

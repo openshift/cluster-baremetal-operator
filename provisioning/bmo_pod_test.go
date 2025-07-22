@@ -363,3 +363,57 @@ func TestNewBMOContainersNoTLSProfile(t *testing.T) {
 			"BMO container should not have --tls-cipher-suites when TLSProfileSpec is nil")
 	}
 }
+
+func TestBMOIronicNetworkingEnvVar(t *testing.T) {
+	images := Images{
+		BaremetalOperator: expectedBaremetalOperator,
+	}
+
+	// Test with SwitchManagement enabled
+	info := &ProvisioningInfo{
+		Images:    &images,
+		Namespace: "openshift-machine-api",
+		ProvConfig: &metal3iov1alpha1.Provisioning{
+			Spec: metal3iov1alpha1.ProvisioningSpec{
+				SwitchManagement: &metal3iov1alpha1.SwitchManagement{Enabled: true},
+			},
+		},
+		OSClient: fakeconfigclientset.NewSimpleClientset(
+			&osconfigv1.Infrastructure{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Infrastructure",
+					APIVersion: "config.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Status: osconfigv1.InfrastructureStatus{
+					PlatformStatus: &osconfigv1.PlatformStatus{
+						Type: osconfigv1.BareMetalPlatformType,
+						BareMetal: &osconfigv1.BareMetalPlatformStatus{
+							APIServerInternalIPs: []string{"192.168.1.1"},
+						},
+					},
+				},
+			}),
+		BaremetalWebhookEnabled: true,
+	}
+
+	container, err := createContainerBaremetalOperator(info)
+	assert.NoError(t, err)
+
+	assertEnvVar(t, container.Env, ironicNetworkingEnabledEnvVar, "true")
+	assertEnvVar(t, container.Env, switchConfigsSecretEnvVar, switchConfigsSecretName)
+	assertEnvVar(t, container.Env, switchCredentialsSecretEnvVar, switchCredentialsSecretName)
+	assertEnvVar(t, container.Env, switchCredentialsMountPathEnvVar, switchCredentialsMountPath)
+
+	// Test with SwitchManagement disabled
+	info.ProvConfig.Spec.SwitchManagement = nil
+	container, err = createContainerBaremetalOperator(info)
+	assert.NoError(t, err)
+
+	assertNoEnvVar(t, container.Env, ironicNetworkingEnabledEnvVar)
+	assertNoEnvVar(t, container.Env, switchConfigsSecretEnvVar)
+	assertNoEnvVar(t, container.Env, switchCredentialsSecretEnvVar)
+	assertNoEnvVar(t, container.Env, switchCredentialsMountPathEnvVar)
+}

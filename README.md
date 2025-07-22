@@ -180,6 +180,12 @@ ironic-prometheus-exporter container, and creates supporting resources
 Most users will not need this set. It is recommended to leave this unset unless
 actually necessary.
 
+- SwitchManagement configures the network switch port management service.
+When enabled, CBO deploys a dedicated service that manages switch port
+configurations for baremetal hosts during provisioning lifecycle stages.
+Switch configurations are stored in a Secret that is updated by the
+Baremetal Operator and consumed by the switch management service.
+
 
 ## What are its outputs?
 
