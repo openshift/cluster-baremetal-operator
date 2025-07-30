@@ -235,6 +235,11 @@ func (pb *provisioningBuilder) ProvisioningDNS(value bool) *provisioningBuilder 
 	return pb
 }
 
+func (pb *provisioningBuilder) EnableSensorMetrics(value bool) *provisioningBuilder {
+	pb.ProvisioningSpec.EnableSensorMetrics = value
+	return pb
+}
+
 func enableMultiNamespace() *provisioningBuilder {
 	return &provisioningBuilder{
 		metal3iov1alpha1.ProvisioningSpec{

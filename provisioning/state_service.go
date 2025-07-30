@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -17,6 +18,7 @@ const (
 	stateService        = "metal3-state"
 	httpPortName        = "http"
 	vmediaHttpsPortName = "vmedia-https"
+	metricsPortName     = "metrics"
 )
 
 func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
@@ -40,11 +42,20 @@ func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
 			Port: int32(httpsPort),
 		})
 	}
+	if info.ProvConfig.Spec.EnableSensorMetrics {
+		ports = append(ports, corev1.ServicePort{
+			Name: metricsPortName,
+			Port: int32(baremetalMetricsPort),
+		})
+	}
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      stateService,
 			Namespace: info.Namespace,
+			Labels: map[string]string{
+				cboLabelName: stateService,
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -75,4 +86,86 @@ func EnsureMetal3StateService(info *ProvisioningInfo) (updated bool, err error) 
 
 func DeleteMetal3StateService(info *ProvisioningInfo) error {
 	return client.IgnoreNotFound(info.Client.CoreV1().Services(info.Namespace).Delete(context.Background(), stateService, metav1.DeleteOptions{}))
+}
+
+// NewIronicServiceMonitor creates a ServiceMonitor for Ironic metrics
+func NewIronicServiceMonitor(namespace string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "monitoring.coreos.com/v1",
+			"kind":       "ServiceMonitor",
+			"metadata": map[string]interface{}{
+				"name":      ironicPrometheusExporterName,
+				"namespace": namespace,
+			},
+			"spec": map[string]interface{}{
+				"endpoints": []interface{}{
+					map[string]interface{}{
+						"port": metricsPortName,
+					},
+				},
+				"namespaceSelector": map[string]interface{}{
+					"matchNames": []interface{}{namespace},
+				},
+				"selector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						cboLabelName: stateService,
+					},
+				},
+			},
+		},
+	}
+}
+
+// EnsureIronicServiceMonitor ensures the ServiceMonitor exists when sensor metrics are enabled
+func EnsureIronicServiceMonitor(info *ProvisioningInfo) (bool, error) {
+	ctx := context.Background()
+	if !info.ProvConfig.Spec.EnableSensorMetrics {
+		// If metrics are disabled, ensure ServiceMonitor is deleted
+		return false, DeleteIronicServiceMonitor(info)
+	}
+
+	serviceMonitor := NewIronicServiceMonitor(info.Namespace)
+
+	if err := controllerutil.SetControllerReference(info.ProvConfig, serviceMonitor, info.Scheme); err != nil {
+		return false, fmt.Errorf("unable to set controllerReference on ServiceMonitor: %w", err)
+	}
+
+	// Check if ServiceMonitor exists
+	existing := &unstructured.Unstructured{}
+	existing.SetAPIVersion("monitoring.coreos.com/v1")
+	existing.SetKind("ServiceMonitor")
+
+	if err := info.ControllerRuntimeClient.Get(ctx, client.ObjectKey{
+		Name:      ironicPrometheusExporterName,
+		Namespace: info.Namespace,
+	}, existing); err != nil {
+		if client.IgnoreNotFound(err) != nil {
+			return false, fmt.Errorf("failed to check for existing ServiceMonitor: %w", err)
+		}
+		// ServiceMonitor doesn't exist, create it
+		if err := info.ControllerRuntimeClient.Create(ctx, serviceMonitor); err != nil {
+			return false, fmt.Errorf("failed to create ServiceMonitor: %w", err)
+		}
+		return true, nil
+	}
+
+	// ServiceMonitor exists, update it
+	serviceMonitor.SetResourceVersion(existing.GetResourceVersion())
+	if err := info.ControllerRuntimeClient.Update(ctx, serviceMonitor); err != nil {
+		return false, fmt.Errorf("failed to update ServiceMonitor: %w", err)
+	}
+	return true, nil
+}
+
+// DeleteIronicServiceMonitor deletes the ServiceMonitor
+func DeleteIronicServiceMonitor(info *ProvisioningInfo) error {
+	serviceMonitor := &unstructured.Unstructured{}
+	serviceMonitor.SetAPIVersion("monitoring.coreos.com/v1")
+	serviceMonitor.SetKind("ServiceMonitor")
+	serviceMonitor.SetName(ironicPrometheusExporterName)
+	serviceMonitor.SetNamespace(info.Namespace)
+
+	ctx := context.Background()
+	return client.IgnoreNotFound(info.ControllerRuntimeClient.Delete(ctx, serviceMonitor))
 }
