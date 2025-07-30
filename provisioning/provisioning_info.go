@@ -46,4 +46,5 @@ type ProvisioningInfo struct {
 	BaremetalWebhookEnabled bool
 	OSClient                osclientset.Interface
 	ResourceCache           resourceapply.ResourceCache
+	IsHyperShift            bool
 }

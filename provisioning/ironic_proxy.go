@@ -201,13 +201,17 @@ func newIronicProxyDaemonSet(info *ProvisioningInfo) (*appsv1.DaemonSet, error) 
 	}, nil
 }
 
-func UseIronicProxy(config *metal3iov1alpha1.ProvisioningSpec) bool {
+func UseIronicProxy(info *ProvisioningInfo) bool {
 	// TODO(dtantsur): is it safe to use VirtualMediaViaExternalNetwork here?
-	return config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled || config.VirtualMediaViaExternalNetwork
+	if info.IsHyperShift {
+		return false
+	} else {
+		return info.ProvConfig.Spec.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled || info.ProvConfig.Spec.VirtualMediaViaExternalNetwork
+	}
 }
 
 func EnsureIronicProxy(info *ProvisioningInfo) (updated bool, err error) {
-	if !UseIronicProxy(&info.ProvConfig.Spec) {
+	if !UseIronicProxy(info) {
 		return
 	}
 
@@ -238,8 +242,8 @@ func EnsureIronicProxy(info *ProvisioningInfo) (updated bool, err error) {
 }
 
 // Provide the current state of ironic-proxy daemonset
-func GetIronicProxyState(client appsclientv1.DaemonSetsGetter, targetNamespace string, config *metal3iov1alpha1.Provisioning) (appsv1.DaemonSetConditionType, error) {
-	if !UseIronicProxy(&config.Spec) {
+func GetIronicProxyState(client appsclientv1.DaemonSetsGetter, targetNamespace string, info *ProvisioningInfo) (appsv1.DaemonSetConditionType, error) {
+	if !UseIronicProxy(info) {
 		return DaemonSetDisabled, nil
 	}
 

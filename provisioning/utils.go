@@ -134,7 +134,7 @@ func GetIronicIPs(info *ProvisioningInfo) (ironicIPs []string, err error) {
 		return
 	}
 
-	if UseIronicProxy(&info.ProvConfig.Spec) {
+	if UseIronicProxy(info) {
 		ironicIPs, err = getServerInternalIPs(info.OSClient)
 		if err != nil {
 			err = fmt.Errorf("error fetching internalIPs: %w", err)

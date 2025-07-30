@@ -389,7 +389,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	ironicProxyState, err := provisioning.GetIronicProxyState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	ironicProxyState, err := provisioning.GetIronicProxyState(r.KubeClient.AppsV1(), ComponentNamespace, info)
 	err = r.checkDaemonSet(ironicProxyState, err, "ironic proxy", func() error { return provisioning.DeleteIronicProxy(info) })
 	if err != nil {
 		return ctrl.Result{}, err
@@ -414,10 +414,14 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		return nil, err
 	}
 
-	if err := r.updateProvisioningMacAddresses(ctx, provConfig); err != nil {
-		return nil, err
-	}
+	infra, _ := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
+	isHyperShift := infra.Status.ControlPlaneTopology == osconfigv1.ExternalTopologyMode
 
+	if !isHyperShift {
+		if err := r.updateProvisioningMacAddresses(ctx, provConfig); err != nil {
+			return nil, err
+		}
+	}
 	enableBaremetalWebhook := provisioning.BaremetalWebhookDependenciesReady(r.OSClient)
 
 	return &provisioning.ProvisioningInfo{
@@ -433,6 +437,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		BaremetalWebhookEnabled: enableBaremetalWebhook,
 		OSClient:                r.OSClient,
 		ResourceCache:           r.ResourceCache,
+		IsHyperShift:            isHyperShift,
 	}, nil
 }
 

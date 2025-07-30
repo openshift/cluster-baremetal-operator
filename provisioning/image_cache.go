@@ -250,6 +250,10 @@ func newImageCacheDaemonSet(info *ProvisioningInfo) (*appsv1.DaemonSet, error) {
 }
 
 func EnsureImageCache(info *ProvisioningInfo) (updated bool, err error) {
+	if info.IsHyperShift {
+		return
+	}
+
 	if info.ProvConfig.Spec.ProvisioningOSDownloadURL == "" {
 		err = DeleteImageCache(info)
 		return

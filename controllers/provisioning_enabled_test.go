@@ -95,7 +95,7 @@ func TestIsEnabled(t *testing.T) {
 			name:          "external controlplane",
 			infra:         withExternalControlPlane(infra),
 			expectedError: false,
-			isEnabled:     false,
+			isEnabled:     true,
 		},
 	}
 	for _, tc := range testCases {
