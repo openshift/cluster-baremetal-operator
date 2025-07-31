@@ -25,7 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -123,7 +123,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		// its own volume and does not have to use the imageCacheSharedVolume
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
-			Privileged: pointer.BoolPtr(true),
+			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 			},
@@ -205,13 +205,13 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			Key:               "node.kubernetes.io/not-ready",
 			Effect:            corev1.TaintEffectNoExecute,
 			Operator:          corev1.TolerationOpExists,
-			TolerationSeconds: pointer.Int64Ptr(120),
+			TolerationSeconds: ptr.To[int64](120),
 		},
 		{
 			Key:               "node.kubernetes.io/unreachable",
 			Effect:            corev1.TaintEffectNoExecute,
 			Operator:          corev1.TolerationOpExists,
-			TolerationSeconds: pointer.Int64Ptr(120),
+			TolerationSeconds: ptr.To[int64](120),
 		},
 	}
 
@@ -262,7 +262,7 @@ func newImageCustomizationDeployment(info *ProvisioningInfo, ironicIPs []string)
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: pointer.Int32Ptr(1),
+			Replicas: ptr.To[int32](1),
 			Selector: selector,
 			Template: *template,
 		},

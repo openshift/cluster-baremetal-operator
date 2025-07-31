@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	utilnet "k8s.io/utils/net"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -101,7 +101,7 @@ func trustedCAVolume() corev1.Volume {
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: externalTrustBundleConfigMapName,
 				},
-				Optional: pointer.BoolPtr(true),
+				Optional: ptr.To(true),
 			},
 		},
 	}
@@ -288,7 +288,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
-			Privileged: pointer.BoolPtr(true),
+			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 			},
@@ -397,7 +397,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
-			Privileged: pointer.BoolPtr(true),
+			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 				Add: []corev1.Capability{
@@ -471,7 +471,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
-			Privileged: pointer.BoolPtr(true),
+			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 			},
@@ -527,7 +527,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for hostPath image volume mount
-			Privileged: pointer.BoolPtr(true),
+			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 			},
@@ -605,7 +605,7 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
 			// Needed for mounting /proc to set the addr_gen_mode
-			Privileged: pointer.BoolPtr(true),
+			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 				Add: []corev1.Capability{
@@ -648,13 +648,13 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 			Key:               "node.kubernetes.io/not-ready",
 			Effect:            corev1.TaintEffectNoExecute,
 			Operator:          corev1.TolerationOpExists,
-			TolerationSeconds: pointer.Int64Ptr(120),
+			TolerationSeconds: ptr.To[int64](120),
 		},
 		{
 			Key:               "node.kubernetes.io/unreachable",
 			Effect:            corev1.TaintEffectNoExecute,
 			Operator:          corev1.TolerationOpExists,
-			TolerationSeconds: pointer.Int64Ptr(120),
+			TolerationSeconds: ptr.To[int64](120),
 		},
 	}
 
@@ -672,7 +672,7 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 			PriorityClassName: "system-node-critical",
 			NodeSelector:      map[string]string{"node-role.kubernetes.io/master": ""},
 			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: pointer.BoolPtr(false),
+				RunAsNonRoot: ptr.To(false),
 			},
 			ServiceAccountName: "cluster-baremetal-operator",
 			Tolerations:        tolerations,
@@ -754,7 +754,7 @@ func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: pointer.Int32Ptr(1),
+			Replicas: ptr.To[int32](1),
 			Selector: selector,
 			Template: *template,
 			Strategy: appsv1.DeploymentStrategy{
