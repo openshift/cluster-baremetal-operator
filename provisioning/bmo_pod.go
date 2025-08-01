@@ -106,7 +106,6 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "webhook-server",
-				HostPort:      int32(webhookPort),
 				ContainerPort: int32(webhookPort),
 			},
 		},
