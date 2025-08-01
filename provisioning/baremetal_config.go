@@ -20,7 +20,7 @@ import (
 	"net"
 	"strings"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 )
@@ -128,13 +128,13 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 	case provisioningInterface:
 		return &baremetalConfig.ProvisioningInterface
 	case provisioningMacAddresses:
-		return pointer.StringPtr(strings.Join(baremetalConfig.ProvisioningMacAddresses, ","))
+		return ptr.To(strings.Join(baremetalConfig.ProvisioningMacAddresses, ","))
 	case deployKernelUrl:
 		return getDeployKernelUrl()
 	case httpPort:
-		return pointer.StringPtr(baremetalHttpPort)
+		return ptr.To(baremetalHttpPort)
 	case vmediaHttpsPort:
-		return pointer.StringPtr(baremetalVmediaHttpsPort)
+		return ptr.To(baremetalVmediaHttpsPort)
 	case dhcpRange:
 		return getDHCPRange(baremetalConfig)
 	case machineImageUrl:
