@@ -39,6 +39,7 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 			},
 		},
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
