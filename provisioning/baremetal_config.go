@@ -46,6 +46,7 @@ const (
 	bootIsoSource                  = "IRONIC_BOOT_ISO_SOURCE"
 	useUnixSocket                  = "unix"
 	useProvisioningDNS             = "provisioning"
+	customConfigPath               = "CUSTOM_CONFIG_DIR" // TODO(hroy): do we need this
 )
 
 func getDHCPRange(config *metal3iov1alpha1.ProvisioningSpec) *string {

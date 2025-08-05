@@ -60,6 +60,12 @@ const (
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
+	ironicConfigVolume               = "metal3-ironic-conf"
+	ironicDataVolume                 = "metal3-ironic-data"
+	ironicConfigPath                 = "/conf"
+	ironicDataPath                   = "/data"
+	ironicTmpVolume                  = "metal3-ironic-tmp"
+	ironicTmpPath                    = "/tmp"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -84,6 +90,27 @@ var ironicTlsMount = corev1.VolumeMount{
 	Name:      ironicTlsVolume,
 	MountPath: metal3TlsRootDir + "/ironic",
 	ReadOnly:  true,
+}
+
+var ironicCertMount = corev1.VolumeMount{
+	Name:      ironicTlsVolume,
+	MountPath: metal3TlsRootDir + "/ca/ironic",
+	ReadOnly:  true,
+}
+
+var ironicConfigMount = corev1.VolumeMount{
+	Name:      ironicConfigVolume,
+	MountPath: ironicConfigPath,
+}
+
+var ironicDataMount = corev1.VolumeMount{
+	Name:      ironicDataVolume,
+	MountPath: ironicDataPath,
+}
+
+var ironicTmpMount = corev1.VolumeMount{
+	Name:      ironicTmpVolume,
+	MountPath: ironicTmpPath,
 }
 
 var vmediaTlsMount = corev1.VolumeMount{
@@ -114,6 +141,24 @@ var metal3Volumes = []corev1.Volume{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	},
+	{
+		Name: ironicConfigVolume,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	},
+	{
+		Name: ironicDataVolume,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	},
+	{
+		Name: ironicTmpVolume,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	},
 	imageVolume(),
 	{
 		Name: ironicCredentialsVolume,
@@ -137,6 +182,12 @@ var metal3Volumes = []corev1.Volume{
 		},
 	},
 	trustedCAVolume(),
+	{
+		Name: "httpd-dir",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	},
 	{
 		Name: ironicTlsVolume,
 		VolumeSource: corev1.VolumeSource{
@@ -288,6 +339,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 		Command:         []string{command},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
@@ -314,6 +366,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 		Command:         []string{"/set-static-ip"},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 				Add:  []corev1.Capability{"NET_ADMIN"},
@@ -397,6 +450,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
@@ -412,6 +466,11 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		VolumeMounts: []corev1.VolumeMount{
 			sharedVolumeMount,
 			imageVolumeMount,
+			//TEST(hroy): is the cert mount needed here
+			ironicCertMount,
+			ironicConfigMount,
+			ironicDataMount,
+			//ironicTmpMount,
 		},
 		Env: envVars,
 		Resources: corev1.ResourceRequirements{
@@ -444,6 +503,9 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 		ironicCredentialsMount,
 		imageVolumeMount,
 		ironicTlsMount,
+		ironicDataMount,
+		ironicConfigMount,
+		ironicCertMount,
 	}
 	ports := []corev1.ContainerPort{
 		{
@@ -472,6 +534,7 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
@@ -518,6 +581,10 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		sharedVolumeMount,
 		imageVolumeMount,
 		ironicTlsMount,
+		ironicCertMount,
+		ironicDataMount,
+		ironicConfigMount,
+		ironicTmpMount,
 	}
 	if !config.DisableVirtualMediaTLS {
 		volumes = append(volumes, vmediaTlsMount)
@@ -528,6 +595,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
@@ -588,6 +656,7 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 				Add: []corev1.Capability{
@@ -606,6 +675,7 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		Command:         []string{"/refresh-static-ip"},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for mounting /proc to set the addr_gen_mode
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
