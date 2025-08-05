@@ -37,8 +37,7 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 		Image:           images.Ironic,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{
-			// Set this for ironic-proxy with custom dirs
-			Privileged: ptr.To(true),
+			ReadOnlyRootFilesystem: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 			},
@@ -46,6 +45,9 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 		Command: []string{"/bin/runironic-proxy"},
 		VolumeMounts: []corev1.VolumeMount{
 			ironicTlsMount,
+			ironicCertMount,
+			ironicConfigMount,
+			ironicDataMount,
 		},
 		Ports: []corev1.ContainerPort{
 			{
@@ -154,6 +156,24 @@ func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateS
 							},
 							Optional: ptr.To(true),
 						},
+					},
+				},
+				{
+					Name: ironicCertVolume,
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: ironicConfigVolume,
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: ironicDataVolume,
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
 			},
