@@ -93,6 +93,8 @@ func createContainerImageCache(images *Images) corev1.Container {
 		Image:           images.Ironic,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{
+			// TODO(hroy): is readOnlyRootFS flag needed here
+			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
@@ -100,7 +102,7 @@ func createContainerImageCache(images *Images) corev1.Container {
 			},
 		},
 		Command:      []string{"/bin/runhttpd"},
-		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount}, // TODO(hroy): do we need to add any mounts here
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          imageCachePortName,
