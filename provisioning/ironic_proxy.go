@@ -37,9 +37,10 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 		Image:           images.Ironic,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{
+			// Set this for ironic-proxy with custom dirs
+			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
-				Add:  []corev1.Capability{"FOWNER"},
 			},
 		},
 		Command: []string{"/bin/runironic-proxy"},
