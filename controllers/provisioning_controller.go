@@ -91,6 +91,7 @@ type ProvisioningReconciler struct {
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=serviceaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
@@ -424,20 +425,27 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 	}
 	enableBaremetalWebhook := provisioning.BaremetalWebhookDependenciesReady(r.OSClient)
 
+	// Get the pull secret name from the service account
+	pullSecretName, err := getServiceAccountPullSecret(ctx, r.KubeClient, ComponentNamespace, "cluster-baremetal-operator")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pull secret from service account: %w", err)
+	}
+
 	return &provisioning.ProvisioningInfo{
-		Client:                  r.KubeClient,
-		EventRecorder:           events.NewLoggingEventRecorder(ComponentName),
-		ProvConfig:              provConfig,
-		Scheme:                  r.Scheme,
-		Namespace:               ComponentNamespace,
-		Images:                  images,
-		Proxy:                   proxy,
-		NetworkStack:            r.NetworkStack,
-		SSHKey:                  sshkey,
-		BaremetalWebhookEnabled: enableBaremetalWebhook,
-		OSClient:                r.OSClient,
-		ResourceCache:           r.ResourceCache,
-		IsHyperShift:            isHyperShift,
+		Client:                      r.KubeClient,
+		EventRecorder:               events.NewLoggingEventRecorder(ComponentName),
+		ProvConfig:                  provConfig,
+		Scheme:                      r.Scheme,
+		Namespace:                   ComponentNamespace,
+		Images:                      images,
+		Proxy:                       proxy,
+		NetworkStack:                r.NetworkStack,
+		SSHKey:                      sshkey,
+		BaremetalWebhookEnabled:     enableBaremetalWebhook,
+		OSClient:                    r.OSClient,
+		ResourceCache:               r.ResourceCache,
+		IsHyperShift:                isHyperShift,
+		ImageRegistryPullSecretName: pullSecretName,
 	}, nil
 }
 
@@ -569,6 +577,32 @@ func getMachineByHost(name string, consumerRef *corev1.ObjectReference) string {
 	}
 
 	return consumerRef.Name
+}
+
+// getServiceAccountPullSecret returns the name of the first dockercfg secret from the service account's imagePullSecrets
+func getServiceAccountPullSecret(ctx context.Context, client kubernetes.Interface, namespace, serviceAccountName string) (string, error) {
+	sa, err := client.CoreV1().ServiceAccounts(namespace).Get(ctx, serviceAccountName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get service account %s: %w", serviceAccountName, err)
+	}
+
+	for _, pullSecret := range sa.ImagePullSecrets {
+		// Check if this secret exists and is a dockercfg secret
+		secret, err := client.CoreV1().Secrets(namespace).Get(ctx, pullSecret.Name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue // Skip non-existent secrets
+			}
+			return "", fmt.Errorf("failed to get secret %s: %w", pullSecret.Name, err)
+		}
+
+		// Check if it's a dockercfg secret
+		if secret.Type == corev1.SecretTypeDockercfg {
+			return pullSecret.Name, nil
+		}
+	}
+
+	return "", fmt.Errorf("no dockercfg secret found in service account %s imagePullSecrets", serviceAccountName)
 }
 
 func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning) error {

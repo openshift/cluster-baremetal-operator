@@ -33,18 +33,19 @@ func (ns NetworkStackType) IpOption() string {
 }
 
 type ProvisioningInfo struct {
-	Client                  kubernetes.Interface
-	EventRecorder           events.Recorder
-	ProvConfig              *metal3iov1alpha1.Provisioning
-	Scheme                  *runtime.Scheme
-	Namespace               string
-	Images                  *Images
-	Proxy                   *configv1.Proxy
-	NetworkStack            NetworkStackType
-	MasterMacAddresses      []string
-	SSHKey                  string
-	BaremetalWebhookEnabled bool
-	OSClient                osclientset.Interface
-	ResourceCache           resourceapply.ResourceCache
-	IsHyperShift            bool
+	Client                      kubernetes.Interface
+	EventRecorder               events.Recorder
+	ProvConfig                  *metal3iov1alpha1.Provisioning
+	Scheme                      *runtime.Scheme
+	Namespace                   string
+	Images                      *Images
+	Proxy                       *configv1.Proxy
+	NetworkStack                NetworkStackType
+	MasterMacAddresses          []string
+	SSHKey                      string
+	BaremetalWebhookEnabled     bool
+	OSClient                    osclientset.Interface
+	ResourceCache               resourceapply.ResourceCache
+	IsHyperShift                bool
+	ImageRegistryPullSecretName string
 }

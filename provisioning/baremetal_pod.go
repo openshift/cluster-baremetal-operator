@@ -48,6 +48,7 @@ const (
 	ironicCredentialsVolume          = "metal3-ironic-basic-auth"
 	ironicTlsVolume                  = "metal3-ironic-tls"
 	vmediaTlsVolume                  = "metal3-vmedia-tls"
+	ironicPullSecretVolume           = "metal3-ironic-pull-secret" // #nosec
 	ironicInsecureEnvVar             = "IRONIC_INSECURE"
 	ironicKernelParamsEnvVar         = "IRONIC_KERNEL_PARAMS"
 	ironicCertEnvVar                 = "IRONIC_CACERT_FILE"
@@ -57,6 +58,7 @@ const (
 	ironicProxyEnvVar                = "IRONIC_REVERSE_PROXY_SETUP"
 	ironicPrivatePortEnvVar          = "IRONIC_PRIVATE_PORT"
 	ironicListenPortEnvVar           = "IRONIC_LISTEN_PORT"
+	ironicOciAuthEnvVar              = "IRONIC_OCI_AUTH_CONFIG"
 	cboOwnedAnnotation               = "baremetal.openshift.io/owned"
 	cboLabelName                     = "baremetal.openshift.io/cluster-baremetal-operator"
 	externalTrustBundleConfigMapName = "cbo-trusted-ca"
@@ -77,6 +79,12 @@ var sharedVolumeMount = corev1.VolumeMount{
 var ironicCredentialsMount = corev1.VolumeMount{
 	Name:      ironicCredentialsVolume,
 	MountPath: metal3AuthRootDir + "/ironic",
+	ReadOnly:  true,
+}
+
+var ironicPullSecretMount = corev1.VolumeMount{
+	Name:      ironicPullSecretVolume,
+	MountPath: metal3AuthRootDir + "/oci",
 	ReadOnly:  true,
 }
 
@@ -107,52 +115,72 @@ func trustedCAVolume() corev1.Volume {
 	}
 }
 
-var metal3Volumes = []corev1.Volume{
-	{
-		Name: baremetalSharedVolume,
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
+func getMetal3Volumes(info *ProvisioningInfo) []corev1.Volume {
+	volumes := []corev1.Volume{
+		{
+			Name: baremetalSharedVolume,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
 		},
-	},
-	imageVolume(),
-	{
-		Name: ironicCredentialsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: ironicSecretName,
-				Items: []corev1.KeyToPath{
-					{Key: ironicUsernameKey, Path: ironicUsernameKey},
-					{Key: ironicPasswordKey, Path: ironicPasswordKey},
-					{Key: ironicHtpasswdKey, Path: ironicHtpasswdKey},
+		imageVolume(),
+		{
+			Name: ironicCredentialsVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: ironicSecretName,
+					Items: []corev1.KeyToPath{
+						{Key: ironicUsernameKey, Path: ironicUsernameKey},
+						{Key: ironicPasswordKey, Path: ironicPasswordKey},
+						{Key: ironicHtpasswdKey, Path: ironicHtpasswdKey},
+					},
 				},
 			},
 		},
-	},
-	{
-		Name: baremetalWebhookCertVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: baremetalWebhookSecretName,
+		{
+			Name: baremetalWebhookCertVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: baremetalWebhookSecretName,
+				},
 			},
 		},
-	},
-	trustedCAVolume(),
-	{
-		Name: ironicTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
+		trustedCAVolume(),
+		{
+			Name: ironicTlsVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: tlsSecretName,
+				},
 			},
 		},
-	},
-	{
-		Name: vmediaTlsVolume,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
+		{
+			Name: vmediaTlsVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: tlsSecretName,
+				},
 			},
 		},
-	},
+	}
+
+	// Add the pull secret volume using the pre-discovered secret name
+	volumes = append(volumes, corev1.Volume{
+		Name: ironicPullSecretVolume,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: info.ImageRegistryPullSecretName,
+				Items: []corev1.KeyToPath{
+					{
+						Key:  corev1.DockerConfigKey, // ".dockercfg"
+						Path: "auth.json",
+					},
+				},
+			},
+		},
+	})
+
+	return volumes
 }
 
 func buildEnvVar(name string, baremetalProvisioningConfig *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
@@ -518,6 +546,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		sharedVolumeMount,
 		imageVolumeMount,
 		ironicTlsMount,
+		ironicPullSecretMount,
 	}
 	if !config.DisableVirtualMediaTLS {
 		volumes = append(volumes, vmediaTlsMount)
@@ -552,6 +581,10 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 			{
 				Name:  ironicPrivatePortEnvVar,
 				Value: useUnixSocket,
+			},
+			{
+				Name:  ironicOciAuthEnvVar,
+				Value: metal3AuthRootDir + "/oci/auth.json",
 			},
 			buildEnvVar(httpPort, config),
 			buildEnvVar(provisioningIP, config),
@@ -665,13 +698,15 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 		nodeSelector = map[string]string{"node-role.kubernetes.io/master": ""}
 	}
 
+	volumes := getMetal3Volumes(info)
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: podTemplateAnnotations,
 			Labels:      *labels,
 		},
 		Spec: corev1.PodSpec{
-			Volumes:           metal3Volumes,
+			Volumes:           volumes,
 			InitContainers:    initContainers,
 			Containers:        containers,
 			HostNetwork:       true,
@@ -748,6 +783,7 @@ func newMetal3Deployment(info *ProvisioningInfo) *appsv1.Deployment {
 		cboLabelName: stateService,
 	}
 	template := newMetal3PodTemplateSpec(info, &podSpecLabels)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      baremetalDeploymentName,

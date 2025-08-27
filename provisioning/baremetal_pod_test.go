@@ -214,6 +214,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "IRONIC_KERNEL_PARAMS", Value: "rd.net.timeout.carrier=30 ip=dhcp"},
 				{Name: "IRONIC_REVERSE_PROXY_SETUP", Value: "true"},
 				{Name: "IRONIC_PRIVATE_PORT", Value: "unix"},
+				{Name: "IRONIC_OCI_AUTH_CONFIG", Value: "/auth/oci/auth.json"},
 				{Name: "HTTP_PORT", Value: "6180"},
 				{Name: "PROVISIONING_IP", Value: "172.30.20.3/24"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
@@ -226,6 +227,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				sharedVolumeMount,
 				imageVolumeMount,
 				ironicTlsMount,
+				ironicPullSecretMount,
 			},
 		},
 		"metal3-ramdisk-logs": {
@@ -413,10 +415,12 @@ func TestNewMetal3Containers(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			info := &ProvisioningInfo{
-				Images:       &images,
-				ProvConfig:   &metal3iov1alpha1.Provisioning{Spec: *tc.config},
-				SSHKey:       tc.sshkey,
-				NetworkStack: NetworkStackV6,
+				Images:                      &images,
+				ProvConfig:                  &metal3iov1alpha1.Provisioning{Spec: *tc.config},
+				SSHKey:                      tc.sshkey,
+				NetworkStack:                NetworkStackV6,
+				Namespace:                   "openshift-machine-api",
+				ImageRegistryPullSecretName: "test-dockercfg-secret",
 				Client: fakekube.NewSimpleClientset(&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "openshift-machine-api",
