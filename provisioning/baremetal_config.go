@@ -30,6 +30,7 @@ const (
 	baremetalVmediaHttpsPort       = "6183"
 	baremetalWebhookPort           = "9447"
 	baremetalIronicPort            = 6385
+	baremetalMetricsPort           = 9608
 	baremetalKernelSubPath         = "ironic-python-agent.kernel"
 	baremetalIronicEndpointSubpath = "v1/"
 	provisioningIP                 = "PROVISIONING_IP"
@@ -44,6 +45,8 @@ const (
 	machineImageUrl                = "RHCOS_IMAGE_URL"
 	ipOptions                      = "IP_OPTIONS"
 	bootIsoSource                  = "IRONIC_BOOT_ISO_SOURCE"
+	sendSensorData                 = "SEND_SENSOR_DATA"
+	sensorDataInterval             = "OS_SENSOR_DATA__INTERVAL"
 	useUnixSocket                  = "unix"
 	useProvisioningDNS             = "provisioning"
 )

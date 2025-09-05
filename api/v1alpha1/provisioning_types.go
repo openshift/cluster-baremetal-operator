@@ -78,6 +78,20 @@ type UnsupportedConfigOverrides struct {
 	IronicAgentImage string `json:"ironicAgentImage,omitempty"`
 }
 
+// PrometheusExporter defines configuration for Prometheus metrics export
+type PrometheusExporter struct {
+	// Enabled controls whether sensor data collection is active.
+	// When true, configures Ironic to collect sensor data, deploys the
+	// ironic-prometheus-exporter container, and creates supporting resources.
+	Enabled bool `json:"enabled"`
+
+	// SensorCollectionInterval defines how often (in seconds) sensor data
+	// is collected from BMCs using Ironic. Must be at least 60 seconds.
+	// +kubebuilder:default=60
+	// +kubebuilder:validation:Minimum=60
+	SensorCollectionInterval int `json:"sensorCollectionInterval,omitempty"`
+}
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface
@@ -207,6 +221,12 @@ type ProvisioningSpec struct {
 	// When reporting a bug, please make sure to reproduce it with
 	// UnsupportedConfigOverrides set to nil.
 	UnsupportedConfigOverrides *UnsupportedConfigOverrides `json:"unsupportedConfigOverrides,omitempty"`
+
+	// PrometheusExporter configures sensor data collection and Prometheus metrics export.
+	// When enabled, this configures Ironic to collect sensor data, deploys the
+	// ironic-prometheus-exporter container, and creates supporting resources
+	// (ServiceMonitor, Service ports) to expose hardware sensor metrics for Prometheus.
+	PrometheusExporter *PrometheusExporter `json:"prometheusExporter,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning

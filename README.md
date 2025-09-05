@@ -163,6 +163,11 @@ upgradability of your cluster.
 When reporting a bug, please make sure to reproduce it with
 UnsupportedConfigOverrides set to nil.
 
+- PrometheusExporter configures sensor data collection and Prometheus metrics export.
+When enabled, this configures Ironic to collect sensor data, deploys the
+ironic-prometheus-exporter container, and creates supporting resources
+(ServiceMonitor, Service ports) to expose hardware sensor metrics for Prometheus.
+
 
 ## What are its outputs?
 

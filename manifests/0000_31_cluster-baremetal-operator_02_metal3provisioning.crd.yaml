@@ -94,6 +94,29 @@ spec:
                     description: RootfsURL Image URL to be used for PXE deployments
                     type: string
                 type: object
+              prometheusExporter:
+                description: |-
+                  PrometheusExporter configures sensor data collection and Prometheus metrics export.
+                  When enabled, this configures Ironic to collect sensor data, deploys the
+                  ironic-prometheus-exporter container, and creates supporting resources
+                  (ServiceMonitor, Service ports) to expose hardware sensor metrics for Prometheus.
+                properties:
+                  enabled:
+                    description: |-
+                      Enabled controls whether sensor data collection is active.
+                      When true, configures Ironic to collect sensor data, deploys the
+                      ironic-prometheus-exporter container, and creates supporting resources.
+                    type: boolean
+                  sensorCollectionInterval:
+                    default: 60
+                    description: |-
+                      SensorCollectionInterval defines how often (in seconds) sensor data
+                      is collected from BMCs using Ironic. Must be at least 60 seconds.
+                    minimum: 60
+                    type: integer
+                required:
+                - enabled
+                type: object
               provisioningDHCPExternal:
                 description: |-
                   ProvisioningDHCPExternal indicates whether the DHCP server

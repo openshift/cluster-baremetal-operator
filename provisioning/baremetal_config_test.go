@@ -235,6 +235,14 @@ func (pb *provisioningBuilder) ProvisioningDNS(value bool) *provisioningBuilder 
 	return pb
 }
 
+func (pb *provisioningBuilder) PrometheusExporter(enabled bool, interval int) *provisioningBuilder {
+	pb.ProvisioningSpec.PrometheusExporter = &metal3iov1alpha1.PrometheusExporter{
+		Enabled:                  enabled,
+		SensorCollectionInterval: interval,
+	}
+	return pb
+}
+
 func enableMultiNamespace() *provisioningBuilder {
 	return &provisioningBuilder{
 		metal3iov1alpha1.ProvisioningSpec{
