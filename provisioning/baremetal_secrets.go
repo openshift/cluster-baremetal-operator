@@ -133,8 +133,7 @@ func createRegistryPullSecret(info *ProvisioningInfo) (bool, error) {
 		},
 		Type: corev1.SecretTypeOpaque,
 		StringData: map[string]string{
-			// The openshift-machine-api/pull-secret .dockerconfigjson field should be double encoded due to PR
-			// https://github.com/openshift/cluster-baremetal-operator/pull/184
+			// ICC expects the pull secret to be additionally base64-encoded since it will be passed to Ignition.
 			openshiftConfigSecretKey: base64.StdEncoding.EncodeToString(openshiftConfigSecretKeyData),
 		},
 	}
