@@ -97,6 +97,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors,verbs=create;watch;get;list;patch;delete;update
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=prometheusrules,verbs=create;watch;get;list;patch;delete;update
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
@@ -335,6 +336,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureImageCustomizationDeployment,
 		provisioning.EnsureIronicProxy,
 		provisioning.EnsureIronicServiceMonitor,
+		provisioning.EnsureIronicPrometheusRule,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -510,6 +512,9 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteIronicServiceMonitor(info); err != nil {
 		return errors.Wrap(err, "failed to delete ironic service monitor")
+	}
+	if err := provisioning.DeleteIronicPrometheusRule(info); err != nil {
+		return errors.Wrap(err, "failed to delete ironic prometheus rule")
 	}
 	return nil
 }

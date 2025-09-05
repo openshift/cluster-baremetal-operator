@@ -2,23 +2,29 @@ package provisioning
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
+//go:embed prometheusrule.yaml
+var prometheusRuleYAML []byte
+
 const (
-	stateService        = "metal3-state"
-	httpPortName        = "http"
-	vmediaHttpsPortName = "vmedia-https"
-	metricsPortName     = "metrics"
+	stateService             = "metal3-state"
+	httpPortName             = "http"
+	vmediaHttpsPortName      = "vmedia-https"
+	metricsPortName          = "metrics"
+	ironicPrometheusRuleName = "metal3-ironic-prometheus-exporter-defaults"
 )
 
 func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
@@ -131,7 +137,6 @@ func EnsureIronicServiceMonitor(info *ProvisioningInfo) (bool, error) {
 		return false, fmt.Errorf("unable to set controllerReference on ServiceMonitor: %w", err)
 	}
 
-	// Apply or Update
 	_, updated, err := resourceapply.ApplyServiceMonitor(ctx, info.DynamicClient, info.EventRecorder, serviceMonitor)
 	if err != nil {
 		return false, fmt.Errorf("failed to apply ServiceMonitor: %w", err)
@@ -144,5 +149,72 @@ func EnsureIronicServiceMonitor(info *ProvisioningInfo) (bool, error) {
 func DeleteIronicServiceMonitor(info *ProvisioningInfo) error {
 	serviceMonitor := NewIronicServiceMonitor(info.Namespace)
 	_, _, err := resourceapply.DeleteServiceMonitor(context.Background(), info.DynamicClient, info.EventRecorder, serviceMonitor)
+	return err
+}
+
+// NewIronicPrometheusRule creates a PrometheusRule for hardware health alerts
+func NewIronicPrometheusRule(namespace string) (*unstructured.Unstructured, error) {
+	prometheusRule := &unstructured.Unstructured{}
+	if err := yaml.Unmarshal(prometheusRuleYAML, prometheusRule); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal PrometheusRule YAML: %w", err)
+	}
+
+	// Ensure all required Kubernetes metadata is properly set
+	prometheusRule.SetAPIVersion("monitoring.coreos.com/v1")
+	prometheusRule.SetKind("PrometheusRule")
+	prometheusRule.SetNamespace(namespace)
+
+	// Ensure name is set (should come from YAML but make it explicit)
+	if prometheusRule.GetName() == "" {
+		prometheusRule.SetName(ironicPrometheusRuleName)
+	}
+
+	// Add CBO label for consistent labeling
+	labels := prometheusRule.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[cboLabelName] = stateService
+	prometheusRule.SetLabels(labels)
+
+	return prometheusRule, nil
+}
+
+// EnsureIronicPrometheusRule ensures the PrometheusRule exists when sensor metrics and default rules are enabled
+func EnsureIronicPrometheusRule(info *ProvisioningInfo) (bool, error) {
+	ctx := context.Background()
+
+	// If metrics are disabled or default rules are disabled, ensure PrometheusRule is deleted
+	if info.ProvConfig.Spec.PrometheusExporter == nil ||
+		!info.ProvConfig.Spec.PrometheusExporter.Enabled ||
+		!info.ProvConfig.Spec.PrometheusExporter.IncludeDefaultPromRules {
+		return false, DeleteIronicPrometheusRule(info)
+	}
+
+	prometheusRule, err := NewIronicPrometheusRule(info.Namespace)
+	if err != nil {
+		return false, fmt.Errorf("failed to create PrometheusRule: %w", err)
+	}
+
+	if err := controllerutil.SetControllerReference(info.ProvConfig, prometheusRule, info.Scheme); err != nil {
+		return false, fmt.Errorf("unable to set controllerReference on PrometheusRule: %w", err)
+	}
+
+	// Apply or Update
+	_, updated, err := resourceapply.ApplyPrometheusRule(ctx, info.DynamicClient, info.EventRecorder, prometheusRule)
+	if err != nil {
+		return false, fmt.Errorf("failed to apply PrometheusRule: %w", err)
+	}
+
+	return updated, nil
+}
+
+// DeleteIronicPrometheusRule deletes the PrometheusRule
+func DeleteIronicPrometheusRule(info *ProvisioningInfo) error {
+	prometheusRule, err := NewIronicPrometheusRule(info.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to create PrometheusRule for deletion: %w", err)
+	}
+	_, _, err = resourceapply.DeletePrometheusRule(context.Background(), info.DynamicClient, info.EventRecorder, prometheusRule)
 	return err
 }

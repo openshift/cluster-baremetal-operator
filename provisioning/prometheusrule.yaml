@@ -1,0 +1,105 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: metal3-ironic-prometheus-exporter-defaults
+  namespace: openshift-machine-api
+spec:
+  groups:
+  - name: baremetal.health
+    rules:
+    # Temperature alerts
+    - alert: BaremetalTemperatureHealth
+      expr: last_over_time(baremetal_temp_health_status[5m]) == 1
+      for: 2m
+      labels:
+        severity: warning
+        component: baremetal
+      annotations:
+        summary: "Temperature warning on {{ $labels.node_name }}"
+        description: "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}"
+
+    - alert: BaremetalTemperatureHealth
+      expr: last_over_time(baremetal_temp_health_status[5m]) == 2
+      for: 0m
+      labels:
+        severity: critical
+        component: baremetal
+      annotations:
+        summary: "Temperature critical on {{ $labels.node_name }}"
+        description: "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}"
+
+    # Power alerts
+    - alert: BaremetalPowerHealth
+      expr: last_over_time(baremetal_power_health_status[5m]) == 1
+      for: 2m
+      labels:
+        severity: warning
+        component: baremetal
+      annotations:
+        summary: "Power warning on {{ $labels.node_name }}"
+        description: "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}"
+
+    - alert: BaremetalPowerHealth
+      expr: last_over_time(baremetal_power_health_status[5m]) == 2
+      for: 0m
+      labels:
+        severity: critical
+        component: baremetal
+      annotations:
+        summary: "Power critical on {{ $labels.node_name }}"
+        description: "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}"
+
+    # Fan alerts
+    - alert: BaremetalFanHealth
+      expr: last_over_time(baremetal_fan_health_status[5m]) == 1
+      for: 2m
+      labels:
+        severity: warning
+        component: baremetal
+      annotations:
+        summary: "Fan warning on {{ $labels.node_name }}"
+        description: "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}"
+
+    - alert: BaremetalFanHealth
+      expr: last_over_time(baremetal_fan_health_status[5m]) == 2
+      for: 0m
+      labels:
+        severity: critical
+        component: baremetal
+      annotations:
+        summary: "Fan critical on {{ $labels.node_name }}"
+        description: "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}"
+
+    # Drive alerts
+    - alert: BaremetalDriveHealth
+      expr: last_over_time(baremetal_drive_health_status[5m]) == 1
+      for: 2m
+      labels:
+        severity: warning
+        component: baremetal
+      annotations:
+        summary: "Drive warning on {{ $labels.node_name }}"
+        description: "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}"
+
+    - alert: BaremetalDriveHealth
+      expr: last_over_time(baremetal_drive_health_status[5m]) == 2
+      for: 0m
+      labels:
+        severity: critical
+        component: baremetal
+      annotations:
+        summary: "Drive critical on {{ $labels.node_name }}"
+        description: "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}"
+
+  - name: baremetal.monitoring
+    rules:
+    # Monitoring health
+    - alert: BaremetalStaleMetrics
+      expr: (time() - baremetal_last_payload_timestamp_seconds) > 300
+      for: 5m
+      labels:
+        severity: warning
+        component: baremetal
+      annotations:
+        summary: "Stale hardware metrics for {{ $labels.node_name }}"
+        description: "No hardware data received from {{ $labels.node_name }} for {{ $value | humanizeDuration }}"
