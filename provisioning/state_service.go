@@ -36,6 +36,14 @@ func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
 			Port: int32(port),
 		},
 	}
+	// Always expose port 6385 since it's always available as a hostPort
+	// either directly from the main pod or via the ironic-proxy DaemonSet
+	if ironicPort != baremetalIronicPort {
+		ports = append(ports, corev1.ServicePort{
+			Name: "ironic-api",
+			Port: int32(baremetalIronicPort),
+		})
+	}
 	if !info.ProvConfig.Spec.DisableVirtualMediaTLS {
 		ports = append(ports, corev1.ServicePort{
 			Name: vmediaHttpsPortName,
