@@ -53,6 +53,7 @@ const (
 	ironicAgentPullSecret            = "ironic-agent-pull-secret" // #nosec G101
 	ironicAgentPullSecretPath        = "/run/secrets/pull-secret" // #nosec G101
 	additionalNTPServers             = "ADDITIONAL_NTP_SERVERS"
+	imageCacheVolume                 = "metal3-image-cache"
 )
 
 var (
@@ -147,6 +148,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		// TODO: This container does not have to run in privileged mode when the i-c-c has
 		// its own volume and does not have to use the imageCacheSharedVolume
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
@@ -266,7 +268,6 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			Tolerations:        tolerations,
 			Volumes: []corev1.Volume{
 				imageRegistriesVolume(),
-				imageVolume(),
 				trustedCAVolume(),
 				ironicAgentPullSecretVolume(),
 				userCABundleVolume(),
