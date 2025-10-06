@@ -107,6 +107,12 @@ spec:
                       When true, configures Ironic to collect sensor data, deploys the
                       ironic-prometheus-exporter container, and creates supporting resources.
                     type: boolean
+                  includeDefaultPromRules:
+                    default: true
+                    description: |-
+                      IncludeDefaultPromRules controls whether default hardware health
+                      alerting rules are deployed alongside the prometheus exporter.
+                    type: boolean
                   sensorCollectionInterval:
                     default: 60
                     description: |-
@@ -116,6 +122,7 @@ spec:
                     type: integer
                 required:
                 - enabled
+                - includeDefaultPromRules
                 type: object
               provisioningDHCPExternal:
                 description: |-
