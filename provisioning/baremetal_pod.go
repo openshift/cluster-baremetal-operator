@@ -72,9 +72,6 @@ const (
 	inspectorHtpasswdPath            = "/auth/inspector/htpasswd" // #nosec G101
 )
 
-var ironicUserID int64 = 1002
-var inspectorGroupID int64 = 1004
-
 var podTemplateAnnotations = map[string]string{
 	"target.workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
 }
@@ -746,8 +743,8 @@ func createContainerMetal3IronicInspector(images *Images, info *ProvisioningInfo
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		SecurityContext: &corev1.SecurityContext{
-			RunAsUser:  ptr.To(ironicUserID),
-			RunAsGroup: ptr.To(inspectorGroupID),
+			// Needed for shared volume directory creation
+			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 			},
