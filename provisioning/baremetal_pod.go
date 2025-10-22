@@ -116,7 +116,7 @@ var metal3Volumes = []corev1.Volume{
 	},
 	imageVolume(),
 	ironicAgentPullSecretVolume(),
-	userCABundleVolume(),
+	caTrustDirVolume(),
 	{
 		Name: ironicCredentialsVolume,
 		VolumeSource: corev1.VolumeSource{
