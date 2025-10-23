@@ -116,8 +116,6 @@ var metal3Volumes = []corev1.Volume{
 		},
 	},
 	imageVolume(),
-	ironicAgentPullSecretVolume(),
-	userCABundleVolume(),
 	{
 		Name: ironicCredentialsVolume,
 		VolumeSource: corev1.VolumeSource{
@@ -250,9 +248,6 @@ func newMetal3InitContainers(info *ProvisioningInfo) []corev1.Container {
 	if info.ProvConfig.Spec.ProvisioningIP != "" && info.ProvConfig.Spec.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled {
 		initContainers = append(initContainers, createInitContainerStaticIpSet(info.Images, &info.ProvConfig.Spec))
 	}
-
-	// Extract the pre-provisioning images from a container in the payload
-	initContainers = append(initContainers, createInitContainerMachineOSImages(info, "--all", imageVolumeMount, imageSharedDir))
 
 	// If the ProvisioningOSDownloadURL is set, we download the URL specified in it
 	if info.ProvConfig.Spec.ProvisioningOSDownloadURL != "" {

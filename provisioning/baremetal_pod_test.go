@@ -104,10 +104,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 					Image: images.StaticIpManager,
 				},
 				{
-					Name:  "machine-os-images",
-					Image: images.MachineOSImages,
-				},
-				{
 					Name:  "metal3-machine-os-downloader",
 					Image: images.MachineOsDownloader,
 				},
@@ -118,10 +114,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
 				{
-					Name:  "machine-os-images",
-					Image: images.MachineOSImages,
-				},
-				{
 					Name:  "metal3-machine-os-downloader",
 					Image: images.MachineOsDownloader,
 				},
@@ -131,10 +123,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 			name:   "disabled with provisioning ip",
 			config: disabledProvisioning().ProvisioningIP("1.2.3.4").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
-				{
-					Name:  "machine-os-images",
-					Image: images.MachineOSImages,
-				},
 				{
 					Name:  "metal3-machine-os-downloader",
 					Image: images.MachineOsDownloader,
@@ -148,10 +136,6 @@ func TestNewMetal3InitContainers(t *testing.T) {
 				{
 					Name:  "metal3-static-ip-set",
 					Image: images.StaticIpManager,
-				},
-				{
-					Name:  "machine-os-images",
-					Image: images.MachineOSImages,
 				},
 				{
 					Name:  "metal3-machine-os-downloader",
