@@ -510,6 +510,8 @@ github.com/mattn/go-runewidth v0.0.7/go.mod h1:H031xJmbD/WCDINGzjvQ9THkh0rPKHF+m
 github.com/mattn/go-runewidth v0.0.9/go.mod h1:H031xJmbD/WCDINGzjvQ9THkh0rPKHF+m2gUSrubnMI=
 github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6TULQc=
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
+github.com/metal3-io/ironic-standalone-operator/api v0.0.0-20251103085234-3d282bf75d50 h1:RhbDrPh0jKaoporNi71Lm2iLZg/CncrJ81DDjH9s/jk=
+github.com/metal3-io/ironic-standalone-operator/api v0.0.0-20251103085234-3d282bf75d50/go.mod h1:yXS5C+kxOddNmruICpI60RrH7Nk9yQDDUmprWhp3Gcg=
 github.com/mgechev/revive v1.9.0 h1:8LaA62XIKrb8lM6VsBSQ92slt/o92z5+hTw3CmrvSrM=
 github.com/mgechev/revive v1.9.0/go.mod h1:LAPq3+MgOf7GcL5PlWIkHb0PT7XH4NuC2LdWymhb9Mo=
 github.com/miekg/dns v1.0.14/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=

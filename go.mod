@@ -8,6 +8,7 @@ require (
 	github.com/golangci/golangci-lint/v2 v2.1.6
 	github.com/google/go-cmp v0.7.0
 	github.com/metal3-io/baremetal-operator/apis v0.0.0
+	github.com/metal3-io/ironic-standalone-operator/api v0.6.0
 	github.com/openshift/api v0.0.0-20251015095338-264e80a2b6e7
 	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235
 	github.com/openshift/library-go v0.0.0-20251029104758-277736d6f195
@@ -280,3 +281,5 @@ replace github.com/metal3-io/baremetal-operator => github.com/openshift/baremeta
 replace github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20250318213501-20a31adf14bc
 
 replace github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20250318213501-20a31adf14bc
+
+replace github.com/metal3-io/ironic-standalone-operator/api => github.com/metal3-io/ironic-standalone-operator/api v0.0.0-20251103085234-3d282bf75d50

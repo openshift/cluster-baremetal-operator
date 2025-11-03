@@ -669,6 +669,9 @@ github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1
 # github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.5.1 => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20250318213501-20a31adf14bc
 ## explicit; go 1.22
 github.com/metal3-io/baremetal-operator/pkg/hardwareutils/bmc
+# github.com/metal3-io/ironic-standalone-operator/api v0.6.0 => github.com/metal3-io/ironic-standalone-operator/api v0.0.0-20251103085234-3d282bf75d50
+## explicit; go 1.24.0
+github.com/metal3-io/ironic-standalone-operator/api/v1alpha1
 # github.com/mgechev/revive v1.9.0
 ## explicit; go 1.23.0
 github.com/mgechev/revive/config
@@ -2003,8 +2006,10 @@ k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 # k8s.io/component-base v0.34.1
 ## explicit; go 1.24.0
+k8s.io/component-base/featuregate
 k8s.io/component-base/metrics
 k8s.io/component-base/metrics/legacyregistry
+k8s.io/component-base/metrics/prometheus/feature
 k8s.io/component-base/metrics/prometheusextension
 k8s.io/component-base/version
 # k8s.io/klog/v2 v2.130.1
@@ -2267,3 +2272,4 @@ sigs.k8s.io/yaml
 # github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20250318213501-20a31adf14bc
 # github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20250318213501-20a31adf14bc
 # github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20250318213501-20a31adf14bc
+# github.com/metal3-io/ironic-standalone-operator/api => github.com/metal3-io/ironic-standalone-operator/api v0.0.0-20251103085234-3d282bf75d50

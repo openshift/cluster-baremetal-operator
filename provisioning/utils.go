@@ -16,10 +16,10 @@ import (
 )
 
 func getPod(podClient coreclientv1.PodsGetter, targetNamespace string) (corev1.Pod, error) {
+	// Find the Ironic pod managed by ironic-standalone-operator
 	labelSelector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{
-			"k8s-app":    metal3AppName,
-			cboLabelName: stateService,
+			"ironic.metal3.io/app": "metal3-ironic-service",
 		}}
 
 	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
@@ -56,7 +56,8 @@ func getPod(podClient coreclientv1.PodsGetter, targetNamespace string) (corev1.P
 	return pods[0], nil
 }
 
-// getPodIPs returns pod IPs for the Metal3 pod (and thus Ironic and its httpd).
+// getPodIPs returns pod IPs for the Ironic pod managed by ironic-standalone-operator.
+// Since the pod uses host networking, these are the node IPs where Ironic is running.
 func getPodIPs(podClient coreclientv1.PodsGetter, targetNamespace string) (ips []string, err error) {
 	pod, err := getPod(podClient, targetNamespace)
 	if err != nil {
