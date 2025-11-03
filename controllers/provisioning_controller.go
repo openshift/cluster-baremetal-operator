@@ -41,6 +41,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 	utilnet "k8s.io/utils/net"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -430,7 +431,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 	return &provisioning.ProvisioningInfo{
 		Client:                  r.KubeClient,
 		DynamicClient:           r.DynamicClient,
-		EventRecorder:           events.NewLoggingEventRecorder(ComponentName),
+		EventRecorder:           events.NewLoggingEventRecorder(ComponentName, clock.RealClock{}),
 		ProvConfig:              provConfig,
 		Scheme:                  r.Scheme,
 		Namespace:               ComponentNamespace,
