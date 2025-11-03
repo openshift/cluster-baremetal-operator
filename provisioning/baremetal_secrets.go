@@ -148,6 +148,7 @@ func createRegistryPullSecret(info *ProvisioningInfo) (bool, error) {
 
 func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	// Create a Secret for the Ironic Password
+	// TODO(alegacy): Ironic will do this on its own if we don't create one.  Maybe we should retrieve it instead?
 	if err := createIronicSecret(info, ironicSecretName, ironicUsername); err != nil {
 		return false, errors.Wrap(err, "failed to create Ironic password")
 	}
@@ -155,14 +156,20 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	if err := createOrUpdateTlsSecret(info); err != nil {
 		return false, errors.Wrap(err, "failed to create TLS certificate")
 	}
+
 	// Create a Secret for the Registry Pull Secret
 	if _, err := createRegistryPullSecret(info); err != nil {
 		return false, errors.Wrap(err, "failed to create Registry pull secret")
 	}
-	// Delete ironic-inspector Secret if it still exists
-	if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{})); err != nil {
-		return false, errors.Wrap(err, "Error occured while deleting Ironic Inspector Secret")
+
+	// Delete old secrets that are no longer needed with ironic-standalone-operator
+	// Inspector, RPC, and MariaDB secrets are managed by ironic-standalone-operator
+	for _, sn := range []string{inspectorSecretName, ironicrpcSecretName, baremetalSecretName} {
+		if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{})); err != nil {
+			return false, errors.Wrapf(err, "error occurred while deleting old secret %s", sn)
+		}
 	}
+
 	return false, nil // ApplySecret does not use Generation, so just return false for updated
 }
 
@@ -179,7 +186,7 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 // createOrUpdateTlsSecret creates a Secret for the Ironic TLS.
 // It updates the secret if the existing certificate is close to expiration.
 func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
-	cert, err := generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
+	cert, err := generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP, info.Namespace)
 	if err != nil {
 		return err
 	}

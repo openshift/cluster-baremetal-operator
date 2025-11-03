@@ -44,6 +44,26 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ironic.metal3.io
+  resources:
+  - ironics
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ironic.metal3.io
+  resources:
+  - ironics/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - monitoring.coreos.com
   resources:
   - servicemonitors

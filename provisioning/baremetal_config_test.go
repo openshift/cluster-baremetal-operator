@@ -166,26 +166,6 @@ func disabledProvisioning() *provisioningBuilder {
 	}
 }
 
-func configWithPreProvisioningOSDownloadURLs() *provisioningBuilder {
-	return &provisioningBuilder{
-		metal3iov1alpha1.ProvisioningSpec{
-			ProvisioningInterface:     "eth0",
-			ProvisioningIP:            "172.30.20.3",
-			ProvisioningMacAddresses:  []string{"34:b3:2d:81:f8:fb", "34:b3:2d:81:f8:fc", "34:b3:2d:81:f8:fd"},
-			ProvisioningNetworkCIDR:   "172.30.20.0/24",
-			ProvisioningDHCPRange:     "172.30.20.11,172.30.20.101",
-			ProvisioningOSDownloadURL: "http://172.22.0.1/images/rhcos-44.81.202001171431.0-openstack.x86_64.qcow2.gz?sha256=e98f83a2b9d4043719664a2be75fe8134dc6ca1fdbde807996622f8cc7ecd234",
-			ProvisioningNetwork:       "Managed",
-			PreProvisioningOSDownloadURLs: metal3iov1alpha1.PreProvisioningOSDownloadURLs{
-				KernelURL:    "http://172.22.0.1/images/rhcos-49.84.202107010027-0-live-kernel-x86_64",
-				InitramfsURL: "http://172.22.0.1/images/rhcos-49.84.202107010027-0-live-initramfs.x86_64.img",
-				RootfsURL:    "http://172.22.0.1/images/rhcos-49.84.202107010027-0-live-rootfs.x86_64.img",
-				IsoURL:       "http://172.22.0.1/images/rhcos-4.9/49.84.202107010027-0/x86_64/rhcos-49.84.202107010027-0-live.x86_64.iso",
-			},
-		},
-	}
-}
-
 func (pb *provisioningBuilder) build() *metal3iov1alpha1.ProvisioningSpec {
 	return &pb.ProvisioningSpec
 }

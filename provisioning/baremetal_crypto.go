@@ -17,6 +17,7 @@ package provisioning
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -53,7 +54,7 @@ func generateRandomPassword() (string, error) {
 	return string(buf), nil
 }
 
-func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
+func generateTlsCertificate(provisioningIP, namespace string) (TlsCertificate, error) {
 	caConfig, err := crypto.MakeSelfSignedCAConfig("metal3-ironic", tlsExpiration)
 	if err != nil {
 		return TlsCertificate{}, err
@@ -64,14 +65,22 @@ func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
 		SerialGenerator: &crypto.RandomSerialGenerator{},
 	}
 
-	var host string
+	// Build set of hostnames/IPs for certificate SANs
+	hosts := []string{}
+
 	if provisioningIP == "" {
-		host = "localhost"
+		hosts = append(hosts, "localhost")
 	} else {
-		host = provisioningIP
+		hosts = append(hosts, provisioningIP)
 	}
 
-	config, err := ca.MakeServerCert(sets.New(host), tlsExpiration)
+	// Add Ironic service DNS names
+	hosts = append(hosts,
+		fmt.Sprintf("%s.%s.svc", ironicServiceName, namespace),
+		fmt.Sprintf("%s.%s.svc.cluster.local", ironicServiceName, namespace),
+	)
+
+	config, err := ca.MakeServerCert(sets.New(hosts...), tlsExpiration)
 
 	if err != nil {
 		return TlsCertificate{}, err

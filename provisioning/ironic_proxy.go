@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -31,7 +29,7 @@ const (
 	ironicProxyPortEnvVar    = "IRONIC_PROXY_PORT"
 )
 
-func createContainerIronicProxy(ironicIP string, images *Images) corev1.Container {
+func createContainerIronicProxy(ironicHost string, ironicPort int, images *Images) corev1.Container {
 	container := corev1.Container{
 		Name:            "ironic-proxy",
 		Image:           images.Ironic,
@@ -61,11 +59,11 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 			},
 			{
 				Name:  ironicUpstreamIPEnvVar,
-				Value: ironicIP,
+				Value: ironicHost,
 			},
 			{
 				Name:  ironicUpstreamPortEnvVar,
-				Value: fmt.Sprint(ironicPrivatePort),
+				Value: fmt.Sprint(ironicPort),
 			},
 			// The provisioning IP is not used except that
 			// httpd cannot start until the IP is available on some interface
@@ -89,15 +87,12 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 	return container
 }
 
-func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSpec, error) {
-	ironicIPs, err := getPodIPs(info.Client.CoreV1(), info.Namespace)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot figure out the upstream IP for ironic proxy")
-	}
+func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) *corev1.PodTemplateSpec {
+	// Connect to the Ironic service created by IrSO (service name is hardcoded to "*-ironic")
+	ironicServiceHost := fmt.Sprintf("%s.%s.svc.cluster.local", ironicServiceName, info.Namespace)
 
 	containers := []corev1.Container{
-		// Even in a dual-stack environment, we don't really care which IP address to use since both are accessible internally.
-		createContainerIronicProxy(ironicIPs[0], info.Images),
+		createContainerIronicProxy(ironicServiceHost, 443, info.Images),
 	}
 
 	tolerations := []corev1.Toleration{
@@ -167,15 +162,11 @@ func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateS
 			ServiceAccountName: "cluster-baremetal-operator",
 			Tolerations:        tolerations,
 		},
-	}, nil
+	}
 }
 
-func newIronicProxyDaemonSet(info *ProvisioningInfo) (*appsv1.DaemonSet, error) {
-	template, err := newIronicProxyPodTemplateSpec(info)
-	if err != nil {
-		return nil, err
-	}
-
+func newIronicProxyDaemonSet(info *ProvisioningInfo) *appsv1.DaemonSet {
+	template := newIronicProxyPodTemplateSpec(info)
 	maxUnavail := intstr.FromString("100%")
 	return &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -199,7 +190,7 @@ func newIronicProxyDaemonSet(info *ProvisioningInfo) (*appsv1.DaemonSet, error) 
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 func UseIronicProxy(info *ProvisioningInfo) bool {
@@ -216,10 +207,7 @@ func EnsureIronicProxy(info *ProvisioningInfo) (updated bool, err error) {
 		return
 	}
 
-	ironicProxyDaemonSet, err := newIronicProxyDaemonSet(info)
-	if err != nil {
-		return
-	}
+	ironicProxyDaemonSet := newIronicProxyDaemonSet(info)
 	expectedGeneration := resourcemerge.ExpectedDaemonSetGeneration(ironicProxyDaemonSet, info.ProvConfig.Status.Generations)
 
 	err = controllerutil.SetControllerReference(info.ProvConfig, ironicProxyDaemonSet, info.Scheme)
