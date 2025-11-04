@@ -52,7 +52,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		imageRegistriesVolumeMount,
 		imageVolumeMount,
 		ironicAgentPullSecretMount,
-		userCaBundleVolumeMount,
+		caTrustDirVolumeMount,
 	}
 
 	ntpServers := []string{"192.168.1.252", "192.168.1.253"}
