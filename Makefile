@@ -4,6 +4,9 @@ else
 GOLANGCI_LINT_CACHE=${HOME}/.cache/golangci-lint
 endif
 
+# CONTAINER_TOOL defines the container tool to be used for building images.
+CONTAINER_TOOL ?= docker
+
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
@@ -114,11 +117,11 @@ generate:
 
 # Build the docker image
 docker-build: test
-	docker build . -t ${IMG}
+	$(CONTAINER_TOOL) build . -t ${IMG}
 
 # Push the docker image
 docker-push:
-	docker push ${IMG}
+	$(CONTAINER_TOOL) push ${IMG}
 
 .PHONY: vendor
 vendor:
