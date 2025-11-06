@@ -70,6 +70,8 @@ func transformURL(targetNamespace, URL string) (string, error) {
 	}
 	imageName := path.Base(fileCompressionSuffix.ReplaceAllString(downloadURL.Path, ""))
 
+	// TODO(alegacy): not sure what needs to happen with the following block
+
 	// The first-level cache downloads and caches the file from the URL specified in ProvisioningOSDownloadURL
 	// and makes it available to this second-level cache.
 	// e.g. ProvisioningOSDownloadURL: https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.2/42.80.20190725.1/rhcos-42.80.20190725.1-openstack.qcow2.gz?sha256sum=123
@@ -80,7 +82,7 @@ func transformURL(targetNamespace, URL string) (string, error) {
 	// See https://github.com/openshift/ironic-rhcos-downloader for more details
 	cacheURL := url.URL{
 		Scheme: "http",
-		Host: net.JoinHostPort(fmt.Sprintf("%s.%s.svc.cluster.local", stateService, targetNamespace),
+		Host: net.JoinHostPort(fmt.Sprintf("%s.%s.svc.cluster.local", ironicServiceName, targetNamespace),
 			baremetalHttpPort),
 		Path: fmt.Sprintf("/images/%s/%s", imageName, imageName),
 	}

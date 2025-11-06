@@ -4,6 +4,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
@@ -36,6 +37,7 @@ func (ns NetworkStackType) IpOption() string {
 type ProvisioningInfo struct {
 	Client                  kubernetes.Interface
 	DynamicClient           dynamic.Interface
+	CRClient                client.Client
 	EventRecorder           events.Recorder
 	ProvConfig              *metal3iov1alpha1.Provisioning
 	Scheme                  *runtime.Scheme

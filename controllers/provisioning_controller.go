@@ -98,6 +98,8 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors,verbs=create;watch;get;list;patch;delete;update
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups=ironic.metal3.io,resources=ironics,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups=ironic.metal3.io,resources=ironics/status,verbs=get;update;patch
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
@@ -327,15 +329,13 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	for _, ensureResource := range []ensureFunc{
 		provisioning.EnsureAllSecrets,
-		provisioning.EnsureMetal3Deployment,
+		provisioning.EnsureIronicDeployment,
 		provisioning.EnsureBaremetalOperatorDeployment,
-		provisioning.EnsureMetal3StateService,
 		provisioning.EnsureImageCache,
 		provisioning.EnsureBaremetalOperatorWebhook,
 		provisioning.EnsureImageCustomizationService,
 		provisioning.EnsureImageCustomizationDeployment,
 		provisioning.EnsureIronicProxy,
-		provisioning.EnsureIronicServiceMonitor,
 	} {
 		updated, err := ensureResource(info)
 		if err != nil {
@@ -354,8 +354,8 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	// Determine the status of the baremetal deployment
-	deploymentState, err := provisioning.GetDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
+	// Determine the status of the Ironic deployment
+	deploymentState, err := provisioning.GetIronicDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace)
 	if err != nil {
 		err = r.updateCOStatus(ReasonResourceNotFound, "metal3 deployment inaccessible", "")
 		if err != nil {
@@ -491,11 +491,8 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	if err := provisioning.DeleteValidatingWebhook(info); err != nil {
 		return errors.Wrap(err, "failed to delete validatingwebhook and service")
 	}
-	if err := provisioning.DeleteMetal3Deployment(info); err != nil {
-		return errors.Wrap(err, "failed to delete metal3 deployment")
-	}
-	if err := provisioning.DeleteMetal3StateService(info); err != nil {
-		return errors.Wrap(err, "failed to delete metal3 service")
+	if err := provisioning.DeleteIronicDeployment(info); err != nil {
+		return errors.Wrap(err, "failed to delete Ironic deployment")
 	}
 	if err := provisioning.DeleteImageCache(info); err != nil {
 		return errors.Wrap(err, "failed to delete metal3 image cache")
@@ -508,9 +505,6 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteIronicProxy(info); err != nil {
 		return errors.Wrap(err, "failed to delete ironic proxy")
-	}
-	if err := provisioning.DeleteIronicServiceMonitor(info); err != nil {
-		return errors.Wrap(err, "failed to delete ironic service monitor")
 	}
 	return nil
 }

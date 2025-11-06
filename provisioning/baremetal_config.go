@@ -95,18 +95,9 @@ func getDeployKernelUrl() *string {
 	return &deployKernelUrl
 }
 
-func getControlPlanePort(info *ProvisioningInfo) (ironicPort int) {
-	ironicPort = baremetalIronicPort
-	if UseIronicProxy(info) {
-		// Direct access to real services behind the proxy.
-		ironicPort = ironicPrivatePort
-	}
-	return
-}
-
 func getControlPlaneEndpoint(info *ProvisioningInfo) (ironicEndpoint string) {
-	ironicPort := getControlPlanePort(info)
-	ironicEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, ironicPort, baremetalIronicEndpointSubpath)
+	// IrSO creates a service named "*-ironic" (hardcoded) that exposes the Ironic API
+	ironicEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local/v1/", ironicServiceName, info.Namespace)
 	return
 }
 
