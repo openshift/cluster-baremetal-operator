@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -168,7 +169,7 @@ func main() {
 	if controllers.IsEnabled(enabledFeatures) && enableWebhook {
 		info := &provisioning.ProvisioningInfo{
 			Client:        kubeClient,
-			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName),
+			EventRecorder: events.NewLoggingEventRecorder(controllers.ComponentName, clock.RealClock{}),
 			Namespace:     controllers.ComponentNamespace,
 			OSClient:      osClient,
 			ResourceCache: resourceCache,

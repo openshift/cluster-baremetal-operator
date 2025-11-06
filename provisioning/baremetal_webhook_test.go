@@ -24,7 +24,6 @@ func TestValidatingWebhookService(t *testing.T) {
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     service.beta.openshift.io/serving-cert-secret-name: baremetal-operator-webhook-server-cert
-  creationTimestamp: null
   labels:
     baremetal.openshift.io/metal3-validating-webhook: metal3-validating-webhook
     k8s-app: metal3
@@ -72,7 +71,6 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     service.beta.openshift.io/inject-cabundle: "true"
-  creationTimestamp: null
   name: baremetal-operator-validating-webhook-configuration
 webhooks:
 - admissionReviewVersions:

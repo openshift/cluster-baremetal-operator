@@ -18,6 +18,7 @@ import (
 	fakekube "k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	faketesting "k8s.io/client-go/testing"
+	"k8s.io/utils/clock"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -109,7 +110,7 @@ func TestCreatePasswordSecret(t *testing.T) {
 				Namespace:     testNamespace,
 				ProvConfig:    baremetalCR,
 				Scheme:        scheme,
-				EventRecorder: events.NewLoggingEventRecorder("tests"),
+				EventRecorder: events.NewLoggingEventRecorder("tests", clock.RealClock{}),
 			}
 			switch tc.name {
 			case "new-ironic-secret":
@@ -162,7 +163,7 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 				Namespace:     testNamespace,
 				ProvConfig:    baremetalCR,
 				Scheme:        scheme,
-				EventRecorder: events.NewLoggingEventRecorder("tests"),
+				EventRecorder: events.NewLoggingEventRecorder("tests", clock.RealClock{}),
 			}
 
 			err := createOrUpdateTlsSecret(info)
@@ -321,7 +322,7 @@ func TestRegistryPullSecret(t *testing.T) {
 				Namespace:     testNamespace,
 				ProvConfig:    baremetalCR,
 				Scheme:        scheme,
-				EventRecorder: events.NewLoggingEventRecorder("tests"),
+				EventRecorder: events.NewLoggingEventRecorder("tests", clock.RealClock{}),
 			}
 
 			// Run the method under test.
