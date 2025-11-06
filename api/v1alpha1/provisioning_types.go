@@ -207,6 +207,11 @@ type ProvisioningSpec struct {
 	// When reporting a bug, please make sure to reproduce it with
 	// UnsupportedConfigOverrides set to nil.
 	UnsupportedConfigOverrides *UnsupportedConfigOverrides `json:"unsupportedConfigOverrides,omitempty"`
+
+	// ExternalIPs are the external-facing IP addresses used to access the Ironic service.
+	// Most users will not need this set. It is recommended to leave this unset unless
+	// actually necessary.
+	ExternalIPs []string `json:"externalIPs,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning
