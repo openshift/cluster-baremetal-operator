@@ -163,6 +163,10 @@ upgradability of your cluster.
 When reporting a bug, please make sure to reproduce it with
 UnsupportedConfigOverrides set to nil.
 
+- ExternalIPs is the external-facing IP address used to access the Ironic service.
+Most users will not need this set. It is recommended to leave this unset unless
+actually necessary.
+
 
 ## What are its outputs?
 

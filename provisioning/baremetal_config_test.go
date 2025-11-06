@@ -266,6 +266,11 @@ func (pb *provisioningBuilder) WatchAllNamespaces(value bool) *provisioningBuild
 	return pb
 }
 
+func (pb *provisioningBuilder) ExternalIP(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.ExternalIP = value
+	return pb
+}
+
 func TestWatchAllNamespaces(t *testing.T) {
 	tCases := []struct {
 		name          string

@@ -186,7 +186,12 @@ func getKernelParams(config *metal3iov1alpha1.ProvisioningSpec, networkStack Net
 }
 
 func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
+	if config.ExternalIP != "" {
+		return corev1.EnvVar{
+			Name:  name,
+			Value: config.ExternalIP,
+		}
+	} else if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
 		return corev1.EnvVar{
 			Name: name,
 			ValueFrom: &corev1.EnvVarSource{

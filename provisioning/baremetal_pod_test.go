@@ -539,3 +539,106 @@ func TestProxyAndCAInjection(t *testing.T) {
 		})
 	}
 }
+
+func TestSetIronicExternalIp(t *testing.T) {
+	tCases := []struct {
+		name           string
+		envVarName     string
+		spec           *metal3iov1alpha1.ProvisioningSpec
+		expectedEnvVar corev1.EnvVar
+	}{
+		{
+			name:       "ExternalIP is set",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().ExternalIP("192.168.1.100").build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalIpEnvVar,
+				Value: "192.168.1.100",
+			},
+		},
+		{
+			name:       "ExternalIP is set with IPv6",
+			envVarName: externalIpEnvVar,
+			spec:       managedIPv6Provisioning().ExternalIP("fd2e:6f44:5dd8:b856::100").build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalIpEnvVar,
+				Value: "fd2e:6f44:5dd8:b856::100",
+			},
+		},
+		{
+			name:       "ExternalIP takes precedence over VirtualMediaViaExternalNetwork",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().ExternalIP("192.168.1.100").VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalIpEnvVar,
+				Value: "192.168.1.100",
+			},
+		},
+		{
+			name:       "VirtualMediaViaExternalNetwork with Managed provisioning",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.hostIP",
+					},
+				},
+			},
+		},
+		{
+			name:       "VirtualMediaViaExternalNetwork with Unmanaged provisioning",
+			envVarName: externalIpEnvVar,
+			spec:       unmanagedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.hostIP",
+					},
+				},
+			},
+		},
+		{
+			name:       "VirtualMediaViaExternalNetwork false with Managed provisioning",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().VirtualMediaViaExternalNetwork(false).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+			},
+		},
+		{
+			name:       "Disabled provisioning network ignores VirtualMediaViaExternalNetwork",
+			envVarName: externalIpEnvVar,
+			spec:       disabledProvisioning().VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+			},
+		},
+		{
+			name:       "Default case with no ExternalIP and no VirtualMediaViaExternalNetwork",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+			},
+		},
+		{
+			name:       "Empty ExternalIP treated as not set",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().ExternalIP("").build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+			},
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing tc : %s", tc.name)
+			actualEnvVar := setIronicExternalIp(tc.envVarName, tc.spec)
+			assert.Equal(t, tc.expectedEnvVar, actualEnvVar, fmt.Sprintf("%s : Expected : %v Actual : %v", tc.name, tc.expectedEnvVar, actualEnvVar))
+		})
+	}
+}
