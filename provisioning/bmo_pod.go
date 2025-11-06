@@ -71,7 +71,7 @@ var bmoVolumes = []corev1.Volume{
 
 func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container, error) {
 	webhookPort, _ := strconv.ParseInt(baremetalWebhookPort, 10, 32) // #nosec
-	externalUrlVar, err := setIronicExternalUrl(info)
+	externalIPv6Var, err := setIronicExternalIPv6(info)
 	if err != nil {
 		return corev1.Container{}, err
 	}
@@ -155,7 +155,7 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 				Value: metal3AuthRootDir,
 			},
 			setIronicExternalIp(externalIpEnvVar, &info.ProvConfig.Spec),
-			externalUrlVar,
+			externalIPv6Var,
 			{
 				Name:  "PROVISIONING_NETWORK_DISABLED",
 				Value: strconv.FormatBool(info.ProvConfig.Spec.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkDisabled),

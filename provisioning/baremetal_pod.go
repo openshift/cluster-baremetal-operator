@@ -189,7 +189,12 @@ func getKernelParams(config *metal3iov1alpha1.ProvisioningSpec, networkStack Net
 }
 
 func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec) corev1.EnvVar {
-	if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
+	if len(config.ExternalIPs) > 0 {
+		return corev1.EnvVar{
+			Name:  name,
+			Value: config.ExternalIPs[0],
+		}
+	} else if config.ProvisioningNetwork != metal3iov1alpha1.ProvisioningNetworkDisabled && config.VirtualMediaViaExternalNetwork {
 		return corev1.EnvVar{
 			Name: name,
 			ValueFrom: &corev1.EnvVarSource{
@@ -204,25 +209,22 @@ func setIronicExternalIp(name string, config *metal3iov1alpha1.ProvisioningSpec)
 	}
 }
 
-func setIronicExternalUrl(info *ProvisioningInfo) (corev1.EnvVar, error) {
-	ironicIPs, err := GetRealIronicIPs(info)
-	if err != nil {
-		return corev1.EnvVar{}, fmt.Errorf("failed to get Ironic IP when setting external url: %w", err)
-	}
-
+func setIronicExternalIPv6(info *ProvisioningInfo) (corev1.EnvVar, error) {
 	var ironicIPv6 string
 
-	for _, ironicIP := range ironicIPs {
-		if utilnet.IsIPv6String(ironicIP) {
-			ironicIPv6 = ironicIP
-			break
+	imageServerIPs, err := GetImageServerIPs(info)
+	if len(imageServerIPs) > 0 {
+		for _, imgServerIP := range imageServerIPs {
+			if utilnet.IsIPv6String(imgServerIP) {
+				ironicIPv6 = imgServerIP
+				break
+			}
 		}
 	}
-
-	if ironicIPv6 == "" {
+	if err != nil || ironicIPv6 == "" {
 		return corev1.EnvVar{
 			Name: externalUrlEnvVar,
-		}, nil
+		}, err
 	}
 
 	// protocol, host, port

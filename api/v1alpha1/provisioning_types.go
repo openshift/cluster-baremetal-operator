@@ -227,6 +227,11 @@ type ProvisioningSpec struct {
 	// ironic-prometheus-exporter container, and creates supporting resources
 	// (ServiceMonitor, Service ports) to expose hardware sensor metrics for Prometheus.
 	PrometheusExporter *PrometheusExporter `json:"prometheusExporter,omitempty"`
+
+	// ExternalIPs are the external-facing IP addresses used to access the Ironic service.
+	// Most users will not need this set. It is recommended to leave this unset unless
+	// actually necessary.
+	ExternalIPs []string `json:"externalIPs,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning
