@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	stateService        = "metal3-state"
-	httpPortName        = "http"
-	vmediaHttpsPortName = "vmedia-https"
-	metricsPortName     = "metrics"
+	stateService             = "metal3-state"
+	httpPortName             = "http"
+	vmediaHttpsPortName      = "vmedia-https"
+	metricsPortName          = "metrics"
+	ironicPrometheusRuleName = "metal3-defaults"
 )
 
 func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
@@ -152,5 +153,190 @@ func EnsureIronicServiceMonitor(info *ProvisioningInfo) (bool, error) {
 func DeleteIronicServiceMonitor(info *ProvisioningInfo) error {
 	serviceMonitor := NewIronicServiceMonitor(info.Namespace)
 	_, _, err := resourceapply.DeleteServiceMonitor(context.Background(), info.DynamicClient, info.EventRecorder, serviceMonitor)
+	return err
+}
+
+// NewIronicPrometheusRule creates a PrometheusRule for hardware health alerts
+// Note: Group-level labels require Prometheus >= 3.0.0 (OCP 4.19+)
+func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "monitoring.coreos.com/v1",
+			"kind":       "PrometheusRule",
+			"metadata": map[string]interface{}{
+				"name":      ironicPrometheusRuleName,
+				"namespace": namespace,
+				"labels": map[string]interface{}{
+					cboLabelName: stateService,
+				},
+			},
+			"spec": map[string]interface{}{
+				"groups": []interface{}{
+					map[string]interface{}{
+						"name": "baremetal.health",
+						"labels": map[string]interface{}{
+							"type":      "hardware",
+							"component": "ironic",
+						},
+						"rules": []interface{}{
+							// Temperature alerts
+							map[string]interface{}{
+								"alert": "BaremetalTemperatureHealth",
+								"expr":  "last_over_time(baremetal_temperature_status[5m]) == 1",
+								"for":   "2m",
+								"labels": map[string]interface{}{
+									"severity": "warning",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Temperature warning on {{ $labels.node_name }}",
+									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
+								},
+							},
+							map[string]interface{}{
+								"alert": "BaremetalTemperatureHealth",
+								"expr":  "last_over_time(baremetal_temperature_status[5m]) == 2",
+								"for":   "0m",
+								"labels": map[string]interface{}{
+									"severity": "critical",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Temperature critical on {{ $labels.node_name }}",
+									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
+								},
+							},
+							// Power alerts
+							map[string]interface{}{
+								"alert": "BaremetalPowerHealth",
+								"expr":  "last_over_time(baremetal_power_status[5m]) == 1",
+								"for":   "2m",
+								"labels": map[string]interface{}{
+									"severity": "warning",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Power warning on {{ $labels.node_name }}",
+									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
+								},
+							},
+							map[string]interface{}{
+								"alert": "BaremetalPowerHealth",
+								"expr":  "last_over_time(baremetal_power_status[5m]) == 2",
+								"for":   "0m",
+								"labels": map[string]interface{}{
+									"severity": "critical",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Power critical on {{ $labels.node_name }}",
+									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
+								},
+							},
+							// Fan alerts
+							map[string]interface{}{
+								"alert": "BaremetalFanHealth",
+								"expr":  "last_over_time(baremetal_fan_status[5m]) == 1",
+								"for":   "2m",
+								"labels": map[string]interface{}{
+									"severity": "warning",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Fan warning on {{ $labels.node_name }}",
+									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
+								},
+							},
+							map[string]interface{}{
+								"alert": "BaremetalFanHealth",
+								"expr":  "last_over_time(baremetal_fan_status[5m]) == 2",
+								"for":   "0m",
+								"labels": map[string]interface{}{
+									"severity": "critical",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Fan critical on {{ $labels.node_name }}",
+									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
+								},
+							},
+							// Drive alerts
+							map[string]interface{}{
+								"alert": "BaremetalDriveHealth",
+								"expr":  "last_over_time(baremetal_drive_status[5m]) == 1",
+								"for":   "2m",
+								"labels": map[string]interface{}{
+									"severity": "warning",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Drive warning on {{ $labels.node_name }}",
+									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
+								},
+							},
+							map[string]interface{}{
+								"alert": "BaremetalDriveHealth",
+								"expr":  "last_over_time(baremetal_drive_status[5m]) == 2",
+								"for":   "0m",
+								"labels": map[string]interface{}{
+									"severity": "critical",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Drive critical on {{ $labels.node_name }}",
+									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
+								},
+							},
+						},
+					},
+					map[string]interface{}{
+						"name": "baremetal.monitoring",
+						"labels": map[string]interface{}{
+							"type":      "hardware",
+							"component": "ironic",
+						},
+						"rules": []interface{}{
+							// Monitoring health
+							map[string]interface{}{
+								"alert": "BaremetalStaleMetrics",
+								"expr":  "(time() - baremetal_last_payload_timestamp_seconds) > 300",
+								"for":   "5m",
+								"labels": map[string]interface{}{
+									"severity": "warning",
+								},
+								"annotations": map[string]interface{}{
+									"summary":     "Stale hardware metrics for {{ $labels.node_name }}",
+									"description": "No hardware data received from {{ $labels.node_name }} for {{ $value | humanizeDuration }}",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// EnsureIronicPrometheusRule ensures the PrometheusRule exists when sensor metrics and default rules are enabled
+func EnsureIronicPrometheusRule(info *ProvisioningInfo) (bool, error) {
+	ctx := context.Background()
+
+	// If metrics are disabled or default rules are disabled, ensure PrometheusRule is deleted
+	if info.ProvConfig.Spec.PrometheusExporter == nil ||
+		!info.ProvConfig.Spec.PrometheusExporter.Enabled ||
+		info.ProvConfig.Spec.PrometheusExporter.DisableDefaultPrometheusRules {
+		return false, DeleteIronicPrometheusRule(info)
+	}
+
+	prometheusRule := NewIronicPrometheusRule(info.Namespace)
+	if err := controllerutil.SetControllerReference(info.ProvConfig, prometheusRule, info.Scheme); err != nil {
+		return false, fmt.Errorf("unable to set controllerReference on PrometheusRule: %w", err)
+	}
+
+	// Apply or Update
+	_, updated, err := resourceapply.ApplyPrometheusRule(ctx, info.DynamicClient, info.EventRecorder, prometheusRule)
+	if err != nil {
+		return false, fmt.Errorf("failed to apply PrometheusRule: %w", err)
+	}
+
+	return updated, nil
+}
+
+// DeleteIronicPrometheusRule deletes the PrometheusRule
+func DeleteIronicPrometheusRule(info *ProvisioningInfo) error {
+	prometheusRule := NewIronicPrometheusRule(info.Namespace)
+	_, _, err := resourceapply.DeletePrometheusRule(context.Background(), info.DynamicClient, info.EventRecorder, prometheusRule)
 	return err
 }
