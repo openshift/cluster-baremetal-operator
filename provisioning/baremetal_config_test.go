@@ -235,6 +235,11 @@ func (pb *provisioningBuilder) ProvisioningDNS(value bool) *provisioningBuilder 
 	return pb
 }
 
+func (pb *provisioningBuilder) DisableVirtualMediaTLS(value bool) *provisioningBuilder {
+	pb.ProvisioningSpec.DisableVirtualMediaTLS = value
+	return pb
+}
+
 func (pb *provisioningBuilder) PrometheusExporter(enabled bool, interval int) *provisioningBuilder {
 	pb.ProvisioningSpec.PrometheusExporter = &metal3iov1alpha1.PrometheusExporter{
 		Enabled:                  enabled,
@@ -271,6 +276,11 @@ func disableMultiNamespace() *provisioningBuilder {
 
 func (pb *provisioningBuilder) WatchAllNamespaces(value bool) *provisioningBuilder {
 	pb.ProvisioningSpec.WatchAllNamespaces = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ExternalIPs(value []string) *provisioningBuilder {
+	pb.ProvisioningSpec.ExternalIPs = value
 	return pb
 }
 

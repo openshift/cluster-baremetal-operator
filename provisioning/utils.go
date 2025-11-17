@@ -129,6 +129,12 @@ func GetRealIronicIPs(info *ProvisioningInfo) ([]string, error) {
 // GetIronicIPs returns Ironic IPs for external consumption, potentially behind an HA proxy.
 // Without a proxy, the provisioning IP is used when present and not disallowed for virtual media via configuration.
 func GetIronicIPs(info *ProvisioningInfo) (ironicIPs []string, err error) {
+	externalIPs := info.ProvConfig.Spec.ExternalIPs
+	if len(externalIPs) > 0 {
+		ironicIPs = externalIPs
+		return ironicIPs, nil
+	}
+
 	podIPs, err := GetRealIronicIPs(info)
 	if err != nil {
 		return
@@ -149,6 +155,20 @@ func GetIronicIPs(info *ProvisioningInfo) (ironicIPs []string, err error) {
 	}
 
 	return ironicIPs, err
+}
+
+func GetImageServerIPs(info *ProvisioningInfo) (imageServerIPs []string, err error) {
+	if len(info.ProvConfig.Spec.ExternalIPs) > 0 {
+		imageServerIPs = info.ProvConfig.Spec.ExternalIPs
+		return imageServerIPs, nil
+	}
+
+	imageServerIPs, err = GetRealIronicIPs(info)
+	if err != nil {
+		return []string{}, fmt.Errorf("failed to get real Ironic IP when setting external url: %w", err)
+	}
+
+	return imageServerIPs, nil
 }
 
 func IpOptionForProvisioning(config *metal3iov1alpha1.ProvisioningSpec, networkStack NetworkStackType) string {

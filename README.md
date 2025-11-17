@@ -168,6 +168,10 @@ When enabled, this configures Ironic to collect sensor data, deploys the
 ironic-prometheus-exporter container, and creates supporting resources
 (ServiceMonitor, Service ports) to expose hardware sensor metrics for Prometheus.
 
+- ExternalIPs are the external-facing IP addresses used to access the Ironic service.
+Most users will not need this set. It is recommended to leave this unset unless
+actually necessary.
+
 
 ## What are its outputs?
 

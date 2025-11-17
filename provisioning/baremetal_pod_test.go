@@ -589,3 +589,241 @@ func TestProxyAndCAInjection(t *testing.T) {
 		})
 	}
 }
+
+func TestSetIronicExternalIp(t *testing.T) {
+	tCases := []struct {
+		name           string
+		envVarName     string
+		spec           *metal3iov1alpha1.ProvisioningSpec
+		expectedEnvVar corev1.EnvVar
+	}{
+		{
+			name:       "ExternalIP is set",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().ExternalIPs([]string{"192.168.1.100"}).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalIpEnvVar,
+				Value: "192.168.1.100",
+			},
+		},
+		{
+			name:       "ExternalIP is set with IPv6",
+			envVarName: externalIpEnvVar,
+			spec:       managedIPv6Provisioning().ExternalIPs([]string{"fd2e:6f44:5dd8:b856::100"}).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalIpEnvVar,
+				Value: "fd2e:6f44:5dd8:b856::100",
+			},
+		},
+		{
+			name:       "ExternalIP takes precedence over VirtualMediaViaExternalNetwork",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().ExternalIPs([]string{"192.168.1.100"}).VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalIpEnvVar,
+				Value: "192.168.1.100",
+			},
+		},
+		{
+			name:       "VirtualMediaViaExternalNetwork with Managed provisioning",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.hostIP",
+					},
+				},
+			},
+		},
+		{
+			name:       "VirtualMediaViaExternalNetwork with Unmanaged provisioning",
+			envVarName: externalIpEnvVar,
+			spec:       unmanagedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.hostIP",
+					},
+				},
+			},
+		},
+		{
+			name:       "VirtualMediaViaExternalNetwork false with Managed provisioning",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().VirtualMediaViaExternalNetwork(false).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+			},
+		},
+		{
+			name:       "Disabled provisioning network ignores VirtualMediaViaExternalNetwork",
+			envVarName: externalIpEnvVar,
+			spec:       disabledProvisioning().VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+			},
+		},
+		{
+			name:       "Default case with no ExternalIP and no VirtualMediaViaExternalNetwork",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+			},
+		},
+		{
+			name:       "Empty ExternalIP treated as not set",
+			envVarName: externalIpEnvVar,
+			spec:       managedProvisioning().ExternalIPs([]string{""}).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalIpEnvVar,
+			},
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing tc : %s", tc.name)
+			actualEnvVar := setIronicExternalIp(tc.envVarName, tc.spec)
+			assert.Equal(t, tc.expectedEnvVar, actualEnvVar, fmt.Sprintf("%s : Expected : %v Actual : %v", tc.name, tc.expectedEnvVar, actualEnvVar))
+		})
+	}
+}
+
+func TestSetIronicExternalIPv6(t *testing.T) {
+	images := Images{
+		BaremetalOperator:   expectedBaremetalOperator,
+		Ironic:              expectedIronic,
+		MachineOsDownloader: expectedMachineOsDownloader,
+		StaticIpManager:     expectedIronicStaticIpManager,
+	}
+
+	tCases := []struct {
+		name           string
+		spec           *metal3iov1alpha1.ProvisioningSpec
+		expectedEnvVar corev1.EnvVar
+		expectError    bool
+	}{
+		{
+			name: "ExternalIPs set with IPv6 address and TLS enabled",
+			spec: managedProvisioning().ExternalIPs([]string{"fd2e:6f44:5dd8:b856::100"}).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalUrlEnvVar,
+				Value: "https://[fd2e:6f44:5dd8:b856::100]:6183",
+			},
+			expectError: false,
+		},
+		{
+			name: "ExternalIPs set with IPv6 address and TLS disabled",
+			spec: managedProvisioning().ExternalIPs([]string{"fd2e:6f44:5dd8:b856::100"}).DisableVirtualMediaTLS(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalUrlEnvVar,
+				Value: "http://[fd2e:6f44:5dd8:b856::100]:6180",
+			},
+			expectError: false,
+		},
+		{
+			name: "ExternalIPs set with multiple IPs including IPv6",
+			spec: managedProvisioning().ExternalIPs([]string{"192.168.1.100", "fd2e:6f44:5dd8:b856::100"}).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalUrlEnvVar,
+				Value: "https://[fd2e:6f44:5dd8:b856::100]:6183",
+			},
+			expectError: false,
+		},
+		{
+			name: "ExternalIPs set with multiple IPv6 addresses",
+			spec: managedProvisioning().ExternalIPs([]string{"fd2e:6f44:5dd8:b856::100", "fd2e:6f44:5dd8:b856::200"}).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalUrlEnvVar,
+				Value: "https://[fd2e:6f44:5dd8:b856::100]:6183",
+			},
+			expectError: false,
+		},
+		{
+			name: "ExternalIPs set with only IPv4 address",
+			spec: managedProvisioning().ExternalIPs([]string{"192.168.1.100"}).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name: externalUrlEnvVar,
+			},
+			expectError: false,
+		},
+		{
+			name: "ExternalIPs not set - falls back to pod IPs",
+			spec: disabledProvisioning().build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalUrlEnvVar,
+				Value: "https://[fd2e:6f44:5dd8:c956::16]:6183",
+			},
+			expectError: false,
+		},
+		{
+			name: "ExternalIPs not set with VirtualMediaViaExternalNetwork - falls back to pod IPs",
+			spec: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  externalUrlEnvVar,
+				Value: "https://[fd2e:6f44:5dd8:c956::16]:6183",
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			info := &ProvisioningInfo{
+				Images:       &images,
+				ProvConfig:   &metal3iov1alpha1.Provisioning{Spec: *tc.spec},
+				SSHKey:       "testkey",
+				NetworkStack: NetworkStackV6,
+				Namespace:    "openshift-machine-api",
+				Client: fakekube.NewSimpleClientset(&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-machine-api",
+						Labels: map[string]string{
+							"k8s-app":    metal3AppName,
+							cboLabelName: stateService,
+						},
+					},
+					Status: corev1.PodStatus{
+						PodIPs: []corev1.PodIP{
+							{IP: "192.168.111.22"},
+							{IP: "fd2e:6f44:5dd8:c956::16"},
+						},
+					}}),
+				OSClient: fakeconfigclientset.NewSimpleClientset(
+					&osconfigv1.Infrastructure{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "Infrastructure",
+							APIVersion: "config.openshift.io/v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "cluster",
+						},
+						Status: osconfigv1.InfrastructureStatus{
+							PlatformStatus: &osconfigv1.PlatformStatus{
+								Type: osconfigv1.BareMetalPlatformType,
+								BareMetal: &osconfigv1.BareMetalPlatformStatus{
+									APIServerInternalIPs: []string{
+										"192.168.1.1",
+										"fd2e:6f44:5dd8:c956::16",
+									},
+								},
+							},
+						},
+					}),
+			}
+
+			actualEnvVar, err := setIronicExternalIPv6(info)
+
+			if tc.expectError {
+				assert.Error(t, err, fmt.Sprintf("%s : Expected error but got none", tc.name))
+			} else {
+				assert.NoError(t, err, fmt.Sprintf("%s : Unexpected error: %v", tc.name, err))
+				assert.Equal(t, tc.expectedEnvVar, actualEnvVar, fmt.Sprintf("%s : Expected : %v Actual : %v", tc.name, tc.expectedEnvVar, actualEnvVar))
+			}
+		})
+	}
+}
