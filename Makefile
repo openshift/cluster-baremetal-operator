@@ -67,6 +67,7 @@ manifests: generate
 	# now rename/join the output files into the files we expect
 	mv $(TMP_DIR)/apiextensions.k8s.io_v1_customresourcedefinition_provisionings.metal3.io.yaml manifests/0000_31_cluster-baremetal-operator_02_metal3provisioning.crd.yaml
 	mv $(TMP_DIR)/apps_v1_deployment_cluster-baremetal-operator.yaml manifests/0000_31_cluster-baremetal-operator_06_deployment.yaml
+	mv $(TMP_DIR)/apps_v1_deployment_cluster-baremetal-operator-hostedcluster.yaml manifests/0000_31_cluster-baremetal-operator_06_deployment-hostedcluster.yaml
 
 	# manifests needed for monitoring
 	mv $(TMP_DIR)/monitoring.coreos.com_v1_servicemonitor_cluster-baremetal-operator-servicemonitor.yaml manifests/0000_90_cluster-baremetal-operator_03_servicemonitor.yaml
