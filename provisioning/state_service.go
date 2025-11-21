@@ -189,7 +189,7 @@ func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
 								},
 								"annotations": map[string]interface{}{
 									"summary":     "Temperature warning on {{ $labels.node_name }}",
-									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
+									"description": "Sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
 								},
 							},
 							map[string]interface{}{
@@ -201,7 +201,7 @@ func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
 								},
 								"annotations": map[string]interface{}{
 									"summary":     "Temperature critical on {{ $labels.node_name }}",
-									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
+									"description": "Sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
 								},
 							},
 							// Power alerts
@@ -214,7 +214,7 @@ func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
 								},
 								"annotations": map[string]interface{}{
 									"summary":     "Power warning on {{ $labels.node_name }}",
-									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
+									"description": "Sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
 								},
 							},
 							map[string]interface{}{
@@ -226,7 +226,7 @@ func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
 								},
 								"annotations": map[string]interface{}{
 									"summary":     "Power critical on {{ $labels.node_name }}",
-									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
+									"description": "Sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
 								},
 							},
 							// Fan alerts
@@ -239,7 +239,7 @@ func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
 								},
 								"annotations": map[string]interface{}{
 									"summary":     "Fan warning on {{ $labels.node_name }}",
-									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
+									"description": "Sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
 								},
 							},
 							map[string]interface{}{
@@ -251,7 +251,7 @@ func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
 								},
 								"annotations": map[string]interface{}{
 									"summary":     "Fan critical on {{ $labels.node_name }}",
-									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
+									"description": "Sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
 								},
 							},
 							// Drive alerts
@@ -264,7 +264,7 @@ func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
 								},
 								"annotations": map[string]interface{}{
 									"summary":     "Drive warning on {{ $labels.node_name }}",
-									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
+									"description": "Sensor {{ $labels.sensor_id }} reports Warning status on {{ $labels.node_name }}",
 								},
 							},
 							map[string]interface{}{
@@ -276,7 +276,7 @@ func NewIronicPrometheusRule(namespace string) *unstructured.Unstructured {
 								},
 								"annotations": map[string]interface{}{
 									"summary":     "Drive critical on {{ $labels.node_name }}",
-									"description": "{{ $labels.entity_id }} sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
+									"description": "Sensor {{ $labels.sensor_id }} reports Critical status on {{ $labels.node_name }}",
 								},
 							},
 						},
