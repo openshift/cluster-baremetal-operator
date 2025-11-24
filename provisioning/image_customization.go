@@ -54,7 +54,6 @@ const (
 	ironicAgentPullSecret            = "ironic-agent-pull-secret" // #nosec G101
 	ironicAgentPullSecretPath        = "/run/secrets/pull-secret" // #nosec G101
 	additionalNTPServers             = "ADDITIONAL_NTP_SERVERS"
-	imageCacheVolume                 = "metal3-image-cache"
 )
 
 var (
