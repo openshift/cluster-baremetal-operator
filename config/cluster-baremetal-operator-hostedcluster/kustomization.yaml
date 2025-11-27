@@ -1,8 +1,19 @@
 commonAnnotations:
   include.release.openshift.io/ibm-cloud-managed: "true"
   include.release.openshift.io/hypershift: "true"
-  include.release.openshift.io/single-node-developer: "true"
-  capability.openshift.io/name: baremetal
 
 resources:
 - cluster-baremetal-operator-hostedcluster.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: cluster-baremetal-operator-hostedcluster
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: cluster-baremetal-operator-hostedcluster
+        annotations:
+          include.release.openshift.io/self-managed-high-availability: null
+          include.release.openshift.io/single-node-developer: null
