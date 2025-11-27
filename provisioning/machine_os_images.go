@@ -39,6 +39,9 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 			},
 		},
 		SecurityContext: &corev1.SecurityContext{
+			// TODO(hroyrh): re-enable this flag after fixing machine-os-images
+			// runtime copying in readOnly /coreos directory.
+			// ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
