@@ -5,7 +5,6 @@ metadata:
     capability.openshift.io/name: baremetal
     include.release.openshift.io/hypershift: "true"
     include.release.openshift.io/ibm-cloud-managed: "true"
-    include.release.openshift.io/single-node-developer: "true"
   labels:
     k8s-app: cluster-baremetal-operator
   name: cluster-baremetal-operator-hostedcluster
@@ -23,7 +22,6 @@ spec:
         capability.openshift.io/name: baremetal
         include.release.openshift.io/hypershift: "true"
         include.release.openshift.io/ibm-cloud-managed: "true"
-        include.release.openshift.io/single-node-developer: "true"
         openshift.io/required-scc: anyuid
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:

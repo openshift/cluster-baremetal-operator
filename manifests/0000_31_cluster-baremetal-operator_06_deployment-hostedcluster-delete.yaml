@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/self-managed-high-availability: "true"
+    release.openshift.io/delete: "true"
+  name: cluster-baremetal-operator-hostedcluster
+  namespace: openshift-machine-api
+spec:
+  template:
+    metadata:
+      annotations:
+        capability.openshift.io/name: baremetal
+        include.release.openshift.io/self-managed-high-availability: "true"
+        release.openshift.io/delete: "true"
