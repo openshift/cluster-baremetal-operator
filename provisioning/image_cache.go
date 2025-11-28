@@ -48,27 +48,6 @@ var (
 	}
 )
 
-func getImageVolumes() []corev1.Volume {
-	volumes := []corev1.Volume{
-		imageVolume(),
-		trustedCAVolume(),
-		{
-			Name: ironicConfigVolume,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		},
-		{
-			Name: ironicDataVolume,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		},
-	}
-
-	return volumes
-}
-
 func imageVolume() corev1.Volume {
 	volType := corev1.HostPathDirectoryOrCreate
 	return corev1.Volume{
@@ -114,20 +93,14 @@ func createContainerImageCache(images *Images) corev1.Container {
 		Image:           images.Ironic,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(true),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 			},
 		},
-		Command: []string{"/bin/runhttpd"},
-		VolumeMounts: []corev1.VolumeMount{
-			imageVolumeMount,
-			ironicConfigMount,
-			ironicDataMount,
-			sharedVolumeMount,
-		},
+		Command:      []string{"/bin/runhttpd"},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          imageCachePortName,
@@ -226,7 +199,10 @@ func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSp
 			NodeSelector: map[string]string{
 				"node-role.kubernetes.io/master": "",
 			},
-			Volumes:           getImageVolumes(),
+			Volumes: []corev1.Volume{
+				imageVolume(),
+				trustedCAVolume(),
+			},
 			InitContainers:    injectProxyAndCA(initContainers, info.Proxy),
 			Containers:        containers,
 			HostNetwork:       true,

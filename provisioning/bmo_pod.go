@@ -106,9 +106,6 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 			"-retry-period-seconds", "26",
 		},
 		ImagePullPolicy: "IfNotPresent",
-		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(true),
-		},
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
 			ironicTlsMount,
