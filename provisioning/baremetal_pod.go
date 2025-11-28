@@ -68,6 +68,9 @@ const (
 	ironicTmpVolume                  = "metal3-ironic-tmp"
 	ironicTmpPath                    = "/tmp"
 	ironicCertVolume                 = "metal3-ironic-cacert"
+	bmcCACertMountPath               = "/certs/ca/bmc"
+	bmcCACertConfigMapName           = "bmc-verify-ca"
+	bmcCACertVolume                  = "bmc-verify-ca"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -118,6 +121,12 @@ var vmediaTlsMount = corev1.VolumeMount{
 	Name:      vmediaTlsVolume,
 	MountPath: metal3TlsRootDir + "/vmedia",
 	ReadOnly:  true,
+}
+
+var baremetalCACertMount = corev1.VolumeMount{
+	Name:      bmcCACertVolume,
+	ReadOnly:  true,
+	MountPath: bmcCACertMountPath,
 }
 
 func trustedCAVolume() corev1.Volume {
@@ -191,6 +200,17 @@ var metal3Volumes = []corev1.Volume{
 		},
 	},
 	trustedCAVolume(),
+	{
+		Name: bmcCACertVolume,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: bmcCACertConfigMapName,
+				},
+				Optional: ptr.To(true),
+			},
+		},
+	},
 	{
 		Name: ironicTlsVolume,
 		VolumeSource: corev1.VolumeSource{
@@ -592,6 +612,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		ironicDataMount,
 		ironicConfigMount,
 		ironicTmpMount,
+		baremetalCACertMount,
 	}
 	if !config.DisableVirtualMediaTLS {
 		volumes = append(volumes, vmediaTlsMount)
