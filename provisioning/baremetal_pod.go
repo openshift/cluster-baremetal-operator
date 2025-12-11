@@ -67,7 +67,6 @@ const (
 	ironicDataPath                   = "/data"
 	ironicTmpVolume                  = "metal3-ironic-tmp"
 	ironicTmpPath                    = "/tmp"
-	ironicCertVolume                 = "metal3-ironic-cacert"
 	bmcCACertMountPath               = "/certs/ca/bmc"
 	bmcCACertConfigMapName           = "bmc-verify-ca"
 	bmcCACertVolume                  = "bmc-verify-ca"
@@ -95,11 +94,6 @@ var ironicTlsMount = corev1.VolumeMount{
 	Name:      ironicTlsVolume,
 	MountPath: metal3TlsRootDir + "/ironic",
 	ReadOnly:  true,
-}
-
-var ironicCertMount = corev1.VolumeMount{
-	Name:      ironicCertVolume,
-	MountPath: metal3TlsRootDir + "/ca/ironic",
 }
 
 var ironicConfigMount = corev1.VolumeMount{
@@ -165,12 +159,6 @@ var metal3Volumes = []corev1.Volume{
 	},
 	{
 		Name: ironicTmpVolume,
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
-	},
-	{
-		Name: ironicCertVolume,
 		VolumeSource: corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
@@ -532,7 +520,6 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 		ironicTlsMount,
 		ironicDataMount,
 		ironicConfigMount,
-		ironicCertMount,
 	}
 	ports := []corev1.ContainerPort{
 		{
@@ -608,7 +595,6 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		sharedVolumeMount,
 		imageVolumeMount,
 		ironicTlsMount,
-		ironicCertMount,
 		ironicDataMount,
 		ironicConfigMount,
 		ironicTmpMount,
