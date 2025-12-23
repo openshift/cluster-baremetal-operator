@@ -359,7 +359,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 				Drop: []corev1.Capability{"ALL"},
 			},
 		},
-		VolumeMounts: []corev1.VolumeMount{imageVolumeMount},
+		VolumeMounts: []corev1.VolumeMount{imageVolumeMount, sharedVolumeMount},
 		Env:          env,
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
