@@ -827,3 +827,61 @@ func TestSetIronicExternalIPv6(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateInitContainerMachineOsDownloader(t *testing.T) {
+	images := Images{
+		BaremetalOperator:   expectedBaremetalOperator,
+		Ironic:              expectedIronic,
+		MachineOsDownloader: expectedMachineOsDownloader,
+		StaticIpManager:     expectedIronicStaticIpManager,
+	}
+
+	tCases := []struct {
+		name                  string
+		useLiveImages         bool
+		expectedCommand       string
+		expectedContainerName string
+	}{
+		{
+			name:                  "get-resource script",
+			useLiveImages:         false,
+			expectedCommand:       "/usr/local/bin/get-resource.sh",
+			expectedContainerName: "metal3-machine-os-downloader",
+		},
+		{
+			name:                  "get-live-images script",
+			useLiveImages:         true,
+			expectedCommand:       "/usr/local/bin/get-live-images.sh",
+			expectedContainerName: "metal3-machine-os-downloader-live-images",
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			info := &ProvisioningInfo{
+				Images:       &images,
+				ProvConfig:   &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
+				NetworkStack: NetworkStackV4,
+			}
+
+			container := createInitContainerMachineOsDownloader(info, "http://example.com/image.qcow2", tc.useLiveImages, false)
+
+			assert.Equal(t, tc.expectedContainerName, container.Name)
+			assert.Equal(t, []string{tc.expectedCommand}, container.Command)
+
+			// Verify that both imageVolumeMount and sharedVolumeMount are present
+			// This is critical because the scripts need to write to /shared/tmp
+			// while having ReadOnlyRootFilesystem enabled
+			assert.Contains(t, container.VolumeMounts, imageVolumeMount,
+				"imageVolumeMount should be present for /shared/html/images")
+			assert.Contains(t, container.VolumeMounts, sharedVolumeMount,
+				"sharedVolumeMount should be present for /shared/tmp writes")
+
+			// Verify ReadOnlyRootFilesystem is enabled
+			assert.NotNil(t, container.SecurityContext)
+			assert.NotNil(t, container.SecurityContext.ReadOnlyRootFilesystem)
+			assert.True(t, *container.SecurityContext.ReadOnlyRootFilesystem,
+				"ReadOnlyRootFilesystem should be true")
+		})
+	}
+}
