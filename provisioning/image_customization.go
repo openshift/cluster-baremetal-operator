@@ -42,7 +42,8 @@ const (
 	containerRegistriesConfPath      = "/etc/containers/registries.conf"
 	containerRegistriesEnvVar        = "REGISTRIES_CONF_PATH"
 	containerUserCaBundlePath        = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
-	containerUserCaBundleVolume      = "user-ca-bundle"
+	containerCATrustDirPath          = "/etc/pki/ca-trust/"
+	containerCATrustDirVolume        = "ca-trust"
 	containerUserCaBundleEnvVar      = "CA_BUNDLE"
 	imageSharedDir                   = "/shared/html/images"
 	deployISOEnvVar                  = "DEPLOY_ISO"
@@ -60,9 +61,9 @@ var (
 		Name:      imageCustomizationVolume,
 		MountPath: containerRegistriesConfPath,
 	}
-	userCaBundleVolumeMount = corev1.VolumeMount{
-		Name:      containerUserCaBundleVolume,
-		MountPath: containerUserCaBundlePath,
+	caTrustDirVolumeMount = corev1.VolumeMount{
+		Name:      containerCATrustDirVolume,
+		MountPath: containerCATrustDirPath,
 	}
 	ironicAgentPullSecretMount = corev1.VolumeMount{
 		Name:      ironicAgentPullSecret,
@@ -101,13 +102,13 @@ func ironicAgentPullSecretVolume() corev1.Volume {
 	}
 }
 
-func userCABundleVolume() corev1.Volume {
-	volType := corev1.HostPathFile
+func caTrustDirVolume() corev1.Volume {
+	volType := corev1.HostPathDirectory
 	return corev1.Volume{
-		Name: containerUserCaBundleVolume,
+		Name: containerCATrustDirVolume,
 		VolumeSource: corev1.VolumeSource{
 			HostPath: &corev1.HostPathVolumeSource{
-				Path: containerUserCaBundlePath,
+				Path: containerCATrustDirPath,
 				Type: &volType,
 			},
 		},
@@ -157,7 +158,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			imageRegistriesVolumeMount,
 			imageVolumeMount,
 			ironicAgentPullSecretMount,
-			userCaBundleVolumeMount,
+			caTrustDirVolumeMount,
 		},
 		ImagePullPolicy: "IfNotPresent",
 		Env: append(envVars, corev1.EnvVar{
@@ -257,7 +258,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 		},
 		Spec: corev1.PodSpec{
 			Containers:         containers,
-			InitContainers:     injectProxyAndCA(initContainers, info.Proxy),
+			InitContainers:     initContainers,
 			HostNetwork:        false,
 			DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName:  "system-node-critical",
@@ -267,9 +268,8 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			Volumes: []corev1.Volume{
 				imageRegistriesVolume(),
 				imageVolume(),
-				trustedCAVolume(),
 				ironicAgentPullSecretVolume(),
-				userCABundleVolume(),
+				caTrustDirVolume(),
 			},
 		},
 	}

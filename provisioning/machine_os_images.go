@@ -18,12 +18,18 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 		Command: []string{"/bin/copy-metal", whichImages, destPath},
 		VolumeMounts: []corev1.VolumeMount{
 			dest,
+			ironicAgentPullSecretMount,
+			caTrustDirVolumeMount,
 		},
 		ImagePullPolicy: "IfNotPresent",
 		Env: []corev1.EnvVar{
 			{
 				Name:  ipOptions,
 				Value: ipOptionValue,
+			},
+			{
+				Name:  "MACHINE_OS_IMAGES_IMAGE",
+				Value: info.Images.MachineOSImages,
 			},
 		},
 		Resources: corev1.ResourceRequirements{
