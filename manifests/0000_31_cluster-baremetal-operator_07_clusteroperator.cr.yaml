@@ -51,3 +51,7 @@ status:
     name: ""
     resource: "hostupdatepolicies"
     namespace: openshift-machine-api
+  - group: rbac.authorization.k8s.io
+    resource: clusterroles
+    name: cluster-baremetal-operator
+
