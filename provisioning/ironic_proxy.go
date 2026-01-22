@@ -278,3 +278,58 @@ func GetIronicProxyState(client appsclientv1.DaemonSetsGetter, targetNamespace s
 func DeleteIronicProxy(info *ProvisioningInfo) error {
 	return client.IgnoreNotFound(info.Client.AppsV1().DaemonSets(info.Namespace).Delete(context.Background(), ironicProxyService, metav1.DeleteOptions{}))
 }
+
+// newIronicProxyService creates a headless service for ironic-proxy pods
+// that exposes port 6385. This service is only needed when ironic-proxy is enabled.
+func newIronicProxyService(info *ProvisioningInfo) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ironicProxyService,
+			Namespace: info.Namespace,
+			Labels: map[string]string{
+				cboLabelName: ironicProxyService,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Type:      corev1.ServiceTypeClusterIP,
+			ClusterIP: corev1.ClusterIPNone, // Headless service
+			Selector: map[string]string{
+				cboLabelName: ironicProxyService,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name: "ironic-api",
+					Port: int32(baremetalIronicPort),
+				},
+			},
+		},
+	}
+}
+
+// EnsureIronicProxyService ensures the headless service for ironic-proxy exists
+// when ironic-proxy is enabled.
+func EnsureIronicProxyService(info *ProvisioningInfo) (updated bool, err error) {
+	if !UseIronicProxy(info) {
+		return false, DeleteIronicProxyService(info)
+	}
+
+	ironicProxySvc := newIronicProxyService(info)
+
+	err = controllerutil.SetControllerReference(info.ProvConfig, ironicProxySvc, info.Scheme)
+	if err != nil {
+		err = fmt.Errorf("unable to set controllerReference on ironic-proxy service: %w", err)
+		return
+	}
+
+	_, updated, err = resourceapply.ApplyService(context.Background(),
+		info.Client.CoreV1(), info.EventRecorder, ironicProxySvc)
+	if err != nil {
+		err = fmt.Errorf("unable to apply ironic-proxy service: %w", err)
+	}
+	return
+}
+
+// DeleteIronicProxyService deletes the ironic-proxy service
+func DeleteIronicProxyService(info *ProvisioningInfo) error {
+	return client.IgnoreNotFound(info.Client.CoreV1().Services(info.Namespace).Delete(context.Background(), ironicProxyService, metav1.DeleteOptions{}))
+}
