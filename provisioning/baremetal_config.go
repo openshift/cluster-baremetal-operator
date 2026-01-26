@@ -106,7 +106,7 @@ func getControlPlanePort(info *ProvisioningInfo) (ironicPort int) {
 
 func getControlPlaneEndpoint(info *ProvisioningInfo) (ironicEndpoint string) {
 	ironicPort := getControlPlanePort(info)
-	ironicEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/%s", stateService, info.Namespace, ironicPort, baremetalIronicEndpointSubpath)
+	ironicEndpoint = fmt.Sprintf("https://%s.%s.svc.cluster.local.:%d/%s", stateService, info.Namespace, ironicPort, baremetalIronicEndpointSubpath)
 	return
 }
 

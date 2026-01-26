@@ -107,7 +107,7 @@ func transformURL(targetNamespace, URL string) (string, error) {
 	// See https://github.com/openshift/ironic-rhcos-downloader for more details
 	cacheURL := url.URL{
 		Scheme: "http",
-		Host: net.JoinHostPort(fmt.Sprintf("%s.%s.svc.cluster.local", stateService, targetNamespace),
+		Host: net.JoinHostPort(fmt.Sprintf("%s.%s.svc.cluster.local.", stateService, targetNamespace),
 			baremetalHttpPort),
 		Path: fmt.Sprintf("/images/%s/%s", imageName, imageName),
 	}

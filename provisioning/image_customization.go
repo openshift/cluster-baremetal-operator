@@ -142,7 +142,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		Command: []string{"/machine-image-customization-controller",
 			"-images-bind-addr", fmt.Sprintf(":%d", imageCustomizationPort),
 			"-images-publish-addr",
-			fmt.Sprintf("http://%s.%s.svc.cluster.local/",
+			fmt.Sprintf("http://%s.%s.svc.cluster.local./",
 				imageCustomizationService, info.Namespace)},
 
 		// TODO: This container does not have to run in privileged mode when the i-c-c has
