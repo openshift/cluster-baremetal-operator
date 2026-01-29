@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -275,4 +276,50 @@ func TestGetUrlFromIP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestImageCustomizationServiceFQDNTrailingDot(t *testing.T) {
+	images := Images{
+		BaremetalOperator:            expectedBaremetalOperator,
+		Ironic:                       expectedIronic,
+		IronicAgent:                  expectedIronicAgent,
+		MachineOsDownloader:          expectedMachineOsDownloader,
+		StaticIpManager:              expectedIronicStaticIpManager,
+		ImageCustomizationController: "registry.ci.openshift.org/openshift:image-customization-controller",
+	}
+
+	info := &ProvisioningInfo{
+		Images:       &images,
+		SSHKey:       "sshkey",
+		NetworkStack: NetworkStackV4,
+		Namespace:    "openshift-machine-api",
+		ProvConfig: &v1alpha1.Provisioning{
+			Spec: v1alpha1.ProvisioningSpec{},
+		},
+	}
+
+	ironicIPs := []string{"192.168.0.2"}
+	container := createImageCustomizationContainer(&images, info, ironicIPs)
+
+	// Verify the -images-publish-addr command argument contains trailing dot
+	// Command structure: ["/machine-image-customization-controller", "-images-bind-addr", ":<port>", "-images-publish-addr", "http://..."]
+	require.Equal(t, 5, len(container.Command), "Container command should have exactly 5 arguments")
+
+	publishAddrIndex := -1
+	for i, arg := range container.Command {
+		if arg == "-images-publish-addr" && i+1 < len(container.Command) {
+			publishAddrIndex = i + 1
+			break
+		}
+	}
+
+	require.NotEqual(t, -1, publishAddrIndex, "Could not find -images-publish-addr argument")
+
+	expectedURL := "http://metal3-image-customization-service.openshift-machine-api.svc.cluster.local./"
+	actualURL := container.Command[publishAddrIndex]
+
+	assert.Equal(t, expectedURL, actualURL,
+		"Image customization service FQDN should have trailing dot to prevent DNS search domain appending")
+	assert.Contains(t, actualURL, ".svc.cluster.local./",
+		"FQDN should end with trailing dot before the slash")
 }

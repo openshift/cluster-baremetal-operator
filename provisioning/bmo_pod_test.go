@@ -41,7 +41,7 @@ func TestNewBMOContainers(t *testing.T) {
 				{Name: "IRONIC_CACERT_FILE", Value: "/certs/ironic/tls.crt"},
 				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "DEPLOY_KERNEL_URL", Value: "file:///shared/html/images/ironic-python-agent.kernel"},
-				{Name: "IRONIC_ENDPOINT", Value: "https://metal3-state.openshift-machine-api.svc.cluster.local:6385/v1/"},
+				{Name: "IRONIC_ENDPOINT", Value: "https://metal3-state.openshift-machine-api.svc.cluster.local.:6385/v1/"},
 				{Name: "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE", Value: "Never"},
 				{Name: "METAL3_AUTH_ROOT_DIR", Value: "/auth"},
 				{Name: "IRONIC_EXTERNAL_IP", Value: ""},
@@ -111,7 +111,7 @@ func TestNewBMOContainers(t *testing.T) {
 					envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP"),
 					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
 					// Private ports because of the proxy
-					envWithValue("IRONIC_ENDPOINT", "https://metal3-state.openshift-machine-api.svc.cluster.local:6388/v1/"),
+					envWithValue("IRONIC_ENDPOINT", "https://metal3-state.openshift-machine-api.svc.cluster.local.:6388/v1/"),
 				),
 			},
 			sshkey: "sshkey",
@@ -125,7 +125,7 @@ func TestNewBMOContainers(t *testing.T) {
 					envWithValue("IRONIC_EXTERNAL_IP", ""),
 					envWithValue("IRONIC_EXTERNAL_URL_V6", "https://[fd2e:6f44:5dd8:c956::16]:6183"),
 					// Private ports because of the proxy
-					envWithValue("IRONIC_ENDPOINT", "https://metal3-state.openshift-machine-api.svc.cluster.local:6388/v1/"),
+					envWithValue("IRONIC_ENDPOINT", "https://metal3-state.openshift-machine-api.svc.cluster.local.:6388/v1/"),
 					envWithValue("PROVISIONING_NETWORK_DISABLED", "true"),
 				),
 			},
