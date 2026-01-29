@@ -32,6 +32,7 @@ func TestGetImageVolumes(t *testing.T) {
 		ironicConfigVolume,
 		ironicDataVolume,
 		baremetalSharedVolume, // emptyDir for /shared (needed for /shared/tmp)
+		ironicTmpVolume,       // emptyDir for /tmp (needed by libguestfs)
 	}
 
 	actualVolumeNames := make([]string, len(volumes))
