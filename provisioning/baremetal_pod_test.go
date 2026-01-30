@@ -869,13 +869,16 @@ func TestCreateInitContainerMachineOsDownloader(t *testing.T) {
 			assert.Equal(t, tc.expectedContainerName, container.Name)
 			assert.Equal(t, []string{tc.expectedCommand}, container.Command)
 
-			// Verify that both imageVolumeMount and sharedVolumeMount are present
+			// Verify that imageVolumeMount, sharedVolumeMount, and ironicTmpMount are present
 			// This is critical because the scripts need to write to /shared/tmp
-			// while having ReadOnlyRootFilesystem enabled
+			// while having ReadOnlyRootFilesystem enabled. ironicTmpMount provides
+			// a writable /tmp for libguestfs tools.
 			assert.Contains(t, container.VolumeMounts, imageVolumeMount,
 				"imageVolumeMount should be present for /shared/html/images")
 			assert.Contains(t, container.VolumeMounts, sharedVolumeMount,
 				"sharedVolumeMount should be present for /shared/tmp writes")
+			assert.Contains(t, container.VolumeMounts, ironicTmpMount,
+				"ironicTmpMount should be present for /tmp writes (required by libguestfs)")
 
 			// Verify ReadOnlyRootFilesystem is enabled
 			assert.NotNil(t, container.SecurityContext)
