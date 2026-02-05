@@ -5,7 +5,7 @@ WORKDIR /go/src/github.com/openshift/cluster-baremetal-operator
 COPY . .
 RUN make build
 
-FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
+FROM registry.ci.openshift.org/ocp/4.22:base-rhel9-minimal
 COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/bin/cluster-baremetal-operator /usr/bin/cluster-baremetal-operator
 COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/manifests /manifests
 LABEL io.openshift.release.operator=true
