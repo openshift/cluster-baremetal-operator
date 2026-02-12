@@ -47,6 +47,12 @@ func TestGetMetal3DeploymentConfig(t *testing.T) {
 			expectedValue: ptr.To("eth0"),
 		},
 		{
+			name:          "Unmanaged ProvisioningIPCIDR",
+			configName:    provisioningIP,
+			spec:          unmanagedProvisioning().build(),
+			expectedValue: ptr.To("172.30.20.3/24"),
+		},
+		{
 			name:          "Unmanaged DeployKernelUrl",
 			configName:    deployKernelUrl,
 			spec:          unmanagedProvisioning().build(),
