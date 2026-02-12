@@ -47,6 +47,15 @@ func TestBuildEnvVar(t *testing.T) {
 			},
 		},
 		{
+			name:       "Unanaged ProvisioningIPCIDR",
+			configName: provisioningIP,
+			spec:       unmanagedProvisioning().build(),
+			expectedEnvVar: corev1.EnvVar{
+				Name:  provisioningIP,
+				Value: "172.30.20.3/24",
+			},
+		},
+		{
 			name:       "Unmanaged ProvisioningInterface",
 			configName: provisioningInterface,
 			spec:       unmanagedProvisioning().build(),
@@ -390,10 +399,10 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "UnmanagedSpec",
 			config: unmanagedProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3")),
-				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3")),
+				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3/24")),
+				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3/24")),
 				containers["metal3-ramdisk-logs"],
-				withEnv(containers["metal3-static-ip-manager"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3")),
+				withEnv(containers["metal3-static-ip-manager"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3/24")),
 				withEnv(containers["metal3-dnsmasq"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("DHCP_RANGE", "")),
 			},
 			sshkey: "",
