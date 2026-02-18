@@ -93,6 +93,7 @@ func createContainerImageCache(images *Images) corev1.Container {
 		Image:           images.Ironic,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(false),
 			// Needed for hostPath image volume mount
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
