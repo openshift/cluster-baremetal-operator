@@ -97,7 +97,7 @@ function fetch_tools {
 
   kb_tools_archive_path="$tmp_root/$kb_tools_archive_name"
   if [ ! -f $kb_tools_archive_path ]; then
-    curl -fsL ${kb_tools_download_url} -o "$kb_tools_archive_path"
+    curl -fL ${kb_tools_download_url} -o "$kb_tools_archive_path"
   fi
   tar -zvxf "$kb_tools_archive_path" -C "$tmp_root/"
 }
