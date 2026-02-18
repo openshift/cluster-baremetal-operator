@@ -21,6 +21,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/controller-runtime v0.21.0
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20250308055145-5fe7bb3edc86
 	sigs.k8s.io/controller-tools v0.17.3
 	sigs.k8s.io/kustomize/kustomize/v4 v4.5.4
 	sigs.k8s.io/yaml v1.6.0
