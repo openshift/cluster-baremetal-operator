@@ -26,20 +26,9 @@ if [ -n "$TRACE" ]; then
   set -x
 fi
 
-k8s_version=1.16.4
-goarch=amd64
-goos="unknown"
-
-if [[ "$OSTYPE" == "linux"* ]]; then
-  goos="linux"
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-  goos="darwin"
-fi
-
-if [[ "$goos" == "unknown" ]]; then
-  echo "OS '$OSTYPE' not supported. Aborting." >&2
-  exit 1
-fi
+# Kubernetes version for envtest binaries
+# Note: The old kubebuilder-tools GCS bucket is deprecated.
+k8s_version=1.33.0
 
 # Turn colors in this script off by setting the NO_COLOR variable in your
 # environment to any value:
@@ -58,56 +47,35 @@ function header_text {
   echo "$header$*$reset"
 }
 
-rc=0
-tmp_root=/tmp
-
-kb_root_dir=$tmp_root/kubebuilder
-kb_orig=$(pwd)
-
 # Skip fetching and untaring the tools by setting the SKIP_FETCH_TOOLS variable
 # in your environment to any value:
 #
 # $ SKIP_FETCH_TOOLS=1 ./fetch_ext_bins.sh
 #
 # If you skip fetching tools, this script will use the tools already on your
-# machine, but rebuild the kubebuilder and kubebuilder-bin binaries.
+# machine.
 SKIP_FETCH_TOOLS=${SKIP_FETCH_TOOLS:-""}
 
-function prepare_staging_dir {
-  header_text "preparing staging dir"
-
-  if [ -z "$SKIP_FETCH_TOOLS" ]; then
-    rm -rf "$kb_root_dir"
-  else
-    rm -f "$kb_root_dir/kubebuilder/bin/kubebuilder"
-    rm -f "$kb_root_dir/kubebuilder/bin/kubebuilder-gen"
-    rm -f "$kb_root_dir/kubebuilder/bin/vendor.tar.gz"
-  fi
-}
-
-# fetch k8s API gen tools and make it available under kb_root_dir/bin.
+# fetch k8s API gen tools using setup-envtest
 function fetch_tools {
   if [ -n "$SKIP_FETCH_TOOLS" ]; then
     return 0
   fi
 
   header_text "fetching tools"
-  kb_tools_archive_name="kubebuilder-tools-$k8s_version-$goos-$goarch.tar.gz"
-  kb_tools_download_url="https://storage.googleapis.com/kubebuilder-tools/$kb_tools_archive_name"
 
-  kb_tools_archive_path="$tmp_root/$kb_tools_archive_name"
-  if [ ! -f $kb_tools_archive_path ]; then
-    curl -fsL ${kb_tools_download_url} -o "$kb_tools_archive_path"
-  fi
-  tar -zvxf "$kb_tools_archive_path" -C "$tmp_root/"
+  # Use setup-envtest (vendored) to download the binaries
+  # The old GCS bucket is deprecated, use the new controller-tools GitHub releases index
+  go run sigs.k8s.io/controller-runtime/tools/setup-envtest use "$k8s_version" --bin-dir /tmp/kubebuilder/bin -p path
 }
 
 function setup_envs {
   header_text "setting up env vars"
 
-  # Setup env vars
-  export PATH=/tmp/kubebuilder/bin:$PATH
-  export TEST_ASSET_KUBECTL=/tmp/kubebuilder/bin/kubectl
-  export TEST_ASSET_KUBE_APISERVER=/tmp/kubebuilder/bin/kube-apiserver
-  export TEST_ASSET_ETCD=/tmp/kubebuilder/bin/etcd
+# Setup env vars for envtest
+export KUBEBUILDER_ASSETS=/tmp/kubebuilder/bin/k8s/$k8s_version-$(go env GOOS)-$(go env GOARCH)
+export PATH=$KUBEBUILDER_ASSETS:$PATH
+export TEST_ASSET_KUBECTL=$KUBEBUILDER_ASSETS/kubectl
+export TEST_ASSET_KUBE_APISERVER=$KUBEBUILDER_ASSETS/kube-apiserver
+export TEST_ASSET_ETCD=$KUBEBUILDER_ASSETS/etcd
 }
