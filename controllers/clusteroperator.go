@@ -136,6 +136,11 @@ func relatedObjects() []osconfigv1.ObjectReference {
 			Name:      "",
 			Namespace: ComponentNamespace,
 		},
+		{
+			Group:    "rbac.authorization.k8s.io",
+			Resource: "clusterroles",
+			Name:     "cluster-baremetal-operator",
+		},
 	}
 }
 
