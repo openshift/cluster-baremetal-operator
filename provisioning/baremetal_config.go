@@ -80,7 +80,9 @@ func getProvisioningIPWithPrefix(config *metal3iov1alpha1.ProvisioningSpec) *str
 }
 
 func getProvisioningIP(config *metal3iov1alpha1.ProvisioningSpec) *string {
-	if config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkManaged {
+	// Use provisioningCIDR for unmanaged provisioning network as well so that corresponding networking configuration
+	// happens at the time of deployment.
+	if config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkManaged || config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkUnmanaged {
 		return getProvisioningIPWithPrefix(config)
 	}
 

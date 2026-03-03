@@ -159,7 +159,7 @@ func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange strin
 		return errs
 	}
 
-	if provisioningNetworkMode != ProvisioningNetworkManaged {
+	if provisioningNetworkMode != ProvisioningNetworkManaged && provisioningNetworkMode != ProvisioningNetworkUnmanaged {
 		return errs
 	}
 	// Verify Network CIDR
