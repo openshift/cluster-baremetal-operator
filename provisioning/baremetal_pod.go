@@ -729,9 +729,13 @@ func envWithProxy(proxy *configv1.Proxy, envVars []corev1.EnvVar, noproxy []stri
 		})
 	}
 	if proxy.Status.NoProxy != "" || noproxy != nil {
+		// Add trailing dot variants for cluster.local to fix OCPBUGS-77488
+		// This ensures URLs with trailing dots (from OCPBUGS-73916) match NO_PROXY patterns
+		noProxyValue := proxy.Status.NoProxy + ",.cluster.local."
+		noProxyValue += "," + strings.Join(noproxy, ",")
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  "NO_PROXY",
-			Value: proxy.Status.NoProxy + "," + strings.Join(noproxy, ","),
+			Value: noProxyValue,
 		})
 	}
 
