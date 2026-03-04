@@ -33,8 +33,8 @@ type TlsCertificate struct {
 }
 
 const (
-	tlsExpiration = 365 * 2 * 24 * time.Hour // 2 years
-	tlsRefresh    = 180 * 24 * time.Hour     // 180 days
+	tlsExpiration = 365 * 24 * time.Hour // 1 year
+	tlsRefresh    = 30 * 24 * time.Hour  // 30 days before expiration
 )
 
 func generateRandomPassword() (string, error) {
@@ -86,14 +86,18 @@ func generateTlsCertificate(hosts sets.Set[string]) (TlsCertificate, error) {
 }
 
 func isTlsCertificateExpired(certificate []byte) (bool, error) {
+	return isTlsCertificateExpiredAt(certificate, time.Now())
+}
+
+func isTlsCertificateExpiredAt(certificate []byte, now time.Time) (bool, error) {
 	certs, err := cert.ParseCertsPEM(certificate)
 	if err != nil {
 		return false, err
 	}
 
-	refreshAfter := time.Now().Add(tlsRefresh)
+	refreshAfter := now.Add(tlsRefresh)
 	for _, cert := range certs {
-		if cert.NotAfter.Before(refreshAfter) {
+		if !cert.NotAfter.After(refreshAfter) {
 			return true, nil
 		}
 	}
