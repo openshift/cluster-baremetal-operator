@@ -337,6 +337,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		provisioning.EnsureImageCustomizationService,
 		provisioning.EnsureImageCustomizationDeployment,
 		provisioning.EnsureIronicProxy,
+		provisioning.EnsureIronicProxyService,
 		provisioning.EnsureIronicServiceMonitor,
 		provisioning.EnsureIronicPrometheusRule,
 	} {
@@ -511,6 +512,9 @@ func (r *ProvisioningReconciler) deleteMetal3Resources(info *provisioning.Provis
 	}
 	if err := provisioning.DeleteIronicProxy(info); err != nil {
 		return errors.Wrap(err, "failed to delete ironic proxy")
+	}
+	if err := provisioning.DeleteIronicProxyService(info); err != nil {
+		return errors.Wrap(err, "failed to delete ironic proxy service")
 	}
 	if err := provisioning.DeleteIronicServiceMonitor(info); err != nil {
 		return errors.Wrap(err, "failed to delete ironic service monitor")
