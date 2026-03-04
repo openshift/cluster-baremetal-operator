@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/api/annotations"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -176,10 +178,57 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 	return utilerrors.NewAggregate(secretErrors)
 }
 
+// defaultClusterDomain is the default Kubernetes cluster domain suffix.
+const defaultClusterDomain = "cluster.local"
+
+// buildTlsHosts builds the complete set of Subject Alternative Names (SANs)
+// for the Ironic TLS certificate based on the cluster topology.
+func buildTlsHosts(info *ProvisioningInfo) (sets.Set[string], error) {
+	hosts := sets.New[string]()
+
+	// Service hostnames (always included for in-cluster access)
+	hosts.Insert(fmt.Sprintf("%s.%s.svc", stateService, info.Namespace))
+	hosts.Insert(fmt.Sprintf("%s.%s.svc.%s", stateService, info.Namespace, defaultClusterDomain))
+
+	// Provisioning IP or localhost fallback
+	if info.ProvConfig.Spec.ProvisioningIP != "" {
+		hosts.Insert(info.ProvConfig.Spec.ProvisioningIP)
+	} else {
+		hosts.Insert("localhost")
+	}
+
+	// External IPs for external access
+	for _, ip := range info.ProvConfig.Spec.ExternalIPs {
+		if ip != "" {
+			hosts.Insert(ip)
+		}
+	}
+
+	// API server internal IPs when using ironic-proxy
+	if UseIronicProxy(info) && info.OSClient != nil {
+		apiVIPs, err := getServerInternalIPs(info.OSClient)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get API server internal IPs for TLS SANs: %w", err)
+		}
+		for _, ip := range apiVIPs {
+			if ip != "" {
+				hosts.Insert(ip)
+			}
+		}
+	}
+
+	return hosts, nil
+}
+
 // createOrUpdateTlsSecret creates a Secret for the Ironic TLS.
 // It updates the secret if the existing certificate is close to expiration.
 func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
-	cert, err := generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
+	hosts, err := buildTlsHosts(info)
+	if err != nil {
+		return err
+	}
+
+	cert, err := generateTlsCertificate(hosts)
 	if err != nil {
 		return err
 	}
