@@ -33,8 +33,8 @@ type TlsCertificate struct {
 }
 
 const (
-	tlsExpiration = 365 * 2 * 24 * time.Hour // 2 years
-	tlsRefresh    = 180 * 24 * time.Hour     // 180 days
+	tlsExpiration = 365 * 24 * time.Hour // 1 year
+	tlsRefresh    = 30 * 24 * time.Hour  // 30 days before expiration
 )
 
 func generateRandomPassword() (string, error) {

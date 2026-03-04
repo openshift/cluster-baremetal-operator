@@ -3,12 +3,34 @@ package provisioning
 import (
 	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/cert"
+
+	"github.com/openshift/library-go/pkg/crypto"
 )
+
+// generateTestCertWithLifetime creates a test certificate with a specific lifetime
+// for testing expiration and rotation boundary conditions.
+func generateTestCertWithLifetime(lifetime time.Duration) ([]byte, error) {
+	caConfig, err := crypto.MakeSelfSignedCAConfig("test-ca", lifetime)
+	if err != nil {
+		return nil, err
+	}
+	ca := crypto.CA{
+		Config:          caConfig,
+		SerialGenerator: &crypto.RandomSerialGenerator{},
+	}
+	config, err := ca.MakeServerCert(sets.New("localhost"), lifetime)
+	if err != nil {
+		return nil, err
+	}
+	certBytes, _, err := config.GetPEMBytes()
+	return certBytes, err
+}
 
 // containsIP checks if the given IP list contains an IP that matches the target,
 // handling the difference between 4-byte and 16-byte IPv4 representations.
@@ -217,4 +239,66 @@ func TestGenerateTlsCertificateAllSANs(t *testing.T) {
 	expired, err := isTlsCertificateExpired(tlsCert.certificate)
 	require.NoError(t, err)
 	assert.False(t, expired, "new certificate should not be expired")
+}
+
+func TestCertificateValidityPeriod(t *testing.T) {
+	tlsCert, err := generateTlsCertificate(sets.New("localhost"))
+	require.NoError(t, err)
+
+	certs, err := cert.ParseCertsPEM(tlsCert.certificate)
+	require.NoError(t, err)
+	require.NotEmpty(t, certs)
+
+	serverCert := certs[0]
+	validity := serverCert.NotAfter.Sub(serverCert.NotBefore)
+	expectedValidity := 365 * 24 * time.Hour
+
+	assert.InDelta(t, expectedValidity.Seconds(), validity.Seconds(), 60,
+		"certificate validity should be approximately 1 year (365 days)")
+}
+
+func TestCertificateRotationBoundary(t *testing.T) {
+	cases := []struct {
+		name            string
+		certLifetime    time.Duration
+		expectRotation  bool
+	}{
+		{
+			name:           "rotation-triggered-at-29-days",
+			certLifetime:   29 * 24 * time.Hour,
+			expectRotation: true,
+		},
+		{
+			name:           "rotation-triggered-at-30-days",
+			certLifetime:   30 * 24 * time.Hour,
+			expectRotation: true,
+		},
+		{
+			name:           "no-rotation-at-31-days",
+			certLifetime:   31 * 24 * time.Hour,
+			expectRotation: false,
+		},
+		{
+			name:           "no-rotation-at-180-days",
+			certLifetime:   180 * 24 * time.Hour,
+			expectRotation: false,
+		},
+		{
+			name:           "no-rotation-freshly-generated",
+			certLifetime:   365 * 24 * time.Hour,
+			expectRotation: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			certPEM, err := generateTestCertWithLifetime(tc.certLifetime)
+			require.NoError(t, err)
+
+			needsRotation, err := isTlsCertificateExpired(certPEM)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectRotation, needsRotation,
+				"cert with %d-day lifetime: expected rotation=%v", int(tc.certLifetime.Hours()/24), tc.expectRotation)
+		})
+	}
 }
