@@ -17,6 +17,7 @@ package provisioning
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -32,8 +33,8 @@ type TlsCertificate struct {
 }
 
 const (
-	tlsExpiration = 365 * 2 * 24 * time.Hour // 2 years
-	tlsRefresh    = 180 * 24 * time.Hour     // 180 days
+	tlsExpiration = 365 * 24 * time.Hour // 1 year
+	tlsRefresh    = 30 * 24 * time.Hour  // 30 days before expiration
 )
 
 func generateRandomPassword() (string, error) {
@@ -53,7 +54,11 @@ func generateRandomPassword() (string, error) {
 	return string(buf), nil
 }
 
-func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
+func generateTlsCertificate(hosts sets.Set[string]) (TlsCertificate, error) {
+	if hosts.Len() == 0 {
+		return TlsCertificate{}, fmt.Errorf("at least one SAN host is required for TLS certificate generation")
+	}
+
 	caConfig, err := crypto.MakeSelfSignedCAConfig("metal3-ironic", tlsExpiration)
 	if err != nil {
 		return TlsCertificate{}, err
@@ -64,15 +69,7 @@ func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
 		SerialGenerator: &crypto.RandomSerialGenerator{},
 	}
 
-	var host string
-	if provisioningIP == "" {
-		host = "localhost"
-	} else {
-		host = provisioningIP
-	}
-
-	config, err := ca.MakeServerCert(sets.New(host), tlsExpiration)
-
+	config, err := ca.MakeServerCert(hosts, tlsExpiration)
 	if err != nil {
 		return TlsCertificate{}, err
 	}
