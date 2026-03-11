@@ -37,6 +37,7 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 		Image:           images.Ironic,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{
+			ReadOnlyRootFilesystem: ptr.To(false),
 			// Set this for ironic-proxy with custom dirs
 			Privileged: ptr.To(true),
 			Capabilities: &corev1.Capabilities{
