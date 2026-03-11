@@ -48,6 +48,7 @@ import (
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/controllers"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
+	utiltls "github.com/openshift/controller-runtime-common/pkg/tls"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
@@ -72,6 +73,7 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var imagesJSONFilename string
+	var enforceTLSProfile bool
 
 	klog.InitFlags(nil)
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -79,6 +81,8 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
 		"The location of the file containing the images to use for our operands.")
+	flag.BoolVar(&enforceTLSProfile, "enforce-tls-profile", false,
+		"Read the TLS security profile from the APIServer CR and enforce it on managed components (Ironic, BMO) and the CBO webhook.")
 	flag.Parse()
 
 	ctrl.SetLogger(klogr.New())
@@ -90,18 +94,41 @@ func main() {
 
 	config := ctrl.GetConfigOrDie()
 
+	// Determine TLS configuration for the webhook server.
+	// When --enforce-tls-profile is enabled, read the TLS profile from the
+	// APIServer CR and apply it. Otherwise, use the hardcoded TLS 1.2 default.
+	var tlsProfileSpec osconfigv1.TLSProfileSpec
+	webhookTLSOpts := []func(*tls.Config){
+		func(t *tls.Config) { t.MinVersion = tls.VersionTLS12 },
+	}
+	if enforceTLSProfile {
+		k8sClient, err := client.New(config, client.Options{Scheme: scheme})
+		if err != nil {
+			klog.ErrorS(err, "unable to create client for TLS profile fetch")
+			os.Exit(1)
+		}
+
+		tlsProfileSpec, err = utiltls.FetchAPIServerTLSProfile(context.Background(), k8sClient)
+		if err != nil {
+			klog.ErrorS(err, "unable to get TLS profile from APIServer")
+			os.Exit(1)
+		}
+
+		tlsConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
+		if len(unsupportedCiphers) > 0 {
+			klog.Infof("TLS configuration contains unsupported ciphers that will be ignored: %v", unsupportedCiphers)
+		}
+		webhookTLSOpts = []func(*tls.Config){tlsConfig}
+	}
+
 	controllerOptions := ctrl.Options{
 		Scheme: scheme,
 		Metrics: server.Options{
 			BindAddress: metricsAddr,
 		},
 		WebhookServer: webhook.NewServer(webhook.Options{
-			Port: 9443,
-			TLSOpts: []func(*tls.Config){
-				func(t *tls.Config) {
-					t.MinVersion = tls.VersionTLS12
-				},
-			},
+			Port:    9443,
+			TLSOpts: webhookTLSOpts,
 			CertDir: "/etc/cluster-baremetal-operator/tls",
 		}),
 		Cache: cache.Options{
@@ -176,16 +203,17 @@ func main() {
 	resourceCache := resourceapply.NewResourceCache()
 
 	if err = (&controllers.ProvisioningReconciler{
-		Client:          mgr.GetClient(),
-		DynamicClient:   dynamicClient,
-		Scheme:          mgr.GetScheme(),
-		OSClient:        osClient,
-		KubeClient:      kubeClient,
-		ReleaseVersion:  releaseVersion,
-		ImagesFilename:  imagesJSONFilename,
-		WebHookEnabled:  enableWebhook,
-		EnabledFeatures: enabledFeatures,
-		ResourceCache:   resourceCache,
+		Client:            mgr.GetClient(),
+		DynamicClient:     dynamicClient,
+		Scheme:            mgr.GetScheme(),
+		OSClient:          osClient,
+		KubeClient:        kubeClient,
+		ReleaseVersion:    releaseVersion,
+		ImagesFilename:    imagesJSONFilename,
+		WebHookEnabled:    enableWebhook,
+		EnabledFeatures:   enabledFeatures,
+		ResourceCache:     resourceCache,
+		EnforceTLSProfile: enforceTLSProfile,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
 		os.Exit(1)
@@ -203,10 +231,32 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+
+	if enforceTLSProfile {
+		// Set up the TLS security profile watcher controller.
+		// This triggers a graceful shutdown when the TLS profile changes,
+		// so that CBO restarts with the new TLS configuration.
+		if err := (&utiltls.SecurityProfileWatcher{
+			Client:                mgr.GetClient(),
+			InitialTLSProfileSpec: tlsProfileSpec,
+			OnProfileChange: func(ctx context.Context, oldSpec, newSpec osconfigv1.TLSProfileSpec) {
+				klog.Infof("TLS profile has changed, initiating a shutdown to reload it. %q: %+v, %q: %+v",
+					"old profile", oldSpec,
+					"new profile", newSpec,
+				)
+				cancel()
+			},
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "unable to create TLS security profile watcher controller")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	klog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		klog.ErrorS(err, "problem running manager")
 		os.Exit(1)
 	}
