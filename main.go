@@ -81,7 +81,7 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
 		"The location of the file containing the images to use for our operands.")
-	flag.BoolVar(&enforceTLSProfile, "enforce-tls-profile", false,
+	flag.BoolVar(&enforceTLSProfile, "enforce-tls-profile", true,
 		"Read the TLS security profile from the APIServer CR and enforce it on managed components (Ironic, BMO) and the CBO webhook.")
 	flag.Parse()
 
