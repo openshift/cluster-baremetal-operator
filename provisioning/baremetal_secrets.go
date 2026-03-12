@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
@@ -14,6 +16,8 @@ import (
 	coreclientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/api/annotations"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -176,10 +180,79 @@ func DeleteAllSecrets(info *ProvisioningInfo) error {
 	return utilerrors.NewAggregate(secretErrors)
 }
 
+// defaultClusterDomain is the default Kubernetes cluster domain suffix.
+const defaultClusterDomain = "cluster.local"
+
+// normalizeHost normalizes an IP address for consistent SAN handling.
+// It strips brackets from IPv6 literals (e.g., "[fd00::1]" -> "fd00::1")
+// and converts IP addresses to their canonical form (e.g., "FD00:0000::1" -> "fd00::1").
+// Non-IP strings (hostnames) are returned unchanged.
+func normalizeHost(host string) string {
+	h := strings.TrimSpace(host)
+	if h == "" {
+		return h
+	}
+
+	// Strip brackets from IPv6 literals like [fd00::1]
+	if strings.HasPrefix(h, "[") && strings.HasSuffix(h, "]") {
+		h = h[1 : len(h)-1]
+	}
+
+	if ip := net.ParseIP(h); ip != nil {
+		return ip.String()
+	}
+	return h
+}
+
+// buildTlsHosts builds the complete set of Subject Alternative Names (SANs)
+// for the Ironic TLS certificate based on the cluster topology.
+func buildTlsHosts(info *ProvisioningInfo) (sets.Set[string], error) {
+	hosts := sets.New[string]()
+
+	// Service hostnames (always included for in-cluster access)
+	hosts.Insert(fmt.Sprintf("%s.%s.svc", stateService, info.Namespace))
+	hosts.Insert(fmt.Sprintf("%s.%s.svc.%s", stateService, info.Namespace, defaultClusterDomain))
+
+	// Provisioning IP
+	if info.ProvConfig.Spec.ProvisioningIP != "" {
+		hosts.Insert(normalizeHost(info.ProvConfig.Spec.ProvisioningIP))
+	}
+
+	// External IPs for external access
+	for _, ip := range info.ProvConfig.Spec.ExternalIPs {
+		if ip != "" {
+			hosts.Insert(normalizeHost(ip))
+		}
+	}
+
+	// Ironic-proxy service hostnames and API server internal IPs
+	if UseIronicProxy(info) {
+		hosts.Insert(fmt.Sprintf("%s.%s.svc", ironicProxyService, info.Namespace))
+		hosts.Insert(fmt.Sprintf("%s.%s.svc.%s", ironicProxyService, info.Namespace, defaultClusterDomain))
+
+		if info.OSClient != nil {
+			apiVIPs, err := getServerInternalIPs(info.OSClient)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get API server internal IPs for TLS SANs: %w", err)
+			}
+			for _, ip := range apiVIPs {
+				hosts.Insert(normalizeHost(ip))
+			}
+		}
+	}
+
+	return hosts, nil
+}
+
 // createOrUpdateTlsSecret creates a Secret for the Ironic TLS.
 // It updates the secret if the existing certificate is close to expiration.
 func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
-	cert, err := generateTlsCertificate(info.ProvConfig.Spec.ProvisioningIP)
+	hosts, err := buildTlsHosts(info)
+	if err != nil {
+		return err
+	}
+
+	cert, err := generateTlsCertificate(hosts)
 	if err != nil {
 		return err
 	}
@@ -207,6 +280,14 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 		if err != nil {
 			return false, err
 		}
-		return expired, nil
+		if expired {
+			return true, nil
+		}
+
+		sansMatch, err := tlsCertificateSANsMatch(existing.Data[corev1.TLSCertKey], hosts)
+		if err != nil {
+			return false, err
+		}
+		return !sansMatch, nil
 	})
 }
