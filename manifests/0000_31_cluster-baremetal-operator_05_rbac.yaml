@@ -137,6 +137,17 @@ rules:
 - apiGroups:
   - config.openshift.io
   resources:
+  - apiservers
+  - infrastructures
+  - networks
+  - proxies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - config.openshift.io
+  resources:
   - clusteroperators
   - clusteroperators/status
   verbs:
@@ -146,16 +157,6 @@ rules:
   - list
   - patch
   - update
-  - watch
-- apiGroups:
-  - config.openshift.io
-  resources:
-  - infrastructures
-  - networks
-  - proxies
-  verbs:
-  - get
-  - list
   - watch
 - apiGroups:
   - config.openshift.io

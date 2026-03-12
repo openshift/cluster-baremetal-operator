@@ -42,6 +42,8 @@ type ProvisioningInfo struct {
 	Namespace               string
 	Images                  *Images
 	Proxy                   *configv1.Proxy
+	EnforceTLSProfile       bool
+	TLSProfileSpec          configv1.TLSProfileSpec
 	NetworkStack            NetworkStackType
 	MasterMacAddresses      []string
 	SSHKey                  string
