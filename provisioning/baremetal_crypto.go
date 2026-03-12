@@ -17,6 +17,7 @@ package provisioning
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -32,8 +33,8 @@ type TlsCertificate struct {
 }
 
 const (
-	tlsExpiration = 365 * 2 * 24 * time.Hour // 2 years
-	tlsRefresh    = 180 * 24 * time.Hour     // 180 days
+	tlsExpiration = 365 * 24 * time.Hour // 1 year
+	tlsRefresh    = 30 * 24 * time.Hour  // 30 days before expiration
 )
 
 func generateRandomPassword() (string, error) {
@@ -53,7 +54,11 @@ func generateRandomPassword() (string, error) {
 	return string(buf), nil
 }
 
-func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
+func generateTlsCertificate(hosts sets.Set[string]) (TlsCertificate, error) {
+	if hosts.Len() == 0 {
+		return TlsCertificate{}, fmt.Errorf("at least one Subject Alternative Name (SAN) host is required for TLS certificate generation")
+	}
+
 	caConfig, err := crypto.MakeSelfSignedCAConfig("metal3-ironic", tlsExpiration)
 	if err != nil {
 		return TlsCertificate{}, err
@@ -64,15 +69,7 @@ func generateTlsCertificate(provisioningIP string) (TlsCertificate, error) {
 		SerialGenerator: &crypto.RandomSerialGenerator{},
 	}
 
-	var host string
-	if provisioningIP == "" {
-		host = "localhost"
-	} else {
-		host = provisioningIP
-	}
-
-	config, err := ca.MakeServerCert(sets.New(host), tlsExpiration)
-
+	config, err := ca.MakeServerCert(hosts, tlsExpiration)
 	if err != nil {
 		return TlsCertificate{}, err
 	}
@@ -102,4 +99,27 @@ func isTlsCertificateExpired(certificate []byte) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// tlsCertificateSANsMatch checks whether the SANs in the existing certificate
+// match the expected hosts. Returns false if they differ (certificate is stale).
+func tlsCertificateSANsMatch(certificate []byte, expectedHosts sets.Set[string]) (bool, error) {
+	certs, err := cert.ParseCertsPEM(certificate)
+	if err != nil {
+		return false, err
+	}
+	if len(certs) == 0 {
+		return false, nil
+	}
+
+	serverCert := certs[0]
+	certHosts := sets.New[string]()
+	for _, name := range serverCert.DNSNames {
+		certHosts.Insert(name)
+	}
+	for _, ip := range serverCert.IPAddresses {
+		certHosts.Insert(ip.String())
+	}
+
+	return certHosts.Equal(expectedHosts), nil
 }
