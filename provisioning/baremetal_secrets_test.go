@@ -623,6 +623,119 @@ func TestBuildTlsHosts(t *testing.T) {
 				"metal3-state.custom-namespace.svc.cluster.local",
 			},
 		},
+		{
+			name: "ipv6-provisioning-ip",
+			info: &ProvisioningInfo{
+				Namespace: "openshift-machine-api",
+				ProvConfig: &metal3iov1alpha1.Provisioning{
+					Spec: metal3iov1alpha1.ProvisioningSpec{
+						ProvisioningIP:      "fd2e:6f44:5dd8:b856::2",
+						ProvisioningNetwork: metal3iov1alpha1.ProvisioningNetworkManaged,
+					},
+				},
+			},
+			expectedHosts: []string{
+				"metal3-state.openshift-machine-api.svc",
+				"metal3-state.openshift-machine-api.svc.cluster.local",
+				"fd2e:6f44:5dd8:b856::2",
+			},
+		},
+		{
+			name: "dual-stack-external-ips",
+			info: &ProvisioningInfo{
+				Namespace: "openshift-machine-api",
+				ProvConfig: &metal3iov1alpha1.Provisioning{
+					Spec: metal3iov1alpha1.ProvisioningSpec{
+						ProvisioningIP:      "172.22.0.3",
+						ProvisioningNetwork: metal3iov1alpha1.ProvisioningNetworkManaged,
+						ExternalIPs:         []string{"10.0.0.5", "fd00::100"},
+					},
+				},
+			},
+			expectedHosts: []string{
+				"metal3-state.openshift-machine-api.svc",
+				"metal3-state.openshift-machine-api.svc.cluster.local",
+				"172.22.0.3",
+				"10.0.0.5",
+				"fd00::100",
+			},
+		},
+		{
+			name: "bracketed-ipv6-normalized",
+			info: &ProvisioningInfo{
+				Namespace: "openshift-machine-api",
+				ProvConfig: &metal3iov1alpha1.Provisioning{
+					Spec: metal3iov1alpha1.ProvisioningSpec{
+						ProvisioningIP:      "[fd2e:6f44:5dd8:b856::2]",
+						ProvisioningNetwork: metal3iov1alpha1.ProvisioningNetworkManaged,
+						ExternalIPs:         []string{"[fd00::100]"},
+					},
+				},
+			},
+			expectedHosts: []string{
+				"metal3-state.openshift-machine-api.svc",
+				"metal3-state.openshift-machine-api.svc.cluster.local",
+				"fd2e:6f44:5dd8:b856::2",
+				"fd00::100",
+			},
+		},
+		{
+			name: "non-canonical-ipv6-normalized",
+			info: &ProvisioningInfo{
+				Namespace: "openshift-machine-api",
+				ProvConfig: &metal3iov1alpha1.Provisioning{
+					Spec: metal3iov1alpha1.ProvisioningSpec{
+						ProvisioningIP:      "FD2E:6F44:5DD8:B856:0000:0000:0000:0002",
+						ProvisioningNetwork: metal3iov1alpha1.ProvisioningNetworkManaged,
+					},
+				},
+			},
+			expectedHosts: []string{
+				"metal3-state.openshift-machine-api.svc",
+				"metal3-state.openshift-machine-api.svc.cluster.local",
+				"fd2e:6f44:5dd8:b856::2",
+			},
+		},
+		{
+			name: "dual-stack-api-vips",
+			info: &ProvisioningInfo{
+				Namespace: "openshift-machine-api",
+				ProvConfig: &metal3iov1alpha1.Provisioning{
+					Spec: metal3iov1alpha1.ProvisioningSpec{
+						ProvisioningIP:      "172.22.0.3",
+						ProvisioningNetwork: metal3iov1alpha1.ProvisioningNetworkDisabled,
+					},
+				},
+				OSClient: fakeconfigclientset.NewSimpleClientset(
+					&osconfigv1.Infrastructure{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "Infrastructure",
+							APIVersion: "config.openshift.io/v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "cluster",
+						},
+						Status: osconfigv1.InfrastructureStatus{
+							PlatformStatus: &osconfigv1.PlatformStatus{
+								Type: osconfigv1.BareMetalPlatformType,
+								BareMetal: &osconfigv1.BareMetalPlatformStatus{
+									APIServerInternalIPs: []string{"192.168.1.100", "fd00::100"},
+								},
+							},
+						},
+					},
+				),
+			},
+			expectedHosts: []string{
+				"metal3-state.openshift-machine-api.svc",
+				"metal3-state.openshift-machine-api.svc.cluster.local",
+				"ironic-proxy.openshift-machine-api.svc",
+				"ironic-proxy.openshift-machine-api.svc.cluster.local",
+				"172.22.0.3",
+				"192.168.1.100",
+				"fd00::100",
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -639,6 +752,31 @@ func TestBuildTlsHosts(t *testing.T) {
 			}
 			assert.Equal(t, len(tc.expectedHosts), hosts.Len(),
 				"expected %d hosts but got %d: %v", len(tc.expectedHosts), hosts.Len(), hosts.UnsortedList())
+		})
+	}
+}
+
+func TestNormalizeHost(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "ipv4-passthrough", input: "172.22.0.3", expected: "172.22.0.3"},
+		{name: "ipv6-canonical", input: "fd2e:6f44:5dd8:b856::2", expected: "fd2e:6f44:5dd8:b856::2"},
+		{name: "ipv6-bracketed", input: "[fd2e:6f44:5dd8:b856::2]", expected: "fd2e:6f44:5dd8:b856::2"},
+		{name: "ipv6-uppercase", input: "FD2E:6F44:5DD8:B856::2", expected: "fd2e:6f44:5dd8:b856::2"},
+		{name: "ipv6-expanded", input: "fd2e:6f44:5dd8:b856:0000:0000:0000:0002", expected: "fd2e:6f44:5dd8:b856::2"},
+		{name: "ipv6-loopback", input: "::1", expected: "::1"},
+		{name: "ipv6-bracketed-loopback", input: "[::1]", expected: "::1"},
+		{name: "hostname-passthrough", input: "metal3-state.openshift-machine-api.svc", expected: "metal3-state.openshift-machine-api.svc"},
+		{name: "empty-string", input: "", expected: ""},
+		{name: "whitespace-trimmed", input: "  172.22.0.3  ", expected: "172.22.0.3"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, normalizeHost(tc.input))
 		})
 	}
 }

@@ -269,3 +269,74 @@ func TestTlsCertificateSANsMismatchRemovedHost(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, match, "SANs should not match when hosts are removed")
 }
+
+func TestGenerateTlsCertificateWithIPv6(t *testing.T) {
+	hosts := sets.New(
+		"metal3-state.openshift-machine-api.svc",
+		"metal3-state.openshift-machine-api.svc.cluster.local",
+		"fd2e:6f44:5dd8:b856::2",
+	)
+
+	tlsCert, err := generateTlsCertificate(hosts)
+	require.NoError(t, err)
+
+	certs, err := cert.ParseCertsPEM(tlsCert.certificate)
+	require.NoError(t, err)
+	require.NotEmpty(t, certs)
+
+	serverCert := certs[0]
+
+	assert.Contains(t, serverCert.DNSNames, "metal3-state.openshift-machine-api.svc",
+		"certificate should contain short service hostname")
+	assert.Contains(t, serverCert.DNSNames, "metal3-state.openshift-machine-api.svc.cluster.local",
+		"certificate should contain FQDN service hostname")
+	assert.True(t, containsIP(serverCert.IPAddresses, "fd2e:6f44:5dd8:b856::2"),
+		"certificate should contain IPv6 provisioning IP")
+}
+
+func TestGenerateTlsCertificateDualStack(t *testing.T) {
+	hosts := sets.New(
+		"metal3-state.openshift-machine-api.svc",
+		"metal3-state.openshift-machine-api.svc.cluster.local",
+		"172.22.0.3",
+		"fd2e:6f44:5dd8:b856::2",
+		"10.0.0.5",
+		"fd00::100",
+	)
+
+	tlsCert, err := generateTlsCertificate(hosts)
+	require.NoError(t, err)
+
+	certs, err := cert.ParseCertsPEM(tlsCert.certificate)
+	require.NoError(t, err)
+	require.NotEmpty(t, certs)
+
+	serverCert := certs[0]
+
+	assert.Contains(t, serverCert.DNSNames, "metal3-state.openshift-machine-api.svc")
+	assert.Contains(t, serverCert.DNSNames, "metal3-state.openshift-machine-api.svc.cluster.local")
+
+	assert.True(t, containsIP(serverCert.IPAddresses, "172.22.0.3"),
+		"certificate should contain IPv4 provisioning IP")
+	assert.True(t, containsIP(serverCert.IPAddresses, "fd2e:6f44:5dd8:b856::2"),
+		"certificate should contain IPv6 provisioning IP")
+	assert.True(t, containsIP(serverCert.IPAddresses, "10.0.0.5"),
+		"certificate should contain IPv4 external IP")
+	assert.True(t, containsIP(serverCert.IPAddresses, "fd00::100"),
+		"certificate should contain IPv6 API VIP")
+}
+
+func TestTlsCertificateSANsMatchIPv6Canonical(t *testing.T) {
+	hosts := sets.New(
+		"metal3-state.openshift-machine-api.svc",
+		"fd2e:6f44:5dd8:b856::2",
+		"172.22.0.3",
+	)
+
+	tlsCert, err := generateTlsCertificate(hosts)
+	require.NoError(t, err)
+
+	match, err := tlsCertificateSANsMatch(tlsCert.certificate, hosts)
+	require.NoError(t, err)
+	assert.True(t, match, "SANs should match with IPv6 addresses in canonical form")
+}
