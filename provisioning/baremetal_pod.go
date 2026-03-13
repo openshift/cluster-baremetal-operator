@@ -287,7 +287,7 @@ func createInitContainerMachineOsDownloader(info *ProvisioningInfo, imageURLs st
 		Command:         []string{command},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(false),
+			ReadOnlyRootFilesystem: pointer.BoolPtr(false),
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 			Capabilities: &corev1.Capabilities{
@@ -314,7 +314,7 @@ func createInitContainerStaticIpSet(images *Images, config *metal3iov1alpha1.Pro
 		Command:         []string{"/set-static-ip"},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(false),
+			ReadOnlyRootFilesystem: pointer.BoolPtr(false),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 				Add:  []corev1.Capability{"NET_ADMIN"},
@@ -398,7 +398,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(false),
+			ReadOnlyRootFilesystem: pointer.BoolPtr(false),
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 			Capabilities: &corev1.Capabilities{
@@ -473,7 +473,7 @@ func createContainerMetal3Httpd(images *Images, config *metal3iov1alpha1.Provisi
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(false),
+			ReadOnlyRootFilesystem: pointer.BoolPtr(false),
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 			Capabilities: &corev1.Capabilities{
@@ -530,7 +530,7 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		Image:           images.Ironic,
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(false),
+			ReadOnlyRootFilesystem: pointer.BoolPtr(false),
 			// Needed for hostPath image volume mount
 			Privileged: pointer.BoolPtr(true),
 			Capabilities: &corev1.Capabilities{
@@ -591,7 +591,7 @@ func createContainerMetal3RamdiskLogs(images *Images) corev1.Container {
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(false),
+			ReadOnlyRootFilesystem: pointer.BoolPtr(false),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
 				Add: []corev1.Capability{
@@ -610,7 +610,7 @@ func createContainerMetal3StaticIpManager(images *Images, config *metal3iov1alph
 		Command:         []string{"/refresh-static-ip"},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(false),
+			ReadOnlyRootFilesystem: pointer.BoolPtr(false),
 			// Needed for mounting /proc to set the addr_gen_mode
 			Privileged: pointer.BoolPtr(true),
 			Capabilities: &corev1.Capabilities{

@@ -107,7 +107,7 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		},
 		ImagePullPolicy: "IfNotPresent",
 		SecurityContext: &corev1.SecurityContext{
-			ReadOnlyRootFilesystem: ptr.To(false),
+			ReadOnlyRootFilesystem: pointer.BoolPtr(false),
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			ironicCredentialsMount,
