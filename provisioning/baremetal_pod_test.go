@@ -247,6 +247,7 @@ func TestNewMetal3Containers(t *testing.T) {
 				{Name: "HTTP_PORT", Value: "6180"},
 				{Name: "PROVISIONING_INTERFACE", Value: "eth0"},
 				{Name: "DHCP_RANGE", Value: "172.30.20.11,172.30.20.101,24"},
+				{Name: "GATEWAY_IP", Value: ""},
 				{Name: "PROVISIONING_MACS", Value: "34:b3:2d:81:f8:fb,34:b3:2d:81:f8:fc,34:b3:2d:81:f8:fd"},
 			},
 			VolumeMounts: []corev1.VolumeMount{
@@ -316,6 +317,21 @@ func TestNewMetal3Containers(t *testing.T) {
 				withEnv(
 					containers["metal3-dnsmasq"],
 					envWithValue("DNS_IP", "provisioning"),
+				),
+			},
+			sshkey: "sshkey",
+		},
+		{
+			name:   "ManagedSpec with Gateway",
+			config: managedProvisioning().ProvisioningNetworkGateway("192.0.2.1").build(),
+			expectedContainers: []corev1.Container{
+				withEnv(containers["metal3-httpd"], sshkey),
+				withEnv(containers["metal3-ironic"], sshkey),
+				containers["metal3-ramdisk-logs"],
+				containers["metal3-static-ip-manager"],
+				withEnv(
+					containers["metal3-dnsmasq"],
+					envWithValue("GATEWAY_IP", "192.0.2.1"),
 				),
 			},
 			sshkey: "sshkey",

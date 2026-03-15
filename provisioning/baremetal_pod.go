@@ -455,6 +455,7 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		buildEnvVar(httpPort, config),
 		buildEnvVar(provisioningInterface, config),
 		buildEnvVar(dhcpRange, config),
+		buildEnvVar(gatewayIP, config),
 		buildEnvVar(provisioningMacAddresses, config),
 	}
 	if config.ProvisioningDNS {

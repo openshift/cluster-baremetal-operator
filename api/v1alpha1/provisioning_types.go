@@ -151,6 +151,15 @@ type ProvisioningSpec struct {
 	// last usable address in the  range.
 	ProvisioningDHCPRange string `json:"provisioningDHCPRange,omitempty"`
 
+	// ProvisioningNetworkGateway is the IP address of the default gateway
+	// for the provisioning network. This gateway is provided to baremetal
+	// hosts via DHCP to enable routing to external networks during
+	// introspection and provisioning. This field is optional and only
+	// used when ProvisioningNetwork is set to Managed. The gateway IP
+	// must be within the ProvisioningNetworkCIDR but outside of the
+	// ProvisioningDHCPRange and must not be the same as ProvisioningIP.
+	ProvisioningNetworkGateway string `json:"provisioningNetworkGateway,omitempty"`
+
 	// ProvisioningOSDownloadURL is the location from which the OS
 	// Image used to boot baremetal host machines can be downloaded
 	// by the metal3 cluster.

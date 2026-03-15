@@ -97,6 +97,14 @@ ProvisioningNetworkCIDR where the 1st address represents
 the start of the range and the 2nd address represents the
 last usable address in the  range.
 
+- ProvisioningNetworkGateway is the IP address of the default gateway
+for the provisioning network. This gateway is provided to baremetal
+hosts via DHCP to enable routing to external networks during
+introspection and provisioning. This field is optional and only
+used when ProvisioningNetwork is set to Managed. The gateway IP
+must be within the ProvisioningNetworkCIDR but outside of the
+ProvisioningDHCPRange and must not be the same as ProvisioningIP.
+
 - ProvisioningOSDownloadURL is the location from which the OS
 Image used to boot baremetal host machines can be downloaded
 by the metal3 cluster.
