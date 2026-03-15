@@ -457,6 +457,13 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		buildEnvVar(dhcpRange, config),
 		buildEnvVar(provisioningMacAddresses, config),
 	}
+	// Only add GATEWAY_IP if it has a value
+	if gatewayValue := getGatewayIP(config); gatewayValue != nil {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  gatewayIP,
+			Value: *gatewayValue,
+		})
+	}
 	if config.ProvisioningDNS {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  dnsIP,
