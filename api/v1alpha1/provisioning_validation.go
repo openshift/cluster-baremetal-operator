@@ -79,11 +79,13 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig(enabledFeatures En
 
 	// Only force check of dhcpRange if in managed mode.
 	dhcpRange := prov.Spec.ProvisioningDHCPRange
+	gatewayIP := prov.Spec.ProvisioningNetworkGateway
 	if provisioningNetworkMode != ProvisioningNetworkManaged {
 		dhcpRange = ""
+		gatewayIP = ""
 	}
 
-	if err := validateProvisioningNetworkSettings(prov.Spec.ProvisioningIP, prov.Spec.ProvisioningNetworkCIDR, dhcpRange, prov.getProvisioningNetworkMode()); err != nil {
+	if err := validateProvisioningNetworkSettings(prov.Spec.ProvisioningIP, prov.Spec.ProvisioningNetworkCIDR, dhcpRange, gatewayIP, prov.getProvisioningNetworkMode()); err != nil {
 		errs = append(errs, err...)
 	}
 
@@ -95,6 +97,37 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig(enabledFeatures En
 	}
 
 	return errors.NewAggregate(errs)
+}
+
+// isNetworkOrBroadcastAddress checks if the IP is a network or broadcast address
+// For IPv4 with masks narrower than /31, network and broadcast addresses are not usable
+func isNetworkOrBroadcastAddress(ip net.IP, cidr *net.IPNet) bool {
+	// Get the mask size
+	ones, bits := cidr.Mask.Size()
+
+	// For IPv4 /31 and /32 (RFC 3021), all addresses are usable
+	if bits == 32 && ones >= 31 {
+		return false
+	}
+
+	// Check if it's the network address (all host bits are 0)
+	networkAddr := cidr.IP.Mask(cidr.Mask)
+	if ip.Equal(networkAddr) {
+		return true
+	}
+
+	// For IPv6, no broadcast address exists
+	if bits == 128 {
+		return false
+	}
+
+	// For IPv4 (not /31 or /32), check for broadcast address (all host bits are 1)
+	broadcast := make(net.IP, len(networkAddr))
+	copy(broadcast, networkAddr)
+	for i := range broadcast {
+		broadcast[i] |= ^cidr.Mask[i]
+	}
+	return ip.Equal(broadcast)
 }
 
 func (prov *Provisioning) getProvisioningNetworkMode() ProvisioningNetwork {
@@ -147,7 +180,7 @@ func validateProvisioningOSDownloadURL(uri string) []error {
 	return errs
 }
 
-func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange string, provisioningNetworkMode ProvisioningNetwork) []error {
+func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange string, gatewayIP string, provisioningNetworkMode ProvisioningNetwork) []error {
 	// provisioningIP and networkCIDR are always set.  DHCP range is optional
 	// depending on mode.
 	var errs []error
@@ -179,6 +212,27 @@ func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange strin
 	// Ensure provisioning IP is in the network CIDR
 	if !provisioningCIDR.Contains(provisioningIP) {
 		errs = append(errs, fmt.Errorf("provisioningIP %q is not in the range defined by the provisioningNetworkCIDR %q", ip, cidr))
+	}
+
+	// Validate gateway IP if provided
+	if gatewayIP != "" {
+		gateway := net.ParseIP(gatewayIP)
+		if gateway == nil {
+			errs = append(errs, fmt.Errorf("could not parse provisioningNetworkGateway %q", gatewayIP))
+			return errs
+		}
+		// Ensure gateway IP is in the network CIDR
+		if !provisioningCIDR.Contains(gateway) {
+			errs = append(errs, fmt.Errorf("provisioningNetworkGateway %q is not in the range defined by the provisioningNetworkCIDR %q", gatewayIP, cidr))
+		}
+		// Ensure gateway IP is not the same as provisioning IP
+		if gateway.Equal(provisioningIP) {
+			errs = append(errs, fmt.Errorf("provisioningNetworkGateway %q cannot be the same as provisioningIP %q", gatewayIP, ip))
+		}
+		// Ensure gateway is a usable host address (not network or broadcast)
+		if isNetworkOrBroadcastAddress(gateway, provisioningCIDR) {
+			errs = append(errs, fmt.Errorf("provisioningNetworkGateway %q is not a usable host address (network or broadcast address)", gatewayIP))
+		}
 	}
 
 	// DHCP Range might not be set in which case we're done here.
@@ -218,6 +272,14 @@ func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange strin
 	if start != nil && end != nil {
 		if bytes.Compare(provisioningIP, start) >= 0 && bytes.Compare(provisioningIP, end) <= 0 {
 			errs = append(errs, fmt.Errorf("invalid provisioningIP %q, value must be outside of the provisioningDHCPRange %q", provisioningIP, dhcpRange))
+		}
+
+		// Ensure gateway IP is not in the DHCP range if provided
+		if gatewayIP != "" {
+			gateway := net.ParseIP(gatewayIP)
+			if gateway != nil && bytes.Compare(gateway, start) >= 0 && bytes.Compare(gateway, end) <= 0 {
+				errs = append(errs, fmt.Errorf("invalid provisioningNetworkGateway %q, value must be outside of the provisioningDHCPRange %q", gatewayIP, dhcpRange))
+			}
 		}
 	}
 

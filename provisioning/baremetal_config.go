@@ -42,6 +42,7 @@ const (
 	vmediaHttpsPort                = "VMEDIA_TLS_PORT"
 	dnsIP                          = "DNS_IP"
 	dhcpRange                      = "DHCP_RANGE"
+	gatewayIP                      = "GATEWAY_IP"
 	machineImageUrl                = "RHCOS_IMAGE_URL"
 	ipOptions                      = "IP_OPTIONS"
 	bootIsoSource                  = "IRONIC_BOOT_ISO_SOURCE"
@@ -124,6 +125,15 @@ func getBootIsoSource(config *metal3iov1alpha1.ProvisioningSpec) *string {
 	return nil
 }
 
+func getGatewayIP(config *metal3iov1alpha1.ProvisioningSpec) *string {
+	managed := config.ProvisioningNetwork == metal3iov1alpha1.ProvisioningNetworkManaged ||
+		(config.ProvisioningNetwork == "" && !config.ProvisioningDHCPExternal)
+	if managed && config.ProvisioningNetworkGateway != "" {
+		return &config.ProvisioningNetworkGateway
+	}
+	return nil
+}
+
 func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.ProvisioningSpec) *string {
 	switch name {
 	case provisioningIP:
@@ -140,6 +150,8 @@ func getMetal3DeploymentConfig(name string, baremetalConfig *metal3iov1alpha1.Pr
 		return ptr.To(baremetalVmediaHttpsPort)
 	case dhcpRange:
 		return getDHCPRange(baremetalConfig)
+	case gatewayIP:
+		return getGatewayIP(baremetalConfig)
 	case machineImageUrl:
 		return getProvisioningOSDownloadURL(baremetalConfig)
 	case bootIsoSource:
