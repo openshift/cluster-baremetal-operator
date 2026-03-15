@@ -321,6 +321,21 @@ func TestNewMetal3Containers(t *testing.T) {
 			sshkey: "sshkey",
 		},
 		{
+			name:   "ManagedSpec with Gateway",
+			config: managedProvisioning().ProvisioningNetworkGateway("192.0.2.1").build(),
+			expectedContainers: []corev1.Container{
+				withTLSEnv(containers["metal3-httpd"], sshkey),
+				withTLSEnv(containers["metal3-ironic"], sshkey),
+				containers["metal3-ramdisk-logs"],
+				containers["metal3-static-ip-manager"],
+				withEnv(
+					containers["metal3-dnsmasq"],
+					envWithValue("GATEWAY_IP", "192.0.2.1"),
+				),
+			},
+			sshkey: "sshkey",
+		},
+		{
 			name:   "ManagedSpec with virtualmedia",
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
