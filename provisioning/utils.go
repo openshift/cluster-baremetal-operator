@@ -83,19 +83,22 @@ func getServerInternalIPs(osclient osclientset.Interface) ([]string, error) {
 		err = fmt.Errorf("cannot get the 'cluster' object from infrastructure API: %w", err)
 		return nil, err
 	}
+	if infra.Status.PlatformStatus == nil {
+		return nil, nil
+	}
 	switch infra.Status.PlatformStatus.Type {
 	case osconfigv1.BareMetalPlatformType:
-		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.BareMetal == nil {
+		if infra.Status.PlatformStatus.BareMetal == nil {
 			return nil, nil
 		}
 		return infra.Status.PlatformStatus.BareMetal.APIServerInternalIPs, nil
 	case osconfigv1.OpenStackPlatformType:
-		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.OpenStack == nil {
+		if infra.Status.PlatformStatus.OpenStack == nil {
 			return nil, nil
 		}
 		return infra.Status.PlatformStatus.OpenStack.APIServerInternalIPs, nil
 	case osconfigv1.VSpherePlatformType:
-		if infra.Status.PlatformStatus == nil || infra.Status.PlatformStatus.VSphere == nil {
+		if infra.Status.PlatformStatus.VSphere == nil {
 			return nil, nil
 		}
 		return infra.Status.PlatformStatus.VSphere.APIServerInternalIPs, nil
