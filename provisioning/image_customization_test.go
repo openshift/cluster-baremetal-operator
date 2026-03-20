@@ -65,6 +65,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
+			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
@@ -86,6 +87,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
+			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
@@ -110,6 +112,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2,2001:db8::2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
+			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385,https://[2001:db8::2]:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
@@ -131,6 +134,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
+			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
@@ -153,6 +157,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
+			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: imageOverride},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
