@@ -296,6 +296,16 @@ func TestNewMetal3Containers(t *testing.T) {
 		MachineOsDownloader: expectedMachineOsDownloader,
 		StaticIpManager:     expectedIronicStaticIpManager,
 	}
+	// withTLSEnv wraps withEnv and appends TLS env vars at the end,
+	// matching the order in which createContainerMetal3Httpd/Ironic append them.
+	withTLSEnv := func(c corev1.Container, ne ...corev1.EnvVar) corev1.Container {
+		c = withEnv(c, ne...)
+		c.Env = append(c.Env,
+			envWithValue("IRONIC_SSL_PROTOCOL", "-ALL +TLSv1.2 +TLSv1.3"),
+			envWithValue("IRONIC_VMEDIA_SSL_PROTOCOL", "-ALL +TLSv1.2 +TLSv1.3"),
+		)
+		return c
+	}
 	tCases := []struct {
 		name               string
 		config             *metal3iov1alpha1.ProvisioningSpec
@@ -306,8 +316,8 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec",
 			config: managedProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-httpd"], sshkey),
-				withEnv(containers["metal3-ironic"], sshkey),
+				withTLSEnv(containers["metal3-httpd"], sshkey),
+				withTLSEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
 				containers["metal3-static-ip-manager"],
 				containers["metal3-dnsmasq"],
@@ -318,8 +328,8 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with DNS",
 			config: managedProvisioning().ProvisioningDNS(true).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-httpd"], sshkey),
-				withEnv(containers["metal3-ironic"], sshkey),
+				withTLSEnv(containers["metal3-httpd"], sshkey),
+				withTLSEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
 				containers["metal3-static-ip-manager"],
 				withEnv(
@@ -333,12 +343,12 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with virtualmedia",
 			config: managedProvisioning().VirtualMediaViaExternalNetwork(true).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
+				withTLSEnv(
 					containers["metal3-httpd"],
 					sshkey,
 					envWithValue("IRONIC_LISTEN_PORT", "6388"),
 				),
-				withEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
+				withTLSEnv(containers["metal3-ironic"], sshkey, envWithFieldValue("IRONIC_EXTERNAL_IP", "status.hostIP")),
 				containers["metal3-ramdisk-logs"],
 				containers["metal3-static-ip-manager"],
 				containers["metal3-dnsmasq"],
@@ -349,8 +359,8 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with sensor metrics enabled",
 			config: managedProvisioning().PrometheusExporter(true, 60).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-httpd"], sshkey),
-				withEnv(containers["metal3-ironic"], sshkey,
+				withTLSEnv(containers["metal3-httpd"], sshkey),
+				withTLSEnv(containers["metal3-ironic"], sshkey,
 					envWithValue("SEND_SENSOR_DATA", "true"),
 					envWithValue("OS_SENSOR_DATA__INTERVAL", "60")),
 				containers["metal3-ramdisk-logs"],
@@ -368,8 +378,8 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with sensor metrics disabled",
 			config: managedProvisioning().PrometheusExporter(false, 60).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-httpd"], sshkey),
-				withEnv(containers["metal3-ironic"], sshkey),
+				withTLSEnv(containers["metal3-httpd"], sshkey),
+				withTLSEnv(containers["metal3-ironic"], sshkey),
 				containers["metal3-ramdisk-logs"],
 				containers["metal3-static-ip-manager"],
 				containers["metal3-dnsmasq"],
@@ -380,8 +390,8 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "ManagedSpec with custom sensor metrics interval",
 			config: managedProvisioning().PrometheusExporter(true, 120).build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-httpd"], sshkey),
-				withEnv(containers["metal3-ironic"], sshkey,
+				withTLSEnv(containers["metal3-httpd"], sshkey),
+				withTLSEnv(containers["metal3-ironic"], sshkey,
 					envWithValue("SEND_SENSOR_DATA", "true"),
 					envWithValue("OS_SENSOR_DATA__INTERVAL", "120")),
 				containers["metal3-ramdisk-logs"],
@@ -399,8 +409,8 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "UnmanagedSpec",
 			config: unmanagedProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				withEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3/24")),
-				withEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3/24")),
+				withTLSEnv(containers["metal3-httpd"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3/24")),
+				withTLSEnv(containers["metal3-ironic"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3/24")),
 				containers["metal3-ramdisk-logs"],
 				withEnv(containers["metal3-static-ip-manager"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("PROVISIONING_IP", "172.30.20.3/24")),
 				withEnv(containers["metal3-dnsmasq"], envWithValue("PROVISIONING_INTERFACE", "ensp0"), envWithValue("DHCP_RANGE", "")),
@@ -411,13 +421,13 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpec",
 			config: disabledProvisioning().build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
+				withTLSEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
 					envWithValue("IRONIC_LISTEN_PORT", "6388"),
 					envWithValue("PROVISIONING_IP", "172.30.20.3"),
 				),
-				withEnv(
+				withTLSEnv(
 					containers["metal3-ironic"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
 					envWithValue("IRONIC_KERNEL_PARAMS", "rd.net.timeout.carrier=30 ip=dhcp6"),
@@ -431,13 +441,13 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpecWithoutProvisioningIP",
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
+				withTLSEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
 					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
 					envWithValue("IRONIC_LISTEN_PORT", "6388"),
 				),
-				withEnv(
+				withTLSEnv(
 					containers["metal3-ironic"],
 					envWithValue("PROVISIONING_INTERFACE", ""),
 					envWithFieldValue("PROVISIONING_IP", "status.hostIP"),
@@ -451,13 +461,13 @@ func TestNewMetal3Containers(t *testing.T) {
 			name:   "DisabledSpecWithProvisioningInterface",
 			config: disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").ProvisioningInterface("em1").build(),
 			expectedContainers: []corev1.Container{
-				withEnv(
+				withTLSEnv(
 					containers["metal3-httpd"],
 					envWithValue("PROVISIONING_INTERFACE", "em1"),
 					envWithValue("PROVISIONING_IP", ""),
 					envWithValue("IRONIC_LISTEN_PORT", "6388"),
 				),
-				withEnv(
+				withTLSEnv(
 					containers["metal3-ironic"],
 					envWithValue("PROVISIONING_INTERFACE", "em1"),
 					envWithValue("PROVISIONING_IP", ""),

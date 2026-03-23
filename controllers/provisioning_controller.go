@@ -59,6 +59,7 @@ import (
 	osclientset "github.com/openshift/client-go/config/clientset/versioned"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
+	utiltls "github.com/openshift/controller-runtime-common/pkg/tls"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
@@ -101,6 +102,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors;prometheusrules,verbs=create;watch;get;list;patch;delete;update
 
+// +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=networks,verbs=get;list;watch
@@ -422,6 +424,11 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		return nil, err
 	}
 
+	tlsProfileSpec, err := utiltls.FetchAPIServerTLSProfile(ctx, r.Client)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get TLS profile from APIServer: %w", err)
+	}
+
 	infra, _ := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
 	isHyperShift := infra.Status.ControlPlaneTopology == osconfigv1.ExternalTopologyMode
 
@@ -441,6 +448,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		Namespace:               ComponentNamespace,
 		Images:                  images,
 		Proxy:                   proxy,
+		TLSProfileSpec:          tlsProfileSpec,
 		NetworkStack:            r.NetworkStack,
 		SSHKey:                  sshkey,
 		BaremetalWebhookEnabled: enableBaremetalWebhook,
@@ -727,6 +735,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(prometheusRule).
 		Watches(&osconfigv1.ClusterOperator{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&osconfigv1.Proxy{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
+		Watches(&osconfigv1.APIServer{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton), builder.WithPredicates(pullSecretFilter)).
 		Complete(r)
 }
