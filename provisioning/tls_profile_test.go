@@ -8,6 +8,41 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 )
 
+func TestShouldHonorClusterTLSProfile(t *testing.T) {
+	tests := []struct {
+		name     string
+		policy   configv1.TLSAdherencePolicy
+		expected bool
+	}{
+		{
+			name:     "NoOpinion (empty) returns false",
+			policy:   configv1.TLSAdherencePolicyNoOpinion,
+			expected: false,
+		},
+		{
+			name:     "LegacyAdheringComponentsOnly returns false",
+			policy:   configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly,
+			expected: false,
+		},
+		{
+			name:     "StrictAllComponents returns true",
+			policy:   configv1.TLSAdherencePolicyStrictAllComponents,
+			expected: true,
+		},
+		{
+			name:     "Unknown value returns true (fail-secure)",
+			policy:   configv1.TLSAdherencePolicy("FutureValue"),
+			expected: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ShouldHonorClusterTLSProfile(tc.policy)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
 func TestTlsVersionToApacheSSLProtocol(t *testing.T) {
 	tests := []struct {
 		name       string

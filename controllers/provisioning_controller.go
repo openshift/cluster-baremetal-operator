@@ -424,9 +424,20 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		return nil, err
 	}
 
-	tlsProfileSpec, err := utiltls.FetchAPIServerTLSProfile(ctx, r.Client)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get TLS profile from APIServer: %w", err)
+	// Check tlsAdherence to decide whether to enforce the cluster TLS profile
+	apiServer := &osconfigv1.APIServer{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: "cluster"}, apiServer); err != nil {
+		return nil, fmt.Errorf("unable to read APIServer CR for TLS adherence check: %w", err)
+	}
+	honorTLS := provisioning.ShouldHonorClusterTLSProfile(apiServer.Spec.TLSAdherence)
+
+	var tlsProfileSpec *osconfigv1.TLSProfileSpec
+	if honorTLS {
+		spec, err := utiltls.FetchAPIServerTLSProfile(ctx, r.Client)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get TLS profile from APIServer: %w", err)
+		}
+		tlsProfileSpec = &spec
 	}
 
 	infra, _ := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})

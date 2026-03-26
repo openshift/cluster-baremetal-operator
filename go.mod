@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-baremetal-operator
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/ghodss/yaml v1.0.0
@@ -8,17 +8,17 @@ require (
 	github.com/golangci/golangci-lint/v2 v2.1.6
 	github.com/google/go-cmp v0.7.0
 	github.com/metal3-io/baremetal-operator/apis v0.0.0
-	github.com/openshift/api v0.0.0-20260213155647-8fe9fe363807
-	github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13
+	github.com/openshift/api v0.0.0-20260318185450-1f2fa3f09f4e
+	github.com/openshift/client-go v0.0.0-20260317180604-743f664b82d1
 	github.com/openshift/controller-runtime-common v0.0.0-20260213175913-767fef058eca
 	github.com/openshift/library-go v0.0.0-20260213153706-03f1709971c5
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/stew v0.0.0-20130812190256-80ef0842b48b
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.47.0
-	k8s.io/api v0.34.3
-	k8s.io/apimachinery v0.34.3
-	k8s.io/client-go v0.34.3
+	k8s.io/api v0.35.1
+	k8s.io/apimachinery v0.35.1
+	k8s.io/client-go v0.35.1
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20260108192941-914a6e750570
 	sigs.k8s.io/controller-runtime v0.22.5

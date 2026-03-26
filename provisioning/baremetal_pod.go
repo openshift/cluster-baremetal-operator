@@ -587,7 +587,9 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
-	container.Env = append(container.Env, tlsProfileToApacheEnvVars(info.TLSProfileSpec)...)
+	if info.TLSProfileSpec != nil {
+		container.Env = append(container.Env, tlsProfileToApacheEnvVars(*info.TLSProfileSpec)...)
+	}
 
 	return container
 }
@@ -668,7 +670,9 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		)
 	}
 
-	container.Env = append(container.Env, tlsProfileToApacheEnvVars(info.TLSProfileSpec)...)
+	if info.TLSProfileSpec != nil {
+		container.Env = append(container.Env, tlsProfileToApacheEnvVars(*info.TLSProfileSpec)...)
+	}
 
 	return container
 }

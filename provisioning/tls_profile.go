@@ -9,6 +9,20 @@ import (
 	"github.com/openshift/library-go/pkg/crypto"
 )
 
+// ShouldHonorClusterTLSProfile returns true if the component should honor the
+// cluster-wide TLS security profile from apiserver.config.openshift.io/cluster.
+// Returns false for NoOpinion ("") and LegacyAdheringComponentsOnly; returns
+// true for StrictAllComponents and any unknown value (fail-secure).
+// This mirrors library-go/pkg/crypto.ShouldHonorClusterTLSProfile().
+func ShouldHonorClusterTLSProfile(tlsAdherence configv1.TLSAdherencePolicy) bool {
+	switch tlsAdherence {
+	case configv1.TLSAdherencePolicyNoOpinion, configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly:
+		return false
+	default:
+		return true
+	}
+}
+
 // tlsVersionToApacheSSLProtocol maps a TLS minimum version to an Apache SSLProtocol directive value.
 // The directive enables all TLS versions from the minimum up through TLS 1.3.
 func tlsVersionToApacheSSLProtocol(minVersion configv1.TLSProtocolVersion) string {

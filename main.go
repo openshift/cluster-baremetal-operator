@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -91,8 +92,8 @@ func main() {
 
 	config := ctrl.GetConfigOrDie()
 
-	// Read the cluster-wide TLS profile from the APIServer CR and apply it
-	// to the CBO webhook server.
+	// Read the APIServer CR to check tlsAdherence and optionally apply
+	// the cluster-wide TLS profile to the CBO webhook server.
 	k8sClient, err := client.New(config, client.Options{Scheme: scheme})
 	if err != nil {
 		klog.ErrorS(err, "unable to create client for TLS profile fetch")
@@ -101,17 +102,32 @@ func main() {
 
 	tlsFetchCtx, tlsFetchCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer tlsFetchCancel()
-	tlsProfileSpec, err := utiltls.FetchAPIServerTLSProfile(tlsFetchCtx, k8sClient)
-	if err != nil {
-		klog.ErrorS(err, "unable to get TLS profile from APIServer")
+
+	apiServer := &osconfigv1.APIServer{}
+	if err := k8sClient.Get(tlsFetchCtx, types.NamespacedName{Name: "cluster"}, apiServer); err != nil {
+		klog.ErrorS(err, "unable to read APIServer CR")
 		os.Exit(1)
 	}
 
-	tlsConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
-	if len(unsupportedCiphers) > 0 {
-		klog.Infof("TLS configuration contains unsupported ciphers that will be ignored: %v", unsupportedCiphers)
+	honorTLSProfile := provisioning.ShouldHonorClusterTLSProfile(apiServer.Spec.TLSAdherence)
+
+	var webhookTLSOpts []func(*tls.Config)
+	var tlsProfileSpec osconfigv1.TLSProfileSpec
+	if honorTLSProfile {
+		tlsProfileSpec, err = utiltls.FetchAPIServerTLSProfile(tlsFetchCtx, k8sClient)
+		if err != nil {
+			klog.ErrorS(err, "unable to get TLS profile from APIServer")
+			os.Exit(1)
+		}
+		tlsConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
+		if len(unsupportedCiphers) > 0 {
+			klog.Infof("TLS configuration contains unsupported ciphers that will be ignored: %v", unsupportedCiphers)
+		}
+		webhookTLSOpts = append(webhookTLSOpts, tlsConfig)
+		klog.Info("Applying cluster TLS profile to webhook server")
+	} else {
+		klog.Info("Cluster TLS adherence does not require enforcement, using defaults")
 	}
-	webhookTLSOpts := []func(*tls.Config){tlsConfig}
 
 	controllerOptions := ctrl.Options{
 		Scheme: scheme,
@@ -225,22 +241,24 @@ func main() {
 	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 	defer cancel()
 
-	// Set up the TLS security profile watcher controller.
-	// This triggers a graceful shutdown when the TLS profile changes,
-	// so that CBO restarts with the new TLS configuration.
-	if err := (&utiltls.SecurityProfileWatcher{
-		Client:                mgr.GetClient(),
-		InitialTLSProfileSpec: tlsProfileSpec,
-		OnProfileChange: func(ctx context.Context, oldSpec, newSpec osconfigv1.TLSProfileSpec) {
-			klog.Infof("TLS profile has changed, initiating a shutdown to reload it. %q: %+v, %q: %+v",
-				"old profile", oldSpec,
-				"new profile", newSpec,
-			)
-			cancel()
-		},
-	}).SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "unable to create TLS security profile watcher controller")
-		os.Exit(1)
+	// Set up the TLS security profile watcher controller when TLS adherence
+	// requires enforcement. This triggers a graceful shutdown when the TLS
+	// profile changes, so that CBO restarts with the new TLS configuration.
+	if honorTLSProfile {
+		if err := (&utiltls.SecurityProfileWatcher{
+			Client:                mgr.GetClient(),
+			InitialTLSProfileSpec: tlsProfileSpec,
+			OnProfileChange: func(ctx context.Context, oldSpec, newSpec osconfigv1.TLSProfileSpec) {
+				klog.Infof("TLS profile has changed, initiating a shutdown to reload it. %q: %+v, %q: %+v",
+					"old profile", oldSpec,
+					"new profile", newSpec,
+				)
+				cancel()
+			},
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "unable to create TLS security profile watcher controller")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
