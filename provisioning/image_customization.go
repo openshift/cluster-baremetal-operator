@@ -50,6 +50,8 @@ const (
 	deployISOFile                    = imageSharedDir + "/ironic-python-agent.iso"
 	deployInitrdEnvVar               = "DEPLOY_INITRD"
 	deployInitrdFile                 = imageSharedDir + "/ironic-python-agent.initramfs"
+	deployKernelEnvVar               = "DEPLOY_KERNEL"
+	deployKernelFile                 = imageSharedDir + "/ironic-python-agent.kernel"
 	imageCustomizationConfigName     = "metal3-image-customization-config"
 	ironicAgentPullSecret            = "ironic-agent-pull-secret" // #nosec G101
 	ironicAgentPullSecretPath        = "/run/secrets/pull-secret" // #nosec G101
@@ -169,6 +171,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			corev1.EnvVar{
 				Name:  deployInitrdEnvVar,
 				Value: deployInitrdFile,
+			},
+			corev1.EnvVar{
+				Name:  deployKernelEnvVar,
+				Value: deployKernelFile,
 			},
 			corev1.EnvVar{
 				Name:  ironicBaseUrl,
