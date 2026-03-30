@@ -52,6 +52,8 @@ const (
 	deployInitrdFile                 = imageSharedDir + "/ironic-python-agent.initramfs"
 	deployKernelEnvVar               = "DEPLOY_KERNEL"
 	deployKernelFile                 = imageSharedDir + "/ironic-python-agent.kernel"
+	ironicRootfsEnvVar               = "IRONIC_ROOTFS_URL"
+	ironicRootfsFile                 = "ironic-python-agent.rootfs"
 	imageCustomizationConfigName     = "metal3-image-customization-config"
 	ironicAgentPullSecret            = "ironic-agent-pull-secret" // #nosec G101
 	ironicAgentPullSecretPath        = "/run/secrets/pull-secret" // #nosec G101
@@ -129,6 +131,16 @@ func getUrlFromIP(ipAddrs []string, port int) string {
 	return strings.Join(result, ",")
 }
 
+func getRootfsURL(ironicIPs []string) string {
+	for _, ip := range ironicIPs {
+		if ip != "" {
+			return fmt.Sprintf("http://%s/images/%s",
+				net.JoinHostPort(ip, baremetalHttpPort), ironicRootfsFile)
+		}
+	}
+	return ""
+}
+
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIPs []string) corev1.Container {
 	noProxy := ironicIPs
 	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{}, noProxy)
@@ -199,6 +211,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			corev1.EnvVar{
 				Name:  containerUserCaBundleEnvVar,
 				Value: containerUserCaBundlePath,
+			},
+			corev1.EnvVar{
+				Name:  ironicRootfsEnvVar,
+				Value: getRootfsURL(ironicIPs),
 			},
 			buildSSHKeyEnvVar(info.SSHKey)),
 		Ports: []corev1.ContainerPort{
