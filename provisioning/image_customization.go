@@ -52,6 +52,7 @@ const (
 	deployInitrdFile                 = imageSharedDir + "/ironic-python-agent.initramfs"
 	deployKernelEnvVar               = "DEPLOY_KERNEL"
 	deployKernelFile                 = imageSharedDir + "/ironic-python-agent.kernel"
+	imageSharedDirEnvVar             = "IMAGE_SHARED_DIR"
 	ironicRootfsEnvVar               = "IRONIC_ROOTFS_URL"
 	ironicRootfsFile                 = "ironic-python-agent.rootfs"
 	imageCustomizationConfigName     = "metal3-image-customization-config"
@@ -187,6 +188,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			corev1.EnvVar{
 				Name:  deployKernelEnvVar,
 				Value: deployKernelFile,
+			},
+			corev1.EnvVar{
+				Name:  imageSharedDirEnvVar,
+				Value: imageSharedDir,
 			},
 			corev1.EnvVar{
 				Name:  ironicBaseUrl,
