@@ -210,6 +210,14 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 			expectedMsg:   "provisioningIP",
 		},
 		{
+			// ProvisioningIP is not in the NetworkCIDR
+			name:          "InvalidUnmanagedProvisioningIPCIDR",
+			spec:          unmanagedProvisioning().ProvisioningIP("172.30.30.3").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkUnmanaged,
+			expectedMsg:   "is not in the range defined by the provisioningNetworkCIDR",
+		},
+		{
 			// Missing provisioning IP.
 			name:          "MissingProvisioningIP",
 			spec:          unmanagedProvisioning().ProvisioningIP("").ProvisioningDHCPExternal(true).build(),
