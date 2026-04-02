@@ -173,7 +173,9 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
-	container.Args = append(container.Args, tlsProfileToBMOArgs(info.TLSProfileSpec)...)
+	if info.TLSProfileSpec != nil {
+		container.Args = append(container.Args, tlsProfileToBMOArgs(*info.TLSProfileSpec)...)
+	}
 
 	if !info.BaremetalWebhookEnabled {
 		// Webhook dependencies are not ready, thus we disable webhook explicitly,

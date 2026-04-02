@@ -34,15 +34,18 @@ func (ns NetworkStackType) IpOption() string {
 }
 
 type ProvisioningInfo struct {
-	Client                  kubernetes.Interface
-	DynamicClient           dynamic.Interface
-	EventRecorder           events.Recorder
-	ProvConfig              *metal3iov1alpha1.Provisioning
-	Scheme                  *runtime.Scheme
-	Namespace               string
-	Images                  *Images
-	Proxy                   *configv1.Proxy
-	TLSProfileSpec          configv1.TLSProfileSpec
+	Client        kubernetes.Interface
+	DynamicClient dynamic.Interface
+	EventRecorder events.Recorder
+	ProvConfig    *metal3iov1alpha1.Provisioning
+	Scheme        *runtime.Scheme
+	Namespace     string
+	Images        *Images
+	Proxy         *configv1.Proxy
+	// TLSProfileSpec is the cluster-wide TLS security profile to enforce on
+	// managed components (Ironic, BMO). When nil, no TLS profile env vars or
+	// args are injected and components use their defaults.
+	TLSProfileSpec          *configv1.TLSProfileSpec
 	NetworkStack            NetworkStackType
 	MasterMacAddresses      []string
 	SSHKey                  string

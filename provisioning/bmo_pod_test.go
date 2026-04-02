@@ -136,11 +136,12 @@ func TestNewBMOContainers(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing tc : %s", tc.name)
 			info := &ProvisioningInfo{
-				Namespace:    "openshift-machine-api",
-				Images:       &images,
-				ProvConfig:   &metal3iov1alpha1.Provisioning{Spec: *tc.config},
-				SSHKey:       tc.sshkey,
-				NetworkStack: NetworkStackV6,
+				Namespace:      "openshift-machine-api",
+				Images:         &images,
+				ProvConfig:     &metal3iov1alpha1.Provisioning{Spec: *tc.config},
+				SSHKey:         tc.sshkey,
+				TLSProfileSpec: &osconfigv1.TLSProfileSpec{},
+				NetworkStack:   NetworkStackV6,
 				Client: fakekube.NewSimpleClientset(&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "openshift-machine-api",
@@ -189,6 +190,176 @@ func TestNewBMOContainers(t *testing.T) {
 					assert.EqualValues(t, tc.expectedContainers[i].Env[e], actualContainers[i].Env[e], "container name: ", tc.expectedContainers[i].Name)
 				}
 			}
+
+			// Verify TLS profile args are present (zero-value profile → --tls-min-version TLS12)
+			bmoContainer := actualContainers[0]
+			assert.Contains(t, bmoContainer.Args, "--tls-min-version",
+				"BMO container should have --tls-min-version when TLSProfileSpec is set")
+			for i, arg := range bmoContainer.Args {
+				if arg == "--tls-min-version" {
+					assert.Equal(t, "TLS12", bmoContainer.Args[i+1])
+					break
+				}
+			}
 		})
+	}
+}
+
+func TestBMOContainerTLSProfileArgs(t *testing.T) {
+	images := Images{
+		BaremetalOperator: expectedBaremetalOperator,
+	}
+
+	tCases := []struct {
+		name          string
+		profile       *osconfigv1.TLSProfileSpec
+		expectVersion string
+		expectCiphers bool
+	}{
+		{
+			name:          "Intermediate profile",
+			profile:       osconfigv1.TLSProfiles[osconfigv1.TLSProfileIntermediateType],
+			expectVersion: "TLS12",
+			expectCiphers: true,
+		},
+		{
+			name:          "Modern profile",
+			profile:       osconfigv1.TLSProfiles[osconfigv1.TLSProfileModernType],
+			expectVersion: "TLS13",
+			expectCiphers: false,
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			info := &ProvisioningInfo{
+				Namespace:      "openshift-machine-api",
+				Images:         &images,
+				ProvConfig:     &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
+				TLSProfileSpec: tc.profile,
+				NetworkStack:   NetworkStackV6,
+				Client: fakekube.NewSimpleClientset(&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-machine-api",
+						Labels: map[string]string{
+							"k8s-app":    metal3AppName,
+							cboLabelName: stateService,
+						},
+					},
+					Status: corev1.PodStatus{
+						PodIPs: []corev1.PodIP{
+							{IP: "192.168.111.22"},
+							{IP: "fd2e:6f44:5dd8:c956::16"},
+						},
+					}}),
+				OSClient: fakeconfigclientset.NewSimpleClientset(
+					&osconfigv1.Infrastructure{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "Infrastructure",
+							APIVersion: "config.openshift.io/v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "cluster",
+						},
+						Status: osconfigv1.InfrastructureStatus{
+							PlatformStatus: &osconfigv1.PlatformStatus{
+								Type: osconfigv1.BareMetalPlatformType,
+								BareMetal: &osconfigv1.BareMetalPlatformStatus{
+									APIServerInternalIPs: []string{
+										"192.168.1.1",
+										"fd2e:6f44:5dd8:c956::16",
+									},
+								},
+							},
+						},
+					}),
+			}
+
+			container, err := createContainerBaremetalOperator(info)
+			assert.NoError(t, err)
+
+			// Check --tls-min-version is present with the expected value
+			foundVersion := false
+			for i, arg := range container.Args {
+				if arg == "--tls-min-version" {
+					assert.Less(t, i+1, len(container.Args), "--tls-min-version must have a value")
+					assert.Equal(t, tc.expectVersion, container.Args[i+1])
+					foundVersion = true
+					break
+				}
+			}
+			assert.True(t, foundVersion, "BMO container should have --tls-min-version arg")
+
+			// Check --tls-cipher-suites presence
+			hasCiphers := false
+			for _, arg := range container.Args {
+				if arg == "--tls-cipher-suites" {
+					hasCiphers = true
+					break
+				}
+			}
+			if tc.expectCiphers {
+				assert.True(t, hasCiphers, "BMO container should have --tls-cipher-suites for %s", tc.name)
+			} else {
+				assert.False(t, hasCiphers, "BMO container should not have --tls-cipher-suites for %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestNewBMOContainersNoTLSProfile(t *testing.T) {
+	images := Images{
+		BaremetalOperator: expectedBaremetalOperator,
+	}
+	info := &ProvisioningInfo{
+		Namespace:    "openshift-machine-api",
+		Images:       &images,
+		ProvConfig:   &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
+		NetworkStack: NetworkStackV6,
+		Client: fakekube.NewSimpleClientset(&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "openshift-machine-api",
+				Labels: map[string]string{
+					"k8s-app":    metal3AppName,
+					cboLabelName: stateService,
+				},
+			},
+			Status: corev1.PodStatus{
+				PodIPs: []corev1.PodIP{
+					{IP: "192.168.111.22"},
+					{IP: "fd2e:6f44:5dd8:c956::16"},
+				},
+			}}),
+		OSClient: fakeconfigclientset.NewSimpleClientset(
+			&osconfigv1.Infrastructure{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Infrastructure",
+					APIVersion: "config.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Status: osconfigv1.InfrastructureStatus{
+					PlatformStatus: &osconfigv1.PlatformStatus{
+						Type: osconfigv1.BareMetalPlatformType,
+						BareMetal: &osconfigv1.BareMetalPlatformStatus{
+							APIServerInternalIPs: []string{
+								"192.168.1.1",
+								"fd2e:6f44:5dd8:c956::16",
+							},
+						},
+					},
+				},
+			}),
+	}
+
+	container, err := createContainerBaremetalOperator(info)
+	assert.NoError(t, err)
+
+	for _, arg := range container.Args {
+		assert.NotEqual(t, "--tls-min-version", arg,
+			"BMO container should not have --tls-min-version when TLSProfileSpec is nil")
+		assert.NotEqual(t, "--tls-cipher-suites", arg,
+			"BMO container should not have --tls-cipher-suites when TLSProfileSpec is nil")
 	}
 }
