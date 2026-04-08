@@ -137,6 +137,91 @@ func TestValidateManagedProvisioningConfig(t *testing.T) {
 			expectedMode:  ProvisioningNetworkManaged,
 			expectedMsg:   "unsupported scheme",
 		},
+		{
+			// Valid gateway in CIDR, outside DHCP range
+			name:          "ValidManagedWithGateway",
+			spec:          managedProvisioning().ProvisioningNetworkGateway("172.30.20.1").build(),
+			expectedError: false,
+			expectedMode:  ProvisioningNetworkManaged,
+		},
+		{
+			// Gateway with invalid IP format
+			name:          "InvalidManagedGatewayBadIP",
+			spec:          managedProvisioning().ProvisioningNetworkGateway("not-an-ip").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "could not parse provisioningNetworkGateway",
+		},
+		{
+			// Gateway outside CIDR
+			name:          "InvalidManagedGatewayOutsideCIDR",
+			spec:          managedProvisioning().ProvisioningNetworkGateway("192.168.1.1").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "is not in the range defined by the provisioningNetworkCIDR",
+		},
+		{
+			// Gateway same as provisioningIP
+			name:          "InvalidManagedGatewaySameAsProvisioningIP",
+			spec:          managedProvisioning().ProvisioningNetworkGateway("172.30.20.3").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "cannot be the same as provisioningIP",
+		},
+		{
+			// Gateway is network address
+			name:          "InvalidManagedGatewayIsNetworkAddress",
+			spec:          managedProvisioning().ProvisioningNetworkGateway("172.30.20.0").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "is not a usable host address",
+		},
+		{
+			// Gateway is broadcast address
+			name:          "InvalidManagedGatewayIsBroadcastAddress",
+			spec:          managedProvisioning().ProvisioningNetworkGateway("172.30.20.255").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "is not a usable host address",
+		},
+		{
+			// Gateway in DHCP range
+			name:          "InvalidManagedGatewayInDHCPRange",
+			spec:          managedProvisioning().ProvisioningNetworkGateway("172.30.20.50").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "value must be outside of the provisioningDHCPRange",
+		},
+		{
+			// Gateway on /31 network (RFC 3021 - all addresses usable)
+			name:          "ValidManagedGatewayOn31Network",
+			spec:          managedProvisioning().ProvisioningNetworkCIDR("172.30.20.0/31").ProvisioningDHCPRange("").ProvisioningNetworkGateway("172.30.20.0").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "provisioningDHCPRange is required in Managed mode",
+		},
+		{
+			// Gateway on /32 network (point-to-point - all addresses usable)
+			name:          "ValidManagedGatewayOn32Network",
+			spec:          managedProvisioning().ProvisioningNetworkCIDR("172.30.20.1/32").ProvisioningDHCPRange("").ProvisioningNetworkGateway("172.30.20.1").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkManaged,
+			expectedMsg:   "provisioningDHCPRange is required in Managed mode",
+		},
+		{
+			// Empty provisioningNetwork with gateway (defaults to Managed)
+			name:          "ValidImpliedManagedWithGateway",
+			spec:          managedProvisioning().ProvisioningNetwork("").ProvisioningNetworkGateway("172.30.20.1").build(),
+			expectedError: false,
+			expectedMode:  ProvisioningNetworkManaged,
+		},
+		{
+			// IPv6 gateway using subnet base address (should be allowed)
+			name:          "ValidManagedIPv6GatewaySubnetBase",
+			spec:          managedProvisioning().ProvisioningNetworkCIDR("fd00::/64").ProvisioningIP("fd00::2").ProvisioningDHCPRange("fd00::10,fd00::ff").ProvisioningNetworkGateway("fd00::").build(),
+			expectedError: false,
+			expectedMode:  ProvisioningNetworkManaged,
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -225,6 +310,14 @@ func TestValidateUnmanagedProvisioningConfig(t *testing.T) {
 			expectedMode:  ProvisioningNetworkUnmanaged,
 			expectedMsg:   "provisioningIP",
 		},
+		{
+			// Gateway set for Unmanaged provisioning network (should be rejected)
+			name:          "InvalidUnmanagedWithGateway",
+			spec:          unmanagedProvisioning().ProvisioningNetworkGateway("172.30.20.1").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkUnmanaged,
+			expectedMsg:   "provisioningNetworkGateway is only supported for Managed provisioning network",
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -299,6 +392,14 @@ func TestValidateDisabledProvisioningConfig(t *testing.T) {
 			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").ProvisioningInterface("em1").build(),
 			expectedError: false,
 			expectedMode:  ProvisioningNetworkDisabled,
+		},
+		{
+			// Gateway set for Disabled provisioning network (should be rejected)
+			name:          "InvalidDisabledWithGateway",
+			spec:          disabledProvisioning().ProvisioningNetworkGateway("172.30.20.1").build(),
+			expectedError: true,
+			expectedMode:  ProvisioningNetworkDisabled,
+			expectedMsg:   "provisioningNetworkGateway is only supported for Managed provisioning network",
 		},
 	}
 	for _, tc := range tCases {
@@ -484,5 +585,10 @@ func (pb *provisioningBuilder) ProvisioningNetwork(value string) *provisioningBu
 
 func (pb *provisioningBuilder) ProvisioningOSDownloadURL(value string) *provisioningBuilder {
 	pb.ProvisioningSpec.ProvisioningOSDownloadURL = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningNetworkGateway(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningNetworkGateway = value
 	return pb
 }
