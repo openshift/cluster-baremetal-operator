@@ -144,8 +144,8 @@ github.com/go-critic/go-critic/checkers/internal/astwalk
 github.com/go-critic/go-critic/checkers/internal/lintutil
 github.com/go-critic/go-critic/checkers/rulesdata
 github.com/go-critic/go-critic/framework/linter
-# github.com/go-errors/errors v1.0.1
-## explicit
+# github.com/go-errors/errors v1.5.1
+## explicit; go 1.14
 github.com/go-errors/errors
 # github.com/go-logr/logr v0.4.0
 ## explicit; go 1.14
