@@ -33,6 +33,7 @@ func TestGetImageVolumes(t *testing.T) {
 		ironicDataVolume,
 		baremetalSharedVolume, // emptyDir for /shared (needed for /shared/tmp)
 		ironicTmpVolume,       // emptyDir for /tmp (needed by libguestfs)
+		ironicTlsVolume,       // secret for TLS CA cert
 	}
 
 	actualVolumeNames := make([]string, len(volumes))
@@ -80,4 +81,47 @@ func TestCreateContainerImageCache(t *testing.T) {
 	assert.NotNil(t, container.SecurityContext.ReadOnlyRootFilesystem)
 	assert.True(t, *container.SecurityContext.ReadOnlyRootFilesystem,
 		"ReadOnlyRootFilesystem should be true")
+}
+
+func TestTransformURL(t *testing.T) {
+	testCases := []struct {
+		name          string
+		namespace     string
+		inputURL      string
+		expectedURL   string
+		expectedError bool
+	}{
+		{
+			name:        "RHCOS image URL",
+			namespace:   "openshift-machine-api",
+			inputURL:    "https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.2/42.80.20190725.1/rhcos-42.80.20190725.1-openstack.qcow2.gz",
+			expectedURL: "https://metal3-state.openshift-machine-api.svc.cluster.local:6388/images/rhcos-42.80.20190725.1-openstack.qcow2/rhcos-42.80.20190725.1-openstack.qcow2",
+		},
+		{
+			name:        "RHCOS image URL with different namespace",
+			namespace:   "test-namespace",
+			inputURL:    "https://example.com/rhcos-9.8.20260403-0-openstack.x86_64.qcow2",
+			expectedURL: "https://metal3-state.test-namespace.svc.cluster.local:6388/images/rhcos-9.8.20260403-0-openstack.x86_64.qcow2/rhcos-9.8.20260403-0-openstack.x86_64.qcow2",
+		},
+		{
+			name:          "Invalid URL",
+			namespace:     "openshift-machine-api",
+			inputURL:      "://invalid-url",
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := transformURL(tc.namespace, tc.inputURL)
+
+			if tc.expectedError {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedURL, result)
+		})
+	}
 }

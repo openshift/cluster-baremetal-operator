@@ -76,6 +76,14 @@ func getImageVolumes() []corev1.Volume {
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
+		{
+			Name: ironicTlsVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: tlsSecretName,
+				},
+			},
+		},
 	}
 
 	return volumes
@@ -107,14 +115,16 @@ func transformURL(targetNamespace, URL string) (string, error) {
 	// and makes it available to this second-level cache.
 	// e.g. ProvisioningOSDownloadURL: https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.2/42.80.20190725.1/rhcos-42.80.20190725.1-openstack.qcow2.gz?sha256sum=123
 	// The first level cache transforms the URL and makes it available for the second level cache at:
-	// http://metal3-state.openshift-machine-api:6180/images/rhcos-42.80.20190725.1-openstack.qcow2/cached-rhcos-42.80.20190725.1-openstack.qcow2
+	// https://metal3-state.openshift-machine-api:6388/images/rhcos-42.80.20190725.1-openstack.qcow2/cached-rhcos-42.80.20190725.1-openstack.qcow2
 	// Finally, the second-level cache will make it available at:
 	// http://cluster.local:6181/images/rhcos-42.80.20190725.1-openstack.qcow2/cached-rhcos-42.80.20190725.1-openstack.qcow2
 	// See https://github.com/openshift/ironic-rhcos-downloader for more details
+	// NOTE: Uses HTTPS and ironicPrivatePort (6388) because TLS is always enabled in OpenShift.
+	// Plain HTTP access to /images on port 6180 is blocked when TLS is enabled.
 	cacheURL := url.URL{
-		Scheme: "http",
+		Scheme: "https",
 		Host: net.JoinHostPort(fmt.Sprintf("%s.%s.svc.cluster.local", stateService, targetNamespace),
-			baremetalHttpPort),
+			fmt.Sprint(ironicPrivatePort)),
 		Path: fmt.Sprintf("/images/%s/%s", imageName, imageName),
 	}
 	return cacheURL.String(), nil
@@ -183,9 +193,18 @@ func newImageCacheInitContainers(info *ProvisioningInfo) ([]corev1.Container, er
 		return nil, err
 	}
 
-	return []corev1.Container{
-		createInitContainerMachineOsDownloader(info, newURL, false, false),
-	}, nil
+	initContainer := createInitContainerMachineOsDownloader(info, newURL, false, false)
+
+	// Add TLS volume mount for HTTPS access to metal3-state service
+	initContainer.VolumeMounts = append(initContainer.VolumeMounts, ironicTlsMount)
+
+	// Add CA cert path for curl to verify TLS
+	initContainer.Env = append(initContainer.Env, corev1.EnvVar{
+		Name:  ironicCertEnvVar,
+		Value: metal3TlsRootDir + "/ironic/ca.crt",
+	})
+
+	return []corev1.Container{initContainer}, nil
 }
 
 func newImageCacheContainers(images *Images, proxy *osconfigv1.Proxy) []corev1.Container {
