@@ -270,6 +270,7 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 		Data: map[string][]byte{
 			corev1.TLSCertKey:       cert.certificate,
 			corev1.TLSPrivateKeyKey: cert.privateKey,
+			"ca.crt":                cert.caCertificate,
 		},
 	}
 

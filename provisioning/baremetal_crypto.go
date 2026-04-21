@@ -28,8 +28,9 @@ import (
 )
 
 type TlsCertificate struct {
-	privateKey  []byte
-	certificate []byte
+	privateKey    []byte
+	certificate   []byte
+	caCertificate []byte
 }
 
 const (
@@ -79,9 +80,15 @@ func generateTlsCertificate(hosts sets.Set[string]) (TlsCertificate, error) {
 		return TlsCertificate{}, err
 	}
 
+	caCertBytes, _, err := ca.Config.GetPEMBytes()
+	if err != nil {
+		return TlsCertificate{}, err
+	}
+
 	return TlsCertificate{
-		privateKey:  keyBytes,
-		certificate: certBytes,
+		privateKey:    keyBytes,
+		certificate:   certBytes,
+		caCertificate: caCertBytes,
 	}, nil
 }
 
