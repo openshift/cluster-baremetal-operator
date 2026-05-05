@@ -76,7 +76,8 @@ func main() {
 	var imagesJSONFilename string
 
 	klog.InitFlags(nil)
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	// Changing default metrics interface to loopback, so that we don't bypass kube-rbac-proxy
+	flag.StringVar(&metricsAddr, "metrics-addr", "[::1]:8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
