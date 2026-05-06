@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -35,11 +36,14 @@ func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
 		},
 	}
 	// Always expose port 6385 since it's always available as a hostPort
-	// either directly from the main pod or via the ironic-proxy DaemonSet
+	// either directly from the main pod or via the ironic-proxy DaemonSet.
+	// When ironic-proxy is enabled (ironicPort == 6388), the metal3 pod listens
+	// on port 6388, so we need to set targetPort to route traffic correctly.
 	if ironicPort != baremetalIronicPort {
 		ports = append(ports, corev1.ServicePort{
-			Name: "ironic-api",
-			Port: int32(baremetalIronicPort),
+			Name:       "ironic-api",
+			Port:       int32(baremetalIronicPort),
+			TargetPort: intstr.FromInt32(int32(ironicPort)),
 		})
 	}
 	if !info.ProvConfig.Spec.DisableVirtualMediaTLS {
@@ -53,6 +57,9 @@ func newMetal3StateService(info *ProvisioningInfo) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      stateService,
 			Namespace: info.Namespace,
+			Labels: map[string]string{
+				cboLabelName: stateService,
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
