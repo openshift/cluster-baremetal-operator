@@ -34,6 +34,7 @@ func (r *Provisioning) SetupWebhookWithManager(mgr ctrl.Manager, features Enable
 	enabledFeatures = features
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
+		WithValidator(r).
 		Complete()
 }
 
