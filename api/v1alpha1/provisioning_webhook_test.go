@@ -60,7 +60,7 @@ func TestProvisioningValidateCreate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.p.Spec = *disabledProvisioning().build()
-			if _, err := tt.p.ValidateCreate(context.TODO(), nil); !errorContains(err, tt.wantErr) {
+			if _, err := tt.p.ValidateCreate(context.TODO(), tt.p); !errorContains(err, tt.wantErr) {
 				t.Errorf("Provisioning.ValidateCreate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

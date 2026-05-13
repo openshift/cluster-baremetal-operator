@@ -43,23 +43,26 @@ var _ webhook.CustomValidator = &Provisioning{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (r *Provisioning) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	provisioninglog.Info("validate create", "name", r.Name)
+	prov := obj.(*Provisioning)
+	provisioninglog.Info("validate create", "name", prov.Name)
 
-	if r.Name != ProvisioningSingletonName {
+	if prov.Name != ProvisioningSingletonName {
 		return nil, fmt.Errorf("Provisioning object is a singleton and must be named \"%s\"", ProvisioningSingletonName)
 	}
 
-	return nil, r.ValidateBaremetalProvisioningConfig(enabledFeatures)
+	return nil, prov.ValidateBaremetalProvisioningConfig(enabledFeatures)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *Provisioning) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	provisioninglog.Info("validate update", "name", r.Name)
-	return nil, r.ValidateBaremetalProvisioningConfig(enabledFeatures)
+	prov := newObj.(*Provisioning)
+	provisioninglog.Info("validate update", "name", prov.Name)
+	return nil, prov.ValidateBaremetalProvisioningConfig(enabledFeatures)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *Provisioning) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	provisioninglog.Info("validate delete", "name", r.Name)
+	prov := obj.(*Provisioning)
+	provisioninglog.Info("validate delete", "name", prov.Name)
 	return nil, nil
 }
