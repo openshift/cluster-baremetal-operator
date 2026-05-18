@@ -147,7 +147,7 @@ func GetIronicIPs(info *ProvisioningInfo) (ironicIPs []string, err error) {
 			return
 		}
 
-		if ironicIPs == nil {
+		if len(ironicIPs) == 0 {
 			ironicIPs = podIPs
 		}
 	} else {
