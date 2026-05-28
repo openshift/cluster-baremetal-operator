@@ -303,7 +303,7 @@ func TestWatchAllNamespaces(t *testing.T) {
 	}
 }
 
-func TestControlPlaneEndpointFQDNTrailingDot(t *testing.T) {
+func TestControlPlaneEndpointFQDNNoTrailingDot(t *testing.T) {
 	tCases := []struct {
 		name                 string
 		namespace            string
@@ -343,12 +343,12 @@ func TestControlPlaneEndpointFQDNTrailingDot(t *testing.T) {
 
 			endpoint := getControlPlaneEndpoint(info)
 
-			// Verify the endpoint contains trailing dot in FQDN
-			expectedPattern := fmt.Sprintf("https://metal3-state.%s.svc.cluster.local.:%d/v1/", tc.namespace, tc.expectedEndpointPort)
+			// Verify the endpoint does not contain trailing dot in FQDN.
+			expectedPattern := fmt.Sprintf("https://metal3-state.%s.svc.cluster.local:%d/v1/", tc.namespace, tc.expectedEndpointPort)
 			assert.Equal(t, expectedPattern, endpoint,
-				"Control plane endpoint FQDN should have trailing dot to prevent DNS search domain appending")
-			assert.Contains(t, endpoint, ".svc.cluster.local.:",
-				"FQDN should end with trailing dot before the port")
+				"Control plane endpoint FQDN should not have a trailing dot")
+			assert.NotContains(t, endpoint, ".svc.cluster.local.:",
+				"FQDN should not end with trailing dot before the port")
 		})
 	}
 }
