@@ -2,7 +2,13 @@ package baremetal
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -186,4 +192,90 @@ func getNicNameByVendor(vendor string) string {
 		g.Skip("Unsupported NIC vendor for name lookup: " + vendor)
 		return ""
 	}
+}
+
+// findBMHByNodeType finds a BareMetalHost that corresponds to a node of the specified type
+// nodeType should be "master" or "worker"
+// Returns the BMH name and corresponding node name, or empty strings if not found
+func findBMHByNodeType(oc *exutil.CLI, nodeType string) (string, string) {
+	allBMHs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get BMHs")
+
+	bmhList := strings.Fields(allBMHs)
+	if len(bmhList) == 0 {
+		e2e.Logf("No BMHs found")
+		return "", ""
+	}
+
+	roleLabel := "node-role.kubernetes.io/" + nodeType
+	for _, bmh := range bmhList {
+		nodeName, err := getNodeNameFromBMH(oc, bmh)
+		if err != nil {
+			e2e.Logf("BMH %s: could not resolve node name: %v, trying next", bmh, err)
+			continue
+		}
+
+		labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get labels for node %s", nodeName))
+		if !strings.Contains(labels, roleLabel) {
+			continue
+		}
+
+		e2e.Logf("Found BMH %s (role %s) corresponding to node %s", bmh, nodeType, nodeName)
+		return bmh, nodeName
+	}
+
+	e2e.Logf("No BMH found with node role %q", nodeType)
+	return "", ""
+}
+
+func redfishGet(targetURL, username, password string) (string, error) {
+	e2e.Logf("Executing Redfish GET to virtual media endpoint")
+
+	proxyFunc := http.ProxyFromEnvironment
+	if proxyURL := os.Getenv("HTTPS_PROXY"); proxyURL != "" {
+		if parsed, err := url.Parse(proxyURL); err == nil {
+			proxyFunc = http.ProxyURL(parsed)
+		}
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy:           proxyFunc,
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	req, err := http.NewRequest("GET", targetURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %v", err)
+	}
+	req.SetBasicAuth(username, password)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("redfish request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("redfish returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Image *string `json:"Image"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("failed to parse redfish response: %v", err)
+	}
+
+	if result.Image == nil {
+		return "null", nil
+	}
+	return *result.Image, nil
 }
