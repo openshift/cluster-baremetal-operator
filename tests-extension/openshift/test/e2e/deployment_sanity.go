@@ -14,16 +14,10 @@ import (
 var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc           = compat_otp.NewCLI("baremetal-deployment-sanity", compat_otp.KubeConfigPath())
-		iaasPlatform string
+		oc = compat_otp.NewCLI("baremetal-deployment-sanity", compat_otp.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		compat_otp.SkipForSNOCluster(oc)
-		iaasPlatform = compat_otp.CheckPlatform(oc)
-		if iaasPlatform != "baremetal" {
-			e2e.Logf("Cluster is: %s", iaasPlatform)
-			g.Skip("For Non-baremetal cluster , this is not supported!")
-		}
+		SkipIfNotBaremetalCluster(oc)
 	})
 	// author: jhajyahy@redhat.com
 	// port=yes - 99.7% pass rate (724 runs last 60 days)

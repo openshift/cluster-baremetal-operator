@@ -6,24 +6,17 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	compat_otp "github.com/openshift/origin/test/extended/util/compat_otp"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job on BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc           = compat_otp.NewCLI("baremetal-ironic-authentication", compat_otp.KubeConfigPath())
-		iaasPlatform string
-		endpointIP   []string
-		userPass     string
+		oc         = compat_otp.NewCLI("baremetal-ironic-authentication", compat_otp.KubeConfigPath())
+		endpointIP []string
+		userPass   string
 	)
 	g.BeforeEach(func() {
-		compat_otp.SkipForSNOCluster(oc)
-		iaasPlatform = compat_otp.CheckPlatform(oc)
-		if !(iaasPlatform == "baremetal") {
-			e2e.Logf("Cluster is: %s", iaasPlatform)
-			g.Skip("For Non-baremetal cluster , this is not supported!")
-		}
+		SkipIfNotBaremetalCluster(oc)
 
 		user := getUserFromSecret(oc, machineAPINamespace, "metal3-ironic-password")
 		pass := getPassFromSecret(oc, machineAPINamespace, "metal3-ironic-password")
