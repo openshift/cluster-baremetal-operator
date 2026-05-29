@@ -14,6 +14,7 @@ import (
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/origin/test/extended/util"
 	compat_otp "github.com/openshift/origin/test/extended/util/compat_otp"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -24,6 +25,16 @@ const (
 	proxyFile         = "proxy"
 )
 
+var (
+	// originalProxyEnv stores the original proxy environment variable values
+	// Key is the environment variable name, Value is the original value (empty string means unset)
+	// The second bool indicates whether the variable was set at all
+	originalProxyEnv = make(map[string]struct {
+		value string
+		wasSet bool
+	})
+)
+
 // SkipIfNotBaremetalCluster skips the test if the cluster is SNO or not baremetal platform
 // This is a common helper for baremetal tests that need both checks
 func SkipIfNotBaremetalCluster(oc *exutil.CLI) {
@@ -32,6 +43,14 @@ func SkipIfNotBaremetalCluster(oc *exutil.CLI) {
 	if iaasPlatform != "baremetal" {
 		e2e.Logf("Cluster is: %s", iaasPlatform)
 		g.Skip("This is not supported for non-baremetal cluster!")
+	}
+}
+
+func SkipIfNotVirtualMediaCluster(oc *exutil.CLI) {
+	provNetwork, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("provisioning", "provisioning-configuration", "-o=jsonpath={.spec.provisioningNetwork}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get provisioningNetwork")
+	if strings.ToLower(strings.TrimSpace(provNetwork)) != "disabled" {
+		g.Skip(fmt.Sprintf("These tests require cluster installed with virtualmedia (provisioningNetwork: Disabled). Current provisioningNetwork: %s", provNetwork))
 	}
 }
 
@@ -149,24 +168,55 @@ func setProxyEnv() {
 
 	proxyURL := strings.TrimSpace(string(proxyData))
 	if proxyURL != "" {
+		// Save original values before setting new ones
+		proxyVars := []string{"HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"}
+		for _, envVar := range proxyVars {
+			if _, exists := originalProxyEnv[envVar]; !exists {
+				value, wasSet := os.LookupEnv(envVar)
+				originalProxyEnv[envVar] = struct {
+					value string
+					wasSet bool
+				}{value, wasSet}
+			}
+		}
+
+		// Set both uppercase and lowercase versions (some tools use one or the other)
 		if err := os.Setenv("HTTP_PROXY", proxyURL); err != nil {
 			e2e.Failf("Failed to set HTTP_PROXY: %v", err)
+		}
+		if err := os.Setenv("http_proxy", proxyURL); err != nil {
+			e2e.Failf("Failed to set http_proxy: %v", err)
 		}
 		if err := os.Setenv("HTTPS_PROXY", proxyURL); err != nil {
 			e2e.Failf("Failed to set HTTPS_PROXY: %v", err)
 		}
+		if err := os.Setenv("https_proxy", proxyURL); err != nil {
+			e2e.Failf("Failed to set https_proxy: %v", err)
+		}
 		if err := os.Setenv("NO_PROXY", "localhost,127.0.0.1,.svc,.cluster.local"); err != nil {
 			e2e.Failf("Failed to set NO_PROXY: %v", err)
 		}
-		e2e.Logf("Proxy environment variables set: HTTP_PROXY=%s", proxyURL)
+		if err := os.Setenv("no_proxy", "localhost,127.0.0.1,.svc,.cluster.local"); err != nil {
+			e2e.Failf("Failed to set no_proxy: %v", err)
+		}
+		e2e.Logf("Proxy environment variables configured")
 	}
 }
 
 func unsetProxyEnv() {
-	os.Unsetenv("HTTP_PROXY")
-	os.Unsetenv("HTTPS_PROXY")
-	os.Unsetenv("NO_PROXY")
-	e2e.Logf("Proxy environment variables unset")
+	// Restore original proxy environment variable values
+	proxyVars := []string{"HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"}
+	for _, envVar := range proxyVars {
+		if original, exists := originalProxyEnv[envVar]; exists {
+			if original.wasSet {
+				os.Setenv(envVar, original.value)
+			} else {
+				os.Unsetenv(envVar)
+			}
+			delete(originalProxyEnv, envVar)
+		}
+	}
+	e2e.Logf("Proxy environment variables restored")
 }
 
 func CopyToFile(fromPath string, toFilename string) string {
