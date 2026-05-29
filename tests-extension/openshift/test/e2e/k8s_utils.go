@@ -240,3 +240,26 @@ func checkNodeStatus(oc *exutil.CLI, pollIntervalSec time.Duration, pollDuration
 	}
 	return errNode
 }
+
+// getReadyWorkerCount returns the number of ready and schedulable worker nodes in the cluster
+func getReadyWorkerCount(oc *exutil.CLI) int {
+	// Get worker nodes with STATUS column to check readiness and schedulability
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "--no-headers").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	readyCount := 0
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for _, line := range lines {
+		// Parse STATUS column (second field after NAME)
+		// STATUS can be: Ready, NotReady, Ready,SchedulingDisabled, etc.
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			status := fields[1]
+			// Only count nodes that are Ready and NOT cordoned (SchedulingDisabled)
+			if strings.Contains(status, "Ready") && !strings.Contains(status, "NotReady") && !strings.Contains(status, "SchedulingDisabled") {
+				readyCount++
+			}
+		}
+	}
+	return readyCount
+}
