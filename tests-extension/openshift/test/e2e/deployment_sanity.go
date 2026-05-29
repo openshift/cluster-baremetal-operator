@@ -11,7 +11,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
+var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = compat_otp.NewCLI("baremetal-deployment-sanity", compat_otp.KubeConfigPath())
@@ -20,7 +20,6 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		SkipIfNotBaremetalCluster(oc)
 	})
 	// author: jhajyahy@redhat.com
-	// port=yes - 99.7% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-29146-Verify that all clusteroperators are Available", func() {
 		g.By("Running oc get clusteroperators")
 		res, err := checkOperatorsRunning(oc)
@@ -29,7 +28,6 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 100.0% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-29719-Verify that all nodes are up and running", func() {
 		g.By("Running oc get nodes")
 		res, err := checkNodesRunning(oc)
@@ -39,7 +37,6 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 99.7% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-32361-Verify that deployment exists and is not empty", func() {
 		g.By("Create new namespace")
 		oc.SetupProject()
@@ -63,7 +60,6 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 99.9% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-34195-Verify all pods replicas are running on workers only", func() {
 		g.By("Create new namespace")
 		oc.SetupProject()
@@ -104,7 +100,6 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 99.7% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-39126-Verify maximum CPU usage limit hasn't reached on each of the nodes", func() {
 		g.By("Running oc get nodes")
 		cpuExceededNodes := []string{}
@@ -124,7 +119,6 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 99.6% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-39125-Verify that every node memory is sufficient", func() {
 		g.By("Running oc get nodes")
 		outOfMemoryNodes := []string{}
@@ -142,24 +136,3 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		o.Expect(outOfMemoryNodes).Should(o.BeEmpty(), "These nodes does not meet minimum required memory: %s", outOfMemoryNodes)
 	})
 })
-
-// var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal Dedicated", func() {
-// 	defer g.GinkgoRecover()
-// 	var (
-// 		oc           = compat_otp.NewCLI("baremetal-deployment-sanity")
-
-// 	)
-// 	g.BeforeEach(func() {
-
-// 	})
-
-// 	g.AfterEach(func() {
-
-// 	})
-
-// 	// author: sgoveas@redhat.com
-// 	g.It("Author:sgoveas--Medium-12345-example case", func() {
-
-// 	})
-
-// })

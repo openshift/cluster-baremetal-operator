@@ -10,7 +10,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
+var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = compat_otp.NewCLI("readonly-filesystem", compat_otp.KubeConfigPath())
@@ -56,8 +56,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 
 				if touchErr == nil {
 					// Touch succeeded - filesystem is writable (FAIL)
-					errMsg := fmt.Sprintf("FAIL: %s container in %s pod has writable filesystem", containerName, podName)
-					e2e.Logf(errMsg)
+					e2e.Logf("FAIL: %s container in %s pod has writable filesystem", containerName, podName)
 					failedContainers = append(failedContainers, fmt.Sprintf("%s/%s", podName, containerName))
 				} else {
 					// Touch failed - check if it's a read-only filesystem error
@@ -67,8 +66,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 						e2e.Logf("PASS: %s container in %s pod has read-only filesystem", containerName, podName)
 					} else {
 						// Other error (exec/connection/binary missing) - treat as test failure
-						errMsg := fmt.Sprintf("FAIL: %s container in %s pod - unexpected error (not RO filesystem): %v, output: %s", containerName, podName, touchErr, touchOutput)
-						e2e.Logf(errMsg)
+						e2e.Logf("FAIL: %s container in %s pod - unexpected error (not RO filesystem): %v, output: %s", containerName, podName, touchErr, touchOutput)
 						failedContainers = append(failedContainers, fmt.Sprintf("%s/%s (error: %v)", podName, containerName, touchErr))
 					}
 				}
