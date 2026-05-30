@@ -4,9 +4,11 @@ FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS 
 WORKDIR /go/src/github.com/openshift/cluster-baremetal-operator
 COPY . .
 RUN make build
+RUN make build-tests
 
 FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/bin/cluster-baremetal-operator /usr/bin/cluster-baremetal-operator
+COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/bin/cluster-baremetal-tests-ext.gz /usr/bin/cluster-baremetal-tests-ext.gz
 COPY --from=builder /go/src/github.com/openshift/cluster-baremetal-operator/manifests /manifests
 LABEL io.openshift.release.operator=true
 ENTRYPOINT ["/usr/bin/cluster-baremetal-operator"]

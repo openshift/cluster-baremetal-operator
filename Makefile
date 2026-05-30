@@ -35,6 +35,21 @@ test: generate lint manifests unit
 build:
 	go build -o bin/cluster-baremetal-operator main.go
 
+# Build OTE test extension binary
+# Test extension is a separate Go module in cmd/cluster-baremetal-tests-ext/ with its own go.mod and vendor/
+# This keeps OTE dependencies isolated from the main operator module
+# GONOSUMDB bypasses checksum verification for origin module - required because origin uses pseudo-versions not in public checksum database
+# CGO_ENABLED=0 produces static binary for container compatibility
+# GO_COMPLIANCE_POLICY="exempt_all" is OpenShift-specific variable that exempts test binaries from internal compliance checks
+#   - Used consistently across OpenShift test extensions (see openshift-tests, oc-tests-ext, etc.)
+#   - Blanket exemption is standard for test-only binaries that don't ship to customers
+#   - Test extensions run in CI environments only, not in production clusters
+build-tests:
+	cd cmd/cluster-baremetal-tests-ext && \
+	GONOSUMDB="github.com/openshift/origin" CGO_ENABLED=0 GO_COMPLIANCE_POLICY="exempt_all" \
+	go build -mod=vendor -o ../../bin/cluster-baremetal-tests-ext .
+	gzip -f bin/cluster-baremetal-tests-ext
+
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate manifests
 	go run ./main.go -images-json $(IMAGES_JSON)
