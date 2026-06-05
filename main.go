@@ -24,7 +24,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -104,22 +103,25 @@ func main() {
 	tlsFetchCtx, tlsFetchCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer tlsFetchCancel()
 
-	apiServer := &osconfigv1.APIServer{}
-	if err := k8sClient.Get(tlsFetchCtx, types.NamespacedName{Name: "cluster"}, apiServer); err != nil {
-		klog.ErrorS(err, "unable to read APIServer CR")
+	var webhookTLSOpts []func(*tls.Config)
+	var tlsProfileSpec osconfigv1.TLSProfileSpec
+	var tlsAdherencePolicy osconfigv1.TLSAdherencePolicy
+
+	if tlsAdherencePolicy, err = utiltls.FetchAPIServerTLSAdherencePolicy(tlsFetchCtx, k8sClient); err != nil {
+		klog.ErrorS(err, "unable to get TLS Adherence Policy from APIServer")
 		os.Exit(1)
 	}
 
-	honorTLSProfile := provisioning.ShouldHonorClusterTLSProfile(apiServer.Spec.TLSAdherence)
+	// Always fetch the current TLS profile so the SecurityProfileWatcher is
+	// seeded with the real value, regardless of whether enforcement is active.
+	tlsProfileSpec, err = utiltls.FetchAPIServerTLSProfile(tlsFetchCtx, k8sClient)
+	if err != nil {
+		klog.ErrorS(err, "unable to get TLS profile from APIServer")
+		os.Exit(1)
+	}
 
-	var webhookTLSOpts []func(*tls.Config)
-	var tlsProfileSpec osconfigv1.TLSProfileSpec
-	if honorTLSProfile {
-		tlsProfileSpec, err = utiltls.FetchAPIServerTLSProfile(tlsFetchCtx, k8sClient)
-		if err != nil {
-			klog.ErrorS(err, "unable to get TLS profile from APIServer")
-			os.Exit(1)
-		}
+	// Only apply the TLS profile to the webhook server when adherence is enforced.
+	if provisioning.ShouldHonorClusterTLSProfile(tlsAdherencePolicy) {
 		tlsConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
 		if len(unsupportedCiphers) > 0 {
 			klog.Infof("TLS configuration contains unsupported ciphers that will be ignored: %v", unsupportedCiphers)
@@ -242,24 +244,34 @@ func main() {
 	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 	defer cancel()
 
-	// Set up the TLS security profile watcher controller when TLS adherence
-	// requires enforcement. This triggers a graceful shutdown when the TLS
-	// profile changes, so that CBO restarts with the new TLS configuration.
-	if honorTLSProfile {
-		if err := (&utiltls.SecurityProfileWatcher{
-			Client:                mgr.GetClient(),
-			InitialTLSProfileSpec: tlsProfileSpec,
-			OnProfileChange: func(ctx context.Context, oldSpec, newSpec osconfigv1.TLSProfileSpec) {
-				klog.Infof("TLS profile has changed, initiating a shutdown to reload it. %q: %+v, %q: %+v",
-					"old profile", oldSpec,
-					"new profile", newSpec,
-				)
-				cancel()
-			},
-		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "unable to create TLS security profile watcher controller")
-			os.Exit(1)
+	// Watch the APIServer CR for changes to both tlsAdherence and the TLS
+	// security profile. Always registered so that transitions in either
+	// direction (e.g. tlsAdherence "" -> "StrictAllComponents" or vice
+	// versa) trigger a graceful restart.
+	tlsWatcher := &utiltls.SecurityProfileWatcher{
+		Client:                    mgr.GetClient(),
+		InitialTLSProfileSpec:     tlsProfileSpec,
+		InitialTLSAdherencePolicy: tlsAdherencePolicy,
+		OnAdherencePolicyChange: func(ctx context.Context, tlsAdherencePolicy, newTlsAdherencePolicy osconfigv1.TLSAdherencePolicy) {
+			klog.Infof("TLS adherence policy has changed, initiating a shutdown to reload it. %q: %+v, %q: %+v",
+				"old TLS Adherence policy", tlsAdherencePolicy,
+				"new TLS Adherence policy", newTlsAdherencePolicy,
+			)
+			cancel()
+		},
+	}
+
+	// Only add watcher for TLS profile if TLS Adherence is enabled
+	if provisioning.ShouldHonorClusterTLSProfile(tlsAdherencePolicy) {
+		tlsWatcher.OnProfileChange = func(ctx context.Context, old, new osconfigv1.TLSProfileSpec) {
+			klog.Infof("TLS profile changed, shutting down")
+			cancel()
 		}
+	}
+
+	if err := tlsWatcher.SetupWithManager(mgr); err != nil {
+		klog.ErrorS(err, "unable to create TLS config watcher controller")
+		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
