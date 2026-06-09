@@ -10,7 +10,7 @@ FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS t
 WORKDIR /go/src/github.com/openshift/cluster-baremetal-operator
 COPY tests-extension/ ./tests-extension/
 RUN cd tests-extension && \
-    make build && \
+    GOMAXPROCS=1 make build && \
     cd bin && \
     tar -czvf cluster-baremetal-operator-test-extension.tar.gz cluster-baremetal-operator-tests-ext && \
     rm -f cluster-baremetal-operator-tests-ext
