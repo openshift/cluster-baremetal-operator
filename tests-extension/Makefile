@@ -5,8 +5,8 @@ build:
 	@echo "Building extension binary..."
 	@cd openshift/test/e2e && $(MAKE) -f bindata.mk update-bindata
 	@mkdir -p bin
-	@echo "Building with limited parallelism to reduce memory usage..."
-	GOTOOLCHAIN=auto GOSUMDB=sum.golang.org go build -mod=vendor -p=1 -o $(BINARY) ./cmd
+	@echo "Building with reduced memory footprint (disabled optimizations)..."
+	GOMEMLIMIT=2GiB GOTOOLCHAIN=auto GOSUMDB=sum.golang.org go build -mod=vendor -p=1 -gcflags="all=-N -l" -o $(BINARY) ./cmd
 	@echo "✅ Binary built: $(BINARY)"
 
 .PHONY: clean
