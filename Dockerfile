@@ -1,3 +1,6 @@
+# URGENT! ART metadata configuration has a different number of FROMs
+# than this Dockerfile. ART will be unable to build your component or
+# reconcile this Dockerfile until that disparity is addressed.
 # When bumping the Go version, don't forget to update the configuration of the
 # CI jobs in openshift/release.
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS builder
