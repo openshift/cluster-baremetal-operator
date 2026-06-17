@@ -128,12 +128,12 @@ func getPodStatus(oc *exutil.CLI, namespace string, podName string) string {
 }
 
 func checkOperator(oc *exutil.CLI, operatorName string) (bool, error) {
-	output, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(output, "True") {
-		return true, nil
+	// Check specifically that Available=True (not just any "True" in the output)
+	available, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName, "-o=jsonpath={.status.conditions[?(@.type=='Available')].status}").Output()
+	if err != nil {
+		return false, err
 	}
-	return false, nil
+	return available == "True", nil
 }
 
 func waitForPodNotFound(oc *exutil.CLI, podName string, nameSpace string) {
