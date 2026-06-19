@@ -398,13 +398,11 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	ironicProxyState, err := provisioning.GetIronicProxyState(r.KubeClient.AppsV1(), ComponentNamespace, info)
 	err = r.checkDaemonSet(ironicProxyState, err, "ironic proxy", func() error { return provisioning.DeleteIronicProxy(info) })
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	if deploymentState == appsv1.DeploymentAvailable && bmoState == appsv1.DeploymentAvailable {
 		msg := getSuccessStatus(imageCacheState, ironicProxyState)
 		if msg != "" {
