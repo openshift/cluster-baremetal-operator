@@ -1,0 +1,142 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-no-ssl
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        server_name _;
+
+        location / {
+            root /usr/share/nginx/html;
+            autoindex on;
+        }
+    }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    fsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  nodeSelector:
+    nginx-node: "true"
+  volumes:
+    - name: firmware-dir
+      emptyDir: {}  # Empty directory to hold the downloaded firmware files
+    - name: firmware-config
+      configMap:
+        name: firmware-download
+    - name: nginx-conf
+      configMap:
+        name: nginx-no-ssl
+    - name: nginx-cache
+      emptyDir: {}
+    - name: nginx-run
+      emptyDir: {}
+  initContainers:
+    - name: init-download-firmware
+      image: ghcr.io/crazy-max/7zip@sha256:7ce404b6494aef25e270de3ceaa4f5f0c262d538b4fe4e4917ae65ff48cbe705
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: false
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+      env:
+        - name: FIRMWARE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: firmware-download
+              key: firmware_url
+        - name: COMPONENT
+          valueFrom:
+            configMapKeyRef:
+              name: firmware-download
+              key: component
+      command:
+      - /bin/sh
+      - -c
+      - |
+        set -xe
+        rm -f /fw/*
+        wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36" \
+          --directory-prefix=/fw \
+          "${FIRMWARE_URL}"
+        
+        if [ "${COMPONENT}" != "nic" ]; then
+          7za e /fw/* -o/fw
+        fi
+      volumeMounts:
+        - name: firmware-config
+          mountPath: /config
+        - name: firmware-dir
+          mountPath: /fw
+  containers:
+    - name: nginx
+      image: quay.io/openshifttest/nginx-alpine@sha256:3414bba0290e5f80241edabcda61ec5775040bb2736cbb8378c242ffa0916c28
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: false
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 5
+      volumeMounts:
+        - name: firmware-dir
+          mountPath: /usr/share/nginx/html
+        - name: nginx-conf
+          mountPath: /etc/nginx/conf.d/ 
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

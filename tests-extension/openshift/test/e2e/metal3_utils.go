@@ -187,3 +187,17 @@ func getNicNameByVendor(vendor string) string {
 		return ""
 	}
 }
+
+// getBypathDeviceName retrieves the first storage device's by-path name from a BareMetalHost
+func getBypathDeviceName(oc *exutil.CLI, bmhName string) string {
+	deviceName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.status.hardware.storage[0].name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get device name for BMH: %s", bmhName)
+	o.Expect(deviceName).NotTo(o.BeEmpty(), "Device name should not be empty for BMH: %s", bmhName)
+	return deviceName
+}
+
+// getHfsByVendor returns vendor-specific HostFirmwareSettings field and its toggled value
+// This is a convenience wrapper around getHfsToggleValue for tests that use this naming
+func getHfsByVendor(oc *exutil.CLI, vendor, machineAPINamespace, host string) (string, string, error) {
+	return getHfsToggleValue(oc, vendor, machineAPINamespace, host)
+}
