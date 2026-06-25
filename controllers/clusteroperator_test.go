@@ -220,6 +220,105 @@ func TestEnsureClusterOperator(t *testing.T) {
 	}
 }
 
+func TestEnsureClusterOperatorVersionUpgrade(t *testing.T) {
+	testCases := []struct {
+		name             string
+		existingVersions []osconfigv1.OperandVersion
+		newVersion       string
+		expectedStatus   osconfigv1.ConditionStatus
+		expectedReason   string
+		expectedMessage  string
+	}{
+		{
+			name: "Version change sets Progressing=True",
+			existingVersions: []osconfigv1.OperandVersion{
+				{Name: "operator", Version: "old-version"},
+			},
+			newVersion:      "new-version",
+			expectedStatus:  osconfigv1.ConditionTrue,
+			expectedReason:  string(ReasonSyncing),
+			expectedMessage: "Upgrading to release version new-version",
+		},
+		{
+			name:             "Initial install does not set Progressing=True",
+			existingVersions: []osconfigv1.OperandVersion{},
+			newVersion:       "new-version",
+			expectedStatus:   osconfigv1.ConditionFalse,
+			expectedReason:   "",
+			expectedMessage:  "",
+		},
+		{
+			name: "Same version does not set Progressing=True",
+			existingVersions: []osconfigv1.OperandVersion{
+				{Name: "operator", Version: "same-version"},
+			},
+			newVersion:      "same-version",
+			expectedStatus:  osconfigv1.ConditionFalse,
+			expectedReason:  "",
+			expectedMessage: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			existingCO := &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultStatusConditions(),
+					RelatedObjects: relatedObjects(),
+					Versions:       tc.existingVersions,
+				},
+			}
+
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+			reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(existingCO)
+			reconciler.ReleaseVersion = tc.newVersion
+
+			err := reconciler.ensureClusterOperator()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			co, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			var progressingCond *osconfigv1.ClusterOperatorStatusCondition
+			for i := range co.Status.Conditions {
+				if co.Status.Conditions[i].Type == osconfigv1.OperatorProgressing {
+					progressingCond = &co.Status.Conditions[i]
+					break
+				}
+			}
+			if progressingCond == nil {
+				t.Fatal("Progressing condition not found")
+			}
+
+			if progressingCond.Status != tc.expectedStatus {
+				t.Errorf("expected Progressing=%s, got %s", tc.expectedStatus, progressingCond.Status)
+			}
+
+			if progressingCond.Reason != tc.expectedReason {
+				t.Errorf("expected reason %q, got %q", tc.expectedReason, progressingCond.Reason)
+			}
+
+			if progressingCond.Message != tc.expectedMessage {
+				t.Errorf("expected message %q, got %q", tc.expectedMessage, progressingCond.Message)
+			}
+
+			if tc.newVersion != "" {
+				expectedVersions := []osconfigv1.OperandVersion{{Name: "operator", Version: tc.newVersion}}
+				if !equality.Semantic.DeepEqual(co.Status.Versions, expectedVersions) {
+					t.Errorf("expected versions %v, got %v", expectedVersions, co.Status.Versions)
+				}
+			}
+		})
+	}
+}
+
 func normalizeTransitionTimes(got, expected osconfigv1.ClusterOperatorStatus) {
 	now := metav1.NewTime(time.Now())
 

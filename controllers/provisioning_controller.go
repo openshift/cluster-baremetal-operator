@@ -348,6 +348,10 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, err
 		}
 		if updated {
+			klog.Info("resource updated during reconcile, setting Progressing=True")
+			if err := r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources"); err != nil {
+				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, err)
+			}
 			return result, r.Client.Status().Update(ctx, baremetalConfig)
 		}
 	}
@@ -369,10 +373,19 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 		return ctrl.Result{}, errors.Wrap(err, "failed to determine state of metal3 deployment")
 	}
+	rolloutInProgress := false
 	if deploymentState == appsv1.DeploymentReplicaFailure {
 		err = r.updateCOStatus(ReasonDeployTimedOut, "metal3 deployment rollout taking too long", "")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
+		}
+	}
+	if deploymentState == appsv1.DeploymentProgressing {
+		rolloutInProgress = true
+		klog.Info("metal3 deployment is rolling out, setting Progressing=True")
+		err = r.updateCOStatus(ReasonSyncing, "", "metal3 deployment is rolling out")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, err)
 		}
 	}
 
@@ -391,6 +404,14 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 	}
+	if bmoState == appsv1.DeploymentProgressing {
+		rolloutInProgress = true
+		klog.Info("baremetal-operator deployment is rolling out, setting Progressing=True")
+		err = r.updateCOStatus(ReasonSyncing, "", "baremetal-operator deployment is rolling out")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, err)
+		}
+	}
 
 	// Determine the status of the image cache DaemonSet
 	imageCacheState, err := provisioning.GetImageCacheState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
@@ -398,19 +419,35 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if imageCacheState == provisioning.DaemonSetProgressing {
+		rolloutInProgress = true
+		klog.Info("metal3 image cache is rolling out, setting Progressing=True")
+		err = r.updateCOStatus(ReasonSyncing, "", "metal3 image cache is rolling out")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, err)
+		}
+	}
 
 	ironicProxyState, err := provisioning.GetIronicProxyState(r.KubeClient.AppsV1(), ComponentNamespace, info)
 	err = r.checkDaemonSet(ironicProxyState, err, "ironic proxy", func() error { return provisioning.DeleteIronicProxy(info) })
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if ironicProxyState == provisioning.DaemonSetProgressing {
+		rolloutInProgress = true
+		klog.Info("ironic proxy is rolling out, setting Progressing=True")
+		err = r.updateCOStatus(ReasonSyncing, "", "ironic proxy is rolling out")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, err)
+		}
+	}
 
-	if deploymentState == appsv1.DeploymentAvailable && bmoState == appsv1.DeploymentAvailable {
+	if !rolloutInProgress && deploymentState == appsv1.DeploymentAvailable && bmoState == appsv1.DeploymentAvailable {
 		msg := getSuccessStatus(imageCacheState, ironicProxyState)
 		if msg != "" {
 			err = r.updateCOStatus(ReasonComplete, msg, "")
 			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
+				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Complete state: %w", clusterOperatorName, err)
 			}
 		}
 	}
