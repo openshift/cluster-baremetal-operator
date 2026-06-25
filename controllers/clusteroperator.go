@@ -182,9 +182,13 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 
 // ensureClusterOperator makes sure that the CO exists
 func (r *ProvisioningReconciler) ensureClusterOperator() error {
+	klog.InfoS("ensureClusterOperator: upgrade-progressing code is present",
+		"releaseVersion", r.ReleaseVersion)
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+	justCreated := false
 	if k8serrors.IsNotFound(err) {
 		co, err = r.createClusterOperator()
+		justCreated = true
 	}
 	if err != nil {
 		return err
@@ -197,6 +201,15 @@ func (r *ProvisioningReconciler) ensureClusterOperator() error {
 	}
 	if !equality.Semantic.DeepEqual(co.Status.Versions, operandVersions(r.ReleaseVersion)) {
 		needsUpdate = true
+		if len(co.Status.Versions) > 0 && !justCreated {
+			klog.InfoS("Version changed, setting Progressing=True",
+				"old", co.Status.Versions, "new", operandVersions(r.ReleaseVersion))
+			v1helpers.SetStatusCondition(&co.Status.Conditions,
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue,
+					string(ReasonSyncing),
+					fmt.Sprintf("Upgrading to release version %s", r.ReleaseVersion)),
+				clock.RealClock{})
+		}
 		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 	if len(co.Status.Conditions) == 0 {
