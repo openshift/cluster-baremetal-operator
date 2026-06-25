@@ -136,17 +136,26 @@ func checkOperator(oc *exutil.CLI, operatorName string) (bool, error) {
 	return available == "True", nil
 }
 
-func waitForPodNotFound(oc *exutil.CLI, podName string, nameSpace string) {
-	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := oc.AsAdmin().Run("get").Args("-n", nameSpace, "pod", podName).Output()
+// waitForPodsWithPrefixDeleted waits for all pods with names starting with the prefix to be deleted
+func waitForPodsWithPrefixDeleted(oc *exutil.CLI, podPrefix string, nameSpace string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		output, err := oc.AsAdmin().Run("get").Args("pods", "-n", nameSpace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		if err != nil {
-			e2e.Logf("pod %v doesn't exist", podName)
-			return true, nil
+			e2e.Logf("Error getting pods: %v", err)
+			return false, err
 		}
-		e2e.Logf("pod %v exist, Trying again", podName)
-		return false, nil
+		// Split output into individual pod names and check each with HasPrefix
+		podNames := strings.Fields(output)
+		for _, podName := range podNames {
+			if strings.HasPrefix(podName, podPrefix) {
+				e2e.Logf("Pods with prefix %q still exist in namespace %s, waiting...", podPrefix, nameSpace)
+				return false, nil
+			}
+		}
+		e2e.Logf("No pods with prefix %q found in namespace %s", podPrefix, nameSpace)
+		return true, nil
 	})
-	compat_otp.AssertWaitPollNoErr(err, "The test deployment job is running")
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("Pods with prefix %q were not deleted within timeout", podPrefix))
 }
 
 func getUserFromSecret(oc *exutil.CLI, namespace string, secretName string) string {
