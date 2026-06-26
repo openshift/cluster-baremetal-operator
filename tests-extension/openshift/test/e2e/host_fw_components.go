@@ -14,7 +14,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on BareMetal", func() {
+var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc           = compat_otp.NewCLI("host-firmware-components", compat_otp.KubeConfigPath())
@@ -180,7 +180,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		g.By("Get node name from BMH mapping")
 		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", machineAPINamespace, machine, "-o=jsonpath={.status.nodeRef.name}").Output()
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, machine, "-o=jsonpath={.status.nodeRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		compat_otp.By("Create host update policy")
@@ -298,7 +298,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		compat_otp.By("Get node name from BMH mapping")
 		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", machineAPINamespace, machine, "-o=jsonpath={.status.nodeRef.name}").Output()
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, machine, "-o=jsonpath={.status.nodeRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Label worker node 1 to run the web-server hosting the iso
@@ -456,7 +456,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		compat_otp.By("Get node name from BMH mapping")
 		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", machineAPINamespace, machine, "-o=jsonpath={.status.nodeRef.name}").Output()
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, machine, "-o=jsonpath={.status.nodeRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Label worker node 1 to run the web-server hosting the iso

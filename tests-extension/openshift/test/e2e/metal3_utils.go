@@ -57,38 +57,60 @@ func getFirstDeviceName(oc *exutil.CLI, bmhName string) string {
 }
 
 func buildFirmwareURL(vendor, currentVersion string) (string, string) {
+	var url, fileName string
+
+	iDRAC_71070 := "https://dl.dell.com/FOLDER11965413M/1/iDRAC_7.10.70.00_A00.exe"
 	iDRAC_71030 := "https://dl.dell.com/FOLDER11319105M/1/iDRAC_7.10.30.00_A00.exe"
 	ilo5_305 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p991377599/v247527/ilo5_305.fwpkg"
 	ilo5_302 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p991377599/v243854/ilo5_302.fwpkg"
-	ilo6_157 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v243858/ilo6_157.fwpkg"
-	ilo6_160 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v247531/ilo6_160.fwpkg"
+	ilo6_157 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v247531/ilo6_160.fwpkg"
+	ilo6_160 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v243858/ilo6_157.fwpkg"
 
 	switch vendor {
 	case "Dell Inc.":
-		fileName := "firmimgFIT.d9"
+		fileName = "firmimgFIT.d9"
 		switch currentVersion {
-		case "7.00.00.00":
-			return iDRAC_71030, fileName
+		case "7.10.70.00":
+			url = iDRAC_71030
+		case "7.10.30.00":
+			url = iDRAC_71070
 		default:
-			return iDRAC_71030, fileName // Default to latest
+			url = iDRAC_71070 // Default to 7.10.70.00
 		}
 	case "HPE":
-		switch currentVersion {
-		case "iLO 5 v3.02":
-			return ilo5_305, "ilo5_305.bin"
-		case "iLO 5 v3.05":
-			return ilo5_302, "ilo5_302.bin"
-		case "iLO 6 v1.57":
-			return ilo6_160, "ilo6_160.bin"
-		case "iLO 6 v1.60":
-			return ilo6_157, "ilo6_157.bin"
-		default:
-			return ilo6_157, "ilo6_157.bin" // Default to 1.57
+		// Extract the iLO version and assign the file name accordingly
+		if strings.Contains(currentVersion, "iLO 5") {
+			switch currentVersion {
+			case "iLO 5 v3.05":
+				url = ilo5_302
+				fileName = "ilo5_302.bin"
+			case "iLO 5 v3.02":
+				url = ilo5_305
+				fileName = "ilo5_305.bin"
+			default:
+				url = ilo5_305 // Default to v3.05
+				fileName = "ilo5_305.bin"
+			}
+		} else if strings.Contains(currentVersion, "iLO 6") {
+			switch currentVersion {
+			case "iLO 6 v1.57":
+				url = ilo6_160
+				fileName = "ilo6_160.bin"
+			case "iLO 6 v1.60":
+				url = ilo6_157
+				fileName = "ilo6_157.bin"
+			default:
+				url = ilo6_157 // Default to 1.57
+				fileName = "ilo6_157.bin"
+			}
+		} else {
+			g.Skip("Unsupported HPE BMC version")
 		}
 	default:
-		g.Skip("Unsupported vendor: " + vendor)
-		return "", ""
+		g.Skip("Unsupported vendor")
 	}
+
+	return url, fileName
 }
 
 // getHfsToggleValue returns a vendor-specific HostFirmwareSettings field name and its toggled value.
