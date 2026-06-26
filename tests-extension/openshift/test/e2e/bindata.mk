@@ -1,16 +1,11 @@
 TESTDATA_PATH := testdata
-GOPATH ?= $(shell go env GOPATH)
-GO_BINDATA := $(GOPATH)/bin/go-bindata
-
-$(GO_BINDATA):
-	@echo "Installing go-bindata..."
-	@GOFLAGS= go install github.com/go-bindata/go-bindata/v3/go-bindata@v3.1.3
 
 .PHONY: update-bindata
-update-bindata: $(GO_BINDATA)
+update-bindata:
 	@echo "Generating bindata..."
 	@mkdir -p $(TESTDATA_PATH)
-	$(GO_BINDATA) -nocompress -nometadata \
+	@go run -mod=vendor github.com/go-bindata/go-bindata/v3/go-bindata \
+		-nocompress -nometadata \
 		-pkg testdata -o $(TESTDATA_PATH)/bindata.go -prefix "testdata" $(TESTDATA_PATH)/...
 	@gofmt -s -w $(TESTDATA_PATH)/bindata.go
 	@echo "✅ Bindata generated successfully"
