@@ -1,10 +1,7 @@
 package baremetal
 
 import (
-	"context"
 	"fmt"
-	"os/exec"
-	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -43,11 +40,14 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	// author: jhajyahy@redhat.com
 	// port=yes - 96.1% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-40655-An unauthenticated user can't do actions in the ironic-api when using --insecure flag with https", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+		// Get metal3 pod name
+		metal3Pod, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "pods", "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
 
+		// Run curl from inside the metal3 pod (which has network access to Ironic API)
 		url := fmt.Sprintf("https://%s/v1/nodes", endpointIP[1])
-		out, cmdErr := exec.CommandContext(ctx, "curl", "-i", "-k", url).Output()
+		curlCmd := fmt.Sprintf("curl -i -k %s", url)
+		out, cmdErr := oc.AsAdmin().Run("exec").Args("-n", machineAPINamespace, metal3Pod, "-c", "metal3-ironic", "--", "sh", "-c", curlCmd).Output()
 		o.Expect(cmdErr).ShouldNot(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring("HTTP/1.1 401 Unauthorized"))
 	})
@@ -55,37 +55,48 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	// author: jhajyahy@redhat.com
 	// port=yes - 96.1% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-40560-An unauthenticated user can't do actions in the ironic-api when using http", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+		// Get metal3 pod name
+		metal3Pod, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "pods", "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
 
+		// Run curl from inside the metal3 pod - HTTP should be rejected with 400 Bad Request
 		url := fmt.Sprintf("http://%s/v1/nodes", endpointIP[1])
-		out, cmdErr := exec.CommandContext(ctx, "curl", url).Output()
-		o.Expect(cmdErr).Should(o.HaveOccurred())
-		o.Expect(out).ShouldNot(o.ContainSubstring("HTTP/1.1 200 OK"))
-		o.Expect(cmdErr.Error()).Should(o.ContainSubstring("exit status 52"))
+		curlCmd := fmt.Sprintf("curl -i %s", url)
+		out, cmdErr := oc.AsAdmin().Run("exec").Args("-n", machineAPINamespace, metal3Pod, "-c", "metal3-ironic", "--", "sh", "-c", curlCmd).Output()
+		o.Expect(cmdErr).ShouldNot(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring("HTTP/1.1 400 Bad Request"))
+		o.Expect(out).Should(o.ContainSubstring("You're speaking plain HTTP to an SSL-enabled server port"))
 	})
 
 	// author: jhajyahy@redhat.com
 	// port=yes - 96.1% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-40561-An authenticated user can't do actions in the ironic-api when using http", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+		// Get metal3 pod name
+		metal3Pod, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "pods", "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
 
+		// Run curl from inside the metal3 pod - HTTP should be rejected even with credentials
+		// Use environment variable to avoid embedding credentials directly in the curl command
 		url := fmt.Sprintf("http://%s/v1/nodes", endpointIP[1])
-		out, cmdErr := exec.CommandContext(ctx, "curl", "-u", userPass, url).Output()
-		o.Expect(cmdErr).Should(o.HaveOccurred())
-		o.Expect(out).ShouldNot(o.ContainSubstring("HTTP/1.1 200 OK"))
-		o.Expect(cmdErr.Error()).Should(o.ContainSubstring("exit status 52"))
+		shellCmd := fmt.Sprintf(`IRONIC_CREDS="%s" && curl -i -u "$IRONIC_CREDS" %s`, userPass, url)
+		out, cmdErr := oc.AsAdmin().Run("exec").Args("-n", machineAPINamespace, metal3Pod, "-c", "metal3-ironic", "--", "sh", "-c", shellCmd).Output()
+		o.Expect(cmdErr).ShouldNot(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring("HTTP/1.1 400 Bad Request"))
+		o.Expect(out).Should(o.ContainSubstring("You're speaking plain HTTP to an SSL-enabled server port"))
 	})
 
 	// author: jhajyahy@redhat.com
 	// port=yes - 95.9% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-40562-An authenticated user can do actions in the ironic-api when using --insecure flag with https", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+		// Get metal3 pod name
+		metal3Pod, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "pods", "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
 
+		// Run curl from inside the metal3 pod - HTTPS with credentials should succeed
+		// Use environment variable to avoid embedding credentials directly in the curl command
 		url := fmt.Sprintf("https://%s/v1/nodes", endpointIP[1])
-		out, cmdErr := exec.CommandContext(ctx, "curl", "-i", "-k", "-u", userPass, url).Output()
+		shellCmd := fmt.Sprintf(`IRONIC_CREDS="%s" && curl -i -k -u "$IRONIC_CREDS" %s`, userPass, url)
+		out, cmdErr := oc.AsAdmin().Run("exec").Args("-n", machineAPINamespace, metal3Pod, "-c", "metal3-ironic", "--", "sh", "-c", shellCmd).Output()
 		o.Expect(cmdErr).ShouldNot(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
 		o.Expect(out).Should(o.ContainSubstring(`"nodes"`), "Expected JSON response with 'nodes' key")
