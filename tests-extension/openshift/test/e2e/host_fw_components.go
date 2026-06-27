@@ -40,7 +40,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		}
 		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.hardware.firmware.bios.vendor}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		initialVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[1].currentVersion}").Output()
+		initialVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[?(@.component==\"bmc\")].currentVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		oc.SetupProject()
@@ -123,9 +123,12 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		// Get the origin number of replicas
-		machineSet, cmdErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", "-n", machineAPINamespace, "-o=jsonpath={.items[0].metadata.name}").Output()
+		// Get the MachineSet that owns this Machine from owner reference
+		machineSet, cmdErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", machine, "-n", machineAPINamespace, "-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"MachineSet\")].name}").Output()
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(machineSet).NotTo(o.BeEmpty(), "Machine should have a MachineSet owner")
+
+		// Get the origin number of replicas from the owning MachineSet
 		originReplicasStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machineSet, "-n", machineAPINamespace, "-o=jsonpath={.spec.replicas}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -164,7 +167,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
 		compat_otp.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 
-		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[1].currentVersion}").Output()
+		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[?(@.component==\"bmc\")].currentVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion))
 
@@ -234,7 +237,11 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		// This can take time as Metal3 processes the annotation and BMC initiates reboot
 		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
-			if err != nil || string(output) == "True" {
+			if err != nil {
+				e2e.Logf("Error getting node status: %v", err)
+				return false, err
+			}
+			if string(output) == "True" {
 				e2e.Logf("Node still Ready, status: %s. Waiting for reboot to start...", output)
 				return false, nil
 			}
@@ -316,7 +323,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 
 		e2e.Logf("Selected BMH: %s, Node: %s, Vendor: %s", host, nodeName, vendor)
 
-		initialVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[1].currentVersion}").Output()
+		initialVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[?(@.component==\"bmc\")].currentVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		compat_otp.By("Create host update policy")
@@ -437,7 +444,11 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		// This can take time as Metal3 processes the annotation and BMC initiates reboot
 		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
-			if err != nil || string(output) == "True" {
+			if err != nil {
+				e2e.Logf("Error getting node status: %v", err)
+				return false, err
+			}
+			if string(output) == "True" {
 				e2e.Logf("Node still Ready, status: %s. Waiting for reboot to start...", output)
 				return false, nil
 			}
@@ -454,7 +465,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
 		compat_otp.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 
-		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[1].currentVersion}").Output()
+		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[?(@.component==\"bmc\")].currentVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion))
 
@@ -463,7 +474,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 	// author: jhajyahy@redhat.com
 	// port=unknown - no data in BigQuery last 60 days
 	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-84342-Update NIC FW using HostFirmwareComponents CRD [Disruptive]", func() {
-		dirname = "OCP-78361.log"
+		dirname = "OCP-84342.log"
 		host, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
 		if getBmhErr != nil || host == "" {
 			g.Skip("Not enough BareMetalHosts (need at least 5) to run this test")
@@ -604,7 +615,8 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		pollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
 			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+jsonPath).Output()
 			if err != nil {
-				return false, nil // keep polling on error
+				e2e.Logf("Error getting HostFirmwareComponents version: %v", err)
+				return false, err
 			}
 			if ver != initialVersion {
 				currentVersion = ver
@@ -718,9 +730,12 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		// Get the origin number of replicas
-		machineSet, cmdErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", "-n", machineAPINamespace, "-o=jsonpath={.items[0].metadata.name}").Output()
+		// Get the MachineSet that owns this Machine from owner reference
+		machineSet, cmdErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", machine, "-n", machineAPINamespace, "-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"MachineSet\")].name}").Output()
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(machineSet).NotTo(o.BeEmpty(), "Machine should have a MachineSet owner")
+
+		// Get the origin number of replicas from the owning MachineSet
 		originReplicasStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machineSet, "-n", machineAPINamespace, "-o=jsonpath={.spec.replicas}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -765,7 +780,8 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		pollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
 			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+jsonPath).Output()
 			if err != nil {
-				return false, nil // keep polling on error
+				e2e.Logf("Error getting HostFirmwareComponents version: %v", err)
+				return false, err
 			}
 			if ver != initialVersion {
 				currentVersion = ver
