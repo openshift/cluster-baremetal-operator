@@ -229,21 +229,22 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("annotated"))
 
-		compat_otp.By("Waiting for the node to return to 'Ready' state")
-		// poll for node status to change to NotReady
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		compat_otp.By("Waiting for the node to transition to NotReady state after reboot")
+		// Wait for node to go NotReady (status becomes Unknown or False)
+		// This can take time as Metal3 processes the annotation and BMC initiates reboot
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
 			if err != nil || string(output) == "True" {
-				e2e.Logf("Node is available, status: %s. Trying again", output)
+				e2e.Logf("Node still Ready, status: %s. Waiting for reboot to start...", output)
 				return false, nil
 			}
-			if string(output) == "Unknown" {
-				e2e.Logf("Node is Ready, status: %s", output)
+			if string(output) == "Unknown" || string(output) == "False" {
+				e2e.Logf("Node is rebooting, Ready status changed to: %s", output)
 				return true, nil
 			}
 			return false, nil
 		})
-		compat_otp.AssertWaitPollNoErr(err, "Node did not change state as expected")
+		compat_otp.AssertWaitPollNoErr(err, "Node did not transition to NotReady state after reboot annotation")
 
 		nodeHealthErr := clusterNodesHealthcheck(oc, 3000)
 		compat_otp.AssertWaitPollNoErr(nodeHealthErr, "Cluster did not recover in time!")
@@ -431,22 +432,22 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("annotated"))
 
-		g.By("Waiting for the node to transition to 'NotReady' state")
-		// poll for node status to change to NotReady
-
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		g.By("Waiting for the node to transition to NotReady state after reboot")
+		// Wait for node to go NotReady (status becomes Unknown or False)
+		// This can take time as Metal3 processes the annotation and BMC initiates reboot
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
 			if err != nil || string(output) == "True" {
-				e2e.Logf("Node is available, status: %s. Trying again", output)
+				e2e.Logf("Node still Ready, status: %s. Waiting for reboot to start...", output)
 				return false, nil
 			}
-			if string(output) == "Unknown" {
-				e2e.Logf("Node is Ready, status: %s", output)
+			if string(output) == "Unknown" || string(output) == "False" {
+				e2e.Logf("Node is rebooting, Ready status changed to: %s", output)
 				return true, nil
 			}
 			return false, nil
 		})
-		compat_otp.AssertWaitPollNoErr(err, "Node did not change state as expected")
+		compat_otp.AssertWaitPollNoErr(err, "Node did not transition to NotReady state after reboot annotation")
 
 		nodeHealthErr := clusterNodesHealthcheck(oc, 3000)
 		compat_otp.AssertWaitPollNoErr(nodeHealthErr, "Cluster did not recover in time!")
