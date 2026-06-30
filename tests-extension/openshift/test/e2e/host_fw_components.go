@@ -175,8 +175,26 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
 		compat_otp.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 
-		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[?(@.component==\"bmc\")].currentVersion}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		bmcJsonPath := `{.status.components[?(@.component=="bmc")].currentVersion}`
+		var currentVersion string
+		pollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+bmcJsonPath).Output()
+			if err != nil {
+				e2e.Logf("Error getting HostFirmwareComponents version: %v", err)
+				return false, err
+			}
+			if ver == "" {
+				e2e.Logf("HostFirmwareComponents version is empty, still waiting...")
+				return false, nil
+			}
+			if ver != initialVersion {
+				currentVersion = ver
+				return true, nil
+			}
+			return false, nil
+		})
+		o.Expect(pollErr).NotTo(o.HaveOccurred(), "Polling for firmware version update failed")
+		o.Expect(currentVersion).NotTo(o.BeEmpty(), "Firmware version must not be empty after update")
 		o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion))
 
 	})
@@ -444,9 +462,35 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
 		compat_otp.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 
-		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[?(@.component==\"bmc\")].currentVersion}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		bmcJsonPath := `{.status.components[?(@.component=="bmc")].currentVersion}`
+		var currentVersion string
+		pollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+bmcJsonPath).Output()
+			if err != nil {
+				e2e.Logf("Error getting HostFirmwareComponents version: %v", err)
+				return false, err
+			}
+			if ver == "" {
+				e2e.Logf("HostFirmwareComponents version is empty, still waiting...")
+				return false, nil
+			}
+			if ver != initialVersion {
+				currentVersion = ver
+				return true, nil
+			}
+			return false, nil
+		})
+		o.Expect(pollErr).NotTo(o.HaveOccurred(), "Polling for firmware version update failed")
+		o.Expect(currentVersion).NotTo(o.BeEmpty(), "Firmware version must not be empty after update")
 		o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion))
+
+		compat_otp.By("Verify BMH operationalStatus is OK and no error")
+		opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(opStatus).Should(o.Equal("OK"), "BMH operationalStatus should be OK after firmware update")
+		bmhError, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.errorMessage}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(bmhError).Should(o.BeEmpty(), "BMH should have no error message after firmware update")
 
 	})
 
