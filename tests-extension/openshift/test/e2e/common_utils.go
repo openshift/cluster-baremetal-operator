@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/origin/test/extended/util"
+	compat_otp "github.com/openshift/origin/test/extended/util/compat_otp"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -21,6 +23,17 @@ const (
 	clusterProfileDir = "CLUSTER_PROFILE_DIR"
 	proxyFile         = "proxy"
 )
+
+// SkipIfNotBaremetalCluster skips the test if the cluster is SNO or not baremetal platform
+// This is a common helper for baremetal tests that need both checks
+func SkipIfNotBaremetalCluster(oc *exutil.CLI) {
+	compat_otp.SkipForSNOCluster(oc)
+	iaasPlatform := compat_otp.CheckPlatform(oc)
+	if iaasPlatform != "baremetal" {
+		e2e.Logf("Cluster is: %s", iaasPlatform)
+		g.Skip("For Non-baremetal cluster , this is not supported!")
+	}
+}
 
 // getCertificateValidityDays calculates the validity period of a certificate in days
 // Returns the number of days between notBefore and notAfter dates
