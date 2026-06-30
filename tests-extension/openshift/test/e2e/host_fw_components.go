@@ -24,7 +24,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 	g.BeforeEach(func() {
 		compat_otp.SkipForSNOCluster(oc)
 		iaasPlatform = compat_otp.CheckPlatform(oc)
-		if !(iaasPlatform == "baremetal") {
+		if iaasPlatform != "baremetal" {
 			e2e.Logf("Cluster is: %s", iaasPlatform)
 			g.Skip("For Non-baremetal cluster, this is not supported!")
 		}
@@ -35,12 +35,21 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		dirname = "OCP-75430.log"
 		host, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
 		if getBmhErr != nil || host == "" {
-			g.Skip("Not enough BareMetalHosts (need at least 5) to run this test")
+			g.Skip(fmt.Sprintf("Not enough BareMetalHosts (need at least 5) to run this test: %v", getBmhErr))
 		}
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		roleLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, machineName, "-o=jsonpath={.metadata.labels.machine\\.openshift\\.io/cluster-api-machine-role}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if roleLabel != "worker" {
+			g.Skip(fmt.Sprintf("BMH items[4] (%s) is not a worker (role: %s), cannot run this test", host, roleLabel))
+		}
+		// TODO: migrate to HardwareData resource when .status.hardware is removed in a future BMH API version
 		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.hardware.firmware.bios.vendor}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		initialVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[?(@.component==\"bmc\")].currentVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(initialVersion).NotTo(o.BeEmpty(), "BMC firmware version must not be empty")
 
 		oc.SetupProject()
 		testNamespace := oc.Namespace()
@@ -83,10 +92,10 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		fwUrl := "fw." + clusterDomain
 		defer func() {
-		if err := os.Remove(nginxIngress); err != nil && !os.IsNotExist(err) {
-			e2e.Logf("Warning: Failed to cleanup temporary file %s: %v", nginxIngress, err)
-		}
-	}()
+			if err := os.Remove(nginxIngress); err != nil && !os.IsNotExist(err) {
+				e2e.Logf("Warning: Failed to cleanup temporary file %s: %v", nginxIngress, err)
+			}
+		}()
 		compat_otp.ModifyYamlFileContent(nginxIngress, []compat_otp.YamlReplace{
 			{
 				Path:  "spec.rules.0.host",
@@ -178,12 +187,17 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		dirname = "OCP-77676.log"
 		host, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
 		if getBmhErr != nil || host == "" {
-			g.Skip("Not enough BareMetalHosts (need at least 5) to run this test")
+			g.Skip(fmt.Sprintf("Not enough BareMetalHosts (need at least 5) to run this test: %v", getBmhErr))
 		}
 
 		g.By("Get node name from BMH mapping")
 		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		roleLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, machine, "-o=jsonpath={.metadata.labels.machine\\.openshift\\.io/cluster-api-machine-role}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if roleLabel != "worker" {
+			g.Skip(fmt.Sprintf("BMH items[4] (%s) is not a worker (role: %s), cannot run this test", host, roleLabel))
+		}
 		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, machine, "-o=jsonpath={.status.nodeRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -209,6 +223,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		}()
 
 		compat_otp.By("Update HFS setting based on vendor")
+		// TODO: migrate to HardwareData resource when .status.hardware is removed in a future BMH API version
 		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.hardware.firmware.bios.vendor}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		hfs, value, err := getHfsByVendor(oc, vendor, machineAPINamespace, host)
@@ -226,7 +241,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(specModified).Should(o.Equal(value))
 
-		compat_otp.By("Reboot baremtalhost worker-01")
+		compat_otp.By("Reboot BareMetalHost")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("baremetalhosts", host, "reboot.metal3.io=", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("annotated"))
@@ -262,6 +277,14 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statusModified).Should(o.Equal(specModified))
 
+		compat_otp.By("Verify BMH operationalStatus is OK and no error")
+		opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(opStatus).Should(o.Equal("OK"), "BMH operationalStatus should be OK after firmware settings update")
+		bmhError, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.errorMessage}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(bmhError).Should(o.BeEmpty(), "BMH should have no error message after firmware settings update")
+
 	})
 
 	// author: jhajyahy@redhat.com
@@ -271,7 +294,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.By("Find a provisioned worker BareMetalHost for testing")
 		host, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
 		if getBmhErr != nil || host == "" {
-			g.Skip("Not enough BareMetalHosts (need at least 5) to run this test")
+			g.Skip(fmt.Sprintf("Not enough BareMetalHosts (need at least 5) to run this test: %v", getBmhErr))
 		}
 		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -284,10 +307,12 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(nodeName).NotTo(o.BeEmpty(), "BMH items[4] has no associated node")
 
+		// TODO: migrate to HardwareData resource when .status.hardware is removed in a future BMH API version
 		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.hardware.firmware.bios.vendor}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		initialVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[?(@.component==\"bmc\")].currentVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(initialVersion).NotTo(o.BeEmpty(), "BMC firmware version must not be empty")
 
 		e2e.Logf("Selected BMH: %s, Node: %s, Vendor: %s, FW: %s", host, nodeName, vendor, initialVersion)
 
@@ -353,10 +378,10 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		fwUrl := "fw." + clusterDomain
 		defer func() {
-		if err := os.Remove(nginxIngress); err != nil && !os.IsNotExist(err) {
-			e2e.Logf("Warning: Failed to cleanup temporary file %s: %v", nginxIngress, err)
-		}
-	}()
+			if err := os.Remove(nginxIngress); err != nil && !os.IsNotExist(err) {
+				e2e.Logf("Warning: Failed to cleanup temporary file %s: %v", nginxIngress, err)
+			}
+		}()
 		compat_otp.ModifyYamlFileContent(nginxIngress, []compat_otp.YamlReplace{
 			{
 				Path:  "spec.rules.0.host",
@@ -388,7 +413,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 			compat_otp.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 		}()
 
-		g.By("Reboot baremtalhost 'worker-01'")
+		g.By("Reboot BareMetalHost")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("baremetalhosts", host, "reboot.metal3.io=", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("annotated"))
@@ -431,8 +456,16 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		dirname = "OCP-84342.log"
 		host, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
 		if getBmhErr != nil || host == "" {
-			g.Skip("Not enough BareMetalHosts (need at least 5) to run this test")
+			g.Skip(fmt.Sprintf("Not enough BareMetalHosts (need at least 5) to run this test: %v", getBmhErr))
 		}
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		roleLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, machineName, "-o=jsonpath={.metadata.labels.machine\\.openshift\\.io/cluster-api-machine-role}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if roleLabel != "worker" {
+			g.Skip(fmt.Sprintf("BMH items[4] (%s) is not a worker (role: %s), cannot run this test", host, roleLabel))
+		}
+		// TODO: migrate to HardwareData resource when .status.hardware is removed in a future BMH API version
 		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.hardware.firmware.bios.vendor}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -550,7 +583,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 			compat_otp.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 		}()
 
-		g.By("Reboot baremtalhost 'worker-01'")
+		g.By("Reboot BareMetalHost")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("baremetalhosts", host, "reboot.metal3.io=", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("annotated"))
@@ -586,6 +619,14 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(currentVersion).NotTo(o.BeEmpty(), "Firmware version must not be empty after update")
 		o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion))
 
+		compat_otp.By("Verify BMH operationalStatus is OK and no error")
+		opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(opStatus).Should(o.Equal("OK"), "BMH operationalStatus should be OK after firmware update")
+		bmhError, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.errorMessage}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(bmhError).Should(o.BeEmpty(), "BMH should have no error message after firmware update")
+
 	})
 
 	// author: jhajyahy@redhat.com
@@ -594,8 +635,16 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		dirname = "OCP-84372.log"
 		host, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
 		if getBmhErr != nil || host == "" {
-			g.Skip("Not enough BareMetalHosts (need at least 5) to run this test")
+			g.Skip(fmt.Sprintf("Not enough BareMetalHosts (need at least 5) to run this test: %v", getBmhErr))
 		}
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.consumerRef.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		roleLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, machineName, "-o=jsonpath={.metadata.labels.machine\\.openshift\\.io/cluster-api-machine-role}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if roleLabel != "worker" {
+			g.Skip(fmt.Sprintf("BMH items[4] (%s) is not a worker (role: %s), cannot run this test", host, roleLabel))
+		}
+		// TODO: migrate to HardwareData resource when .status.hardware is removed in a future BMH API version
 		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.hardware.firmware.bios.vendor}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
