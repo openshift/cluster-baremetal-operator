@@ -187,3 +187,39 @@ func getNicNameByVendor(vendor string) string {
 		return ""
 	}
 }
+
+// findBMHByNodeType finds a BareMetalHost that corresponds to a node of the specified type
+// nodeType should be "master" or "worker"
+// Returns the BMH name and corresponding node name, or empty strings if not found
+func findBMHByNodeType(oc *exutil.CLI, nodeType string) (string, string) {
+	// Get all BMH names
+	allBMHs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	if err != nil {
+		e2e.Logf("Failed to get BMHs: %v", err)
+		return "", ""
+	}
+
+	bmhList := strings.Fields(allBMHs)
+	if len(bmhList) == 0 {
+		e2e.Logf("No BMHs found")
+		return "", ""
+	}
+
+	// Find the first BMH whose name contains the requested node type
+	// This assumes BMH naming convention: master-XX for masters, worker-XX for workers
+	for _, bmh := range bmhList {
+		if strings.Contains(bmh, nodeType) {
+			// Get the hostname to return both
+			hostname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", bmh, "-n", machineAPINamespace, "-o=jsonpath={.status.hardware.hostname}").Output()
+			if err != nil || hostname == "" {
+				e2e.Logf("BMH %s matches type %s but failed to get hostname, trying next", bmh, nodeType)
+				continue
+			}
+			e2e.Logf("Found BMH %s (type %s) corresponding to node", bmh, nodeType)
+			return bmh, hostname
+		}
+	}
+
+	e2e.Logf("No BMH found with name containing %q", nodeType)
+	return "", ""
+}
