@@ -329,6 +329,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
+	rolloutInProgress := false
 	for _, ensureResource := range []ensureFunc{
 		provisioning.EnsureAllSecrets,
 		provisioning.EnsureMetal3Deployment,
@@ -348,6 +349,10 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, err
 		}
 		if updated {
+			klog.Info("Resource updated during ensure loop, setting Progressing=True")
+			if coErr := r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources"); coErr != nil {
+				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, coErr)
+			}
 			return result, r.Client.Status().Update(ctx, baremetalConfig)
 		}
 	}
@@ -375,6 +380,10 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 	}
+	if deploymentState == appsv1.DeploymentProgressing {
+		klog.Info("metal3 deployment is progressing")
+		rolloutInProgress = true
+	}
 
 	// Determine the status of the BMO deployment
 	bmoState, err := provisioning.GetBaremetalOperatorDeploymentState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
@@ -391,6 +400,10 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Degraded state: %w", clusterOperatorName, err)
 		}
 	}
+	if bmoState == appsv1.DeploymentProgressing {
+		klog.Info("baremetal-operator deployment is progressing")
+		rolloutInProgress = true
+	}
 
 	// Determine the status of the image cache DaemonSet
 	imageCacheState, err := provisioning.GetImageCacheState(r.KubeClient.AppsV1(), ComponentNamespace, baremetalConfig)
@@ -398,24 +411,46 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if imageCacheState == provisioning.DaemonSetProgressing {
+		klog.Info("image cache daemonset is progressing")
+		rolloutInProgress = true
+	}
 
 	ironicProxyState, err := provisioning.GetIronicProxyState(r.KubeClient.AppsV1(), ComponentNamespace, info)
 	err = r.checkDaemonSet(ironicProxyState, err, "ironic proxy", func() error { return provisioning.DeleteIronicProxy(info) })
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if ironicProxyState == provisioning.DaemonSetProgressing {
+		klog.Info("ironic proxy daemonset is progressing")
+		rolloutInProgress = true
+	}
 
-	if deploymentState == appsv1.DeploymentAvailable && bmoState == appsv1.DeploymentAvailable {
-		msg := getSuccessStatus(imageCacheState, ironicProxyState)
-		if msg != "" {
-			err = r.updateCOStatus(ReasonComplete, msg, "")
-			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Progressing state: %w", clusterOperatorName, err)
-			}
-		}
+	if err := r.updateCOProgressingStatus(rolloutInProgress, deploymentState, bmoState, imageCacheState, ironicProxyState); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	return result, nil
+}
+
+func (r *ProvisioningReconciler) updateCOProgressingStatus(
+	rolloutInProgress bool,
+	deploymentState appsv1.DeploymentConditionType,
+	bmoState appsv1.DeploymentConditionType,
+	imageCacheState appsv1.DaemonSetConditionType,
+	ironicProxyState appsv1.DaemonSetConditionType,
+) error {
+	if rolloutInProgress {
+		return r.updateCOStatus(ReasonSyncing, "", "Waiting for metal3 resources to rollout")
+	}
+	if deploymentState != appsv1.DeploymentAvailable || bmoState != appsv1.DeploymentAvailable {
+		return nil
+	}
+	msg := getSuccessStatus(imageCacheState, ironicProxyState)
+	if msg == "" {
+		return nil
+	}
+	return r.updateCOStatus(ReasonComplete, msg, "")
 }
 
 func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, sshkey string) (*provisioning.ProvisioningInfo, error) {

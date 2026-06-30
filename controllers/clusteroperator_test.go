@@ -131,6 +131,35 @@ func TestEnsureClusterOperator(t *testing.T) {
 		},
 	}
 
+	var progressingUpgradeConditions = []osconfigv1.ClusterOperatorStatusCondition{
+		setStatusCondition(
+			osconfigv1.OperatorProgressing,
+			osconfigv1.ConditionTrue,
+			string(ReasonSyncing),
+			"Upgrading to release version test-version",
+		),
+		setStatusCondition(
+			osconfigv1.OperatorDegraded,
+			osconfigv1.ConditionFalse,
+			"", "",
+		),
+		setStatusCondition(
+			osconfigv1.OperatorAvailable,
+			osconfigv1.ConditionFalse,
+			"", "",
+		),
+		setStatusCondition(
+			osconfigv1.OperatorUpgradeable,
+			osconfigv1.ConditionTrue,
+			"", "",
+		),
+		setStatusCondition(
+			OperatorDisabled,
+			osconfigv1.ConditionFalse,
+			"", "",
+		),
+	}
+
 	testCases := []struct {
 		name       string
 		existingCO *osconfigv1.ClusterOperator
@@ -184,6 +213,75 @@ func TestEnsureClusterOperator(t *testing.T) {
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
 					Conditions:     conditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+		},
+		{
+			name: "Version upgrade sets Progressing",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}},
+				},
+			},
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     progressingUpgradeConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+		},
+		{
+			name: "First version set does not set Progressing",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{},
+				},
+			},
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+		},
+		{
+			name: "Same version does not update",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
 					RelatedObjects: relatedObjects(),
 					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
 				},
