@@ -15,16 +15,10 @@ import (
 var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job on BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc           = compat_otp.NewCLI("ironic-prometheus-exporter", compat_otp.KubeConfigPath())
-		iaasPlatform string
+		oc = compat_otp.NewCLI("ironic-prometheus-exporter", compat_otp.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		compat_otp.SkipForSNOCluster(oc)
-		iaasPlatform = compat_otp.CheckPlatform(oc)
-		if !(iaasPlatform == "baremetal") {
-			e2e.Logf("Cluster is: %s", iaasPlatform)
-			g.Skip("For Non-baremetal cluster , this is not supported!")
-		}
+		SkipIfNotBaremetalCluster(oc)
 	})
 
 	// author: jhajyahy@redhat.com
