@@ -24,7 +24,8 @@ import (
 type StatusReason string
 
 const (
-	clusterOperatorName = "baremetal"
+	clusterOperatorName              = "baremetal"
+	machineConfigClusterOperatorName = "machine-config"
 
 	// OperatorDisabled represents a Disabled ClusterStatusConditionTypes
 	OperatorDisabled osconfigv1.ClusterStatusConditionType = "Disabled"
@@ -180,9 +181,127 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 	return r.OSClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
 }
 
+func getReportedOperatorVersion(co *osconfigv1.ClusterOperator) string {
+	for _, version := range co.Status.Versions {
+		if version.Name == "operator" {
+			return version.Version
+		}
+	}
+	return ""
+}
+
+func (r *ProvisioningReconciler) getClusterDesiredVersion(ctx context.Context) (string, error) {
+	cv, err := r.OSClient.ConfigV1().ClusterVersions().Get(ctx, "version", metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	return cv.Status.Desired.Version, nil
+}
+
+// isOperatorVersionUpgradePending reports whether the baremetal ClusterOperator
+// still needs to finish an upgrade. This compares the reported operator version
+// against both the local RELEASE_VERSION and the cluster desired version so
+// upgrades are surfaced even before the new CBO pod is rolled out.
+func (r *ProvisioningReconciler) isOperatorVersionUpgradePending(ctx context.Context, co *osconfigv1.ClusterOperator) (bool, string, error) {
+	reported := getReportedOperatorVersion(co)
+	if reported == "" {
+		return false, "", nil
+	}
+
+	if r.ReleaseVersion != "" && reported != r.ReleaseVersion {
+		return true, r.ReleaseVersion, nil
+	}
+
+	desired, err := r.getClusterDesiredVersion(ctx)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, "", nil
+		}
+		return false, "", err
+	}
+	if desired != "" && reported != desired {
+		return true, desired, nil
+	}
+
+	return false, "", nil
+}
+
+func upgradeProgressMessage(targetVersion string) string {
+	return fmt.Sprintf("Upgrading to release version %s", targetVersion)
+}
+
+func (r *ProvisioningReconciler) isMachineConfigOperatorProgressing(ctx context.Context) (bool, error) {
+	mco, err := r.OSClient.ConfigV1().ClusterOperators().Get(ctx, machineConfigClusterOperatorName, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return v1helpers.IsStatusConditionTrue(mco.Status.Conditions, osconfigv1.OperatorProgressing), nil
+}
+
+func setOperatorVersionUpgradeProgressing(co *osconfigv1.ClusterOperator, reported, target string, clusterUpgrade bool) {
+	if clusterUpgrade {
+		klog.InfoS("Cluster version upgrade pending, setting Progressing=True",
+			"reportedVersion", reported,
+			"targetVersion", target)
+	} else {
+		klog.InfoS("Version upgrade pending, setting Progressing=True",
+			"reportedVersion", reported,
+			"targetVersion", target)
+	}
+	v1helpers.SetStatusCondition(&co.Status.Conditions,
+		setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue,
+			string(ReasonSyncing),
+			upgradeProgressMessage(target)),
+		clock.RealClock{})
+}
+
+func (r *ProvisioningReconciler) reconcileOperatorVersionStatus(ctx context.Context, co *osconfigv1.ClusterOperator, justCreated bool) (bool, error) {
+	reported := getReportedOperatorVersion(co)
+	if r.ReleaseVersion != "" && reported != r.ReleaseVersion {
+		if justCreated || reported == "" {
+			co.Status.Versions = operandVersions(r.ReleaseVersion)
+			return true, nil
+		}
+		updated, err := r.setVersionUpgradeProgressingIfAllowed(ctx, co, reported, r.ReleaseVersion, false)
+		if err != nil {
+			return false, err
+		}
+		return updated, nil
+	}
+
+	if justCreated {
+		return false, nil
+	}
+
+	pending, target, err := r.isOperatorVersionUpgradePending(ctx, co)
+	if err != nil {
+		return false, err
+	}
+	if !pending {
+		return false, nil
+	}
+
+	return r.setVersionUpgradeProgressingIfAllowed(ctx, co, reported, target, true)
+}
+
+func (r *ProvisioningReconciler) setVersionUpgradeProgressingIfAllowed(ctx context.Context, co *osconfigv1.ClusterOperator, reported, target string, clusterUpgrade bool) (bool, error) {
+	mcoProgressing, err := r.isMachineConfigOperatorProgressing(ctx)
+	if err != nil {
+		return false, err
+	}
+	if mcoProgressing {
+		return false, nil
+	}
+	setOperatorVersionUpgradeProgressing(co, reported, target, clusterUpgrade)
+	return true, nil
+}
+
 // ensureClusterOperator makes sure that the CO exists
-func (r *ProvisioningReconciler) ensureClusterOperator() error {
-	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+func (r *ProvisioningReconciler) ensureClusterOperator(ctx context.Context) error {
+	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(ctx, clusterOperatorName, metav1.GetOptions{})
 	justCreated := false
 	if k8serrors.IsNotFound(err) {
 		co, err = r.createClusterOperator()
@@ -197,27 +316,19 @@ func (r *ProvisioningReconciler) ensureClusterOperator() error {
 		needsUpdate = true
 		co.Status.RelatedObjects = relatedObjects()
 	}
-	if !equality.Semantic.DeepEqual(co.Status.Versions, operandVersions(r.ReleaseVersion)) {
-		needsUpdate = true
-		if len(co.Status.Versions) > 0 && !justCreated {
-			klog.InfoS("Version change detected, setting Progressing=True",
-				"oldVersion", co.Status.Versions[0].Version,
-				"newVersion", r.ReleaseVersion)
-			v1helpers.SetStatusCondition(&co.Status.Conditions,
-				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue,
-					string(ReasonSyncing),
-					fmt.Sprintf("Upgrading to release version %s", r.ReleaseVersion)),
-				clock.RealClock{})
-		}
-		co.Status.Versions = operandVersions(r.ReleaseVersion)
-	}
 	if len(co.Status.Conditions) == 0 {
 		needsUpdate = true
 		co.Status.Conditions = defaultStatusConditions()
 	}
 
+	versionNeedsUpdate, err := r.reconcileOperatorVersionStatus(ctx, co, justCreated)
+	if err != nil {
+		return err
+	}
+	needsUpdate = needsUpdate || versionNeedsUpdate
+
 	if needsUpdate {
-		_, err = r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(context.Background(), co, metav1.UpdateOptions{})
+		_, err = r.OSClient.ConfigV1().ClusterOperators().UpdateStatus(ctx, co, metav1.UpdateOptions{})
 	}
 	return err
 }
@@ -267,15 +378,18 @@ func getStatusConditionsDiff(oldConditions []osconfigv1.ClusterOperatorStatusCon
 }
 
 // syncStatus applies the new condition to the CBO ClusterOperator object.
-func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, conds []osconfigv1.ClusterOperatorStatusCondition) error {
+func (r *ProvisioningReconciler) syncStatus(co *osconfigv1.ClusterOperator, conds []osconfigv1.ClusterOperatorStatusCondition, reason StatusReason) error {
 	diff := getStatusConditionsDiff(co.Status.Conditions, conds)
 
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c, clock.RealClock{})
 	}
 
-	if len(co.Status.Versions) < 1 {
-		klog.Info("updating ClusterOperator Status Versions field")
+	if reason == ReasonComplete {
+		klog.Info("upgrade complete, updating ClusterOperator Status Versions field")
+		co.Status.Versions = operandVersions(r.ReleaseVersion)
+	} else if len(co.Status.Versions) < 1 && r.ReleaseVersion != "" {
+		klog.Info("initializing ClusterOperator Status Versions field")
 		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 
@@ -319,5 +433,5 @@ func (r *ProvisioningReconciler) updateCOStatus(newReason StatusReason, msg, pro
 		v1helpers.SetStatusCondition(&conds, setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(newReason), progressMsg), clk)
 	}
 
-	return r.syncStatus(co, conds)
+	return r.syncStatus(co, conds, newReason)
 }

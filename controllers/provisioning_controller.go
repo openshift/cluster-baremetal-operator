@@ -107,7 +107,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=networks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
-// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status;clusterversions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;infrastructures/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;watch;list;patch
 // +kubebuilder:rbac:groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
@@ -229,7 +229,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Make sure ClusterOperator exists
-	err := r.ensureClusterOperator()
+	err := r.ensureClusterOperator(ctx)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -349,9 +349,15 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, err
 		}
 		if updated {
-			klog.Info("Resource updated during ensure loop, setting Progressing=True")
-			if coErr := r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources"); coErr != nil {
-				return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, coErr)
+			mcoProgressing, mcoErr := r.isMachineConfigOperatorProgressing(ctx)
+			if mcoErr != nil {
+				return ctrl.Result{}, mcoErr
+			}
+			if !mcoProgressing {
+				klog.Info("Resource updated during ensure loop, setting Progressing=True")
+				if coErr := r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources"); coErr != nil {
+					return ctrl.Result{}, fmt.Errorf("unable to put %q ClusterOperator in Syncing state: %w", clusterOperatorName, coErr)
+				}
 			}
 			return result, r.Client.Status().Update(ctx, baremetalConfig)
 		}
@@ -426,7 +432,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		rolloutInProgress = true
 	}
 
-	if err := r.updateCOProgressingStatus(rolloutInProgress, deploymentState, bmoState, imageCacheState, ironicProxyState); err != nil {
+	if err := r.updateCOProgressingStatus(ctx, rolloutInProgress, deploymentState, bmoState, imageCacheState, ironicProxyState); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -434,16 +440,47 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 }
 
 func (r *ProvisioningReconciler) updateCOProgressingStatus(
+	ctx context.Context,
 	rolloutInProgress bool,
 	deploymentState appsv1.DeploymentConditionType,
 	bmoState appsv1.DeploymentConditionType,
 	imageCacheState appsv1.DaemonSetConditionType,
 	ironicProxyState appsv1.DaemonSetConditionType,
 ) error {
-	if rolloutInProgress {
-		return r.updateCOStatus(ReasonSyncing, "", "Waiting for metal3 resources to rollout")
+	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(ctx, clusterOperatorName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get clusterOperator %q: %w", clusterOperatorName, err)
 	}
-	if deploymentState != appsv1.DeploymentAvailable || bmoState != appsv1.DeploymentAvailable {
+
+	mcoProgressing, err := r.isMachineConfigOperatorProgressing(ctx)
+	if err != nil {
+		return err
+	}
+	if mcoProgressing {
+		return nil
+	}
+
+	pending, target, err := r.isOperatorVersionUpgradePending(ctx, co)
+	if err != nil {
+		return err
+	}
+
+	operandsReady := deploymentState == appsv1.DeploymentAvailable && bmoState == appsv1.DeploymentAvailable
+	reported := getReportedOperatorVersion(co)
+	// A reported-vs-local release mismatch can be resolved once this CBO instance
+	// has finished rolling out operands. Cluster-version-only mismatches mean a
+	// newer CBO pod is still required and must keep Progressing=True.
+	releaseUpgradePending := r.ReleaseVersion != "" && reported != r.ReleaseVersion
+	versionUpgradeBlocking := pending && (rolloutInProgress || !operandsReady || !releaseUpgradePending)
+
+	if versionUpgradeBlocking || rolloutInProgress {
+		progressMsg := upgradeProgressMessage(target)
+		if rolloutInProgress {
+			progressMsg = "Waiting for metal3 resources to rollout"
+		}
+		return r.updateCOStatus(ReasonSyncing, "", progressMsg)
+	}
+	if !operandsReady {
 		return nil
 	}
 	msg := getSuccessStatus(imageCacheState, ironicProxyState)
@@ -700,7 +737,7 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	ctx := context.Background()
-	err := r.ensureClusterOperator()
+	err := r.ensureClusterOperator(ctx)
 	if err != nil {
 		return errors.Wrap(err, "unable to set get baremetal ClusterOperator")
 	}
@@ -780,6 +817,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(serviceMonitor).
 		Owns(prometheusRule).
 		Watches(&osconfigv1.ClusterOperator{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
+		Watches(&osconfigv1.ClusterVersion{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&osconfigv1.Proxy{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&osconfigv1.APIServer{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton), builder.WithPredicates(pullSecretFilter)).
