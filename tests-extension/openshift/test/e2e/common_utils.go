@@ -31,7 +31,7 @@ func SkipIfNotBaremetalCluster(oc *exutil.CLI) {
 	iaasPlatform := compat_otp.CheckPlatform(oc)
 	if iaasPlatform != "baremetal" {
 		e2e.Logf("Cluster is: %s", iaasPlatform)
-		g.Skip("For Non-baremetal cluster , this is not supported!")
+		g.Skip("This is not supported for non-baremetal cluster!")
 	}
 }
 
