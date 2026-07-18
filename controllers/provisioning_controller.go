@@ -135,6 +135,9 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies/finalizers,verbs=update
+// +kubebuilder:rbac:groups=metal3.io,resources=hostnetworkattachments,verbs=get;list;watch
+// +kubebuilder:rbac:groups=metal3.io,resources=baremetalswitches,verbs=get;list;watch
+// +kubebuilder:rbac:groups=metal3.io,resources=baremetalswitches/status,verbs=get;update;patch
 
 func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal3iov1alpha1.Provisioning, error) {
 	// Fetch the Provisioning instance

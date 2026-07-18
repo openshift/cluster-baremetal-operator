@@ -114,6 +114,29 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
+  - baremetalswitches
+  - hostnetworkattachments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalswitches/status
+  - bmceventsubscriptions/status
+  - dataimages/status
+  - hostfirmwarecomponents/status
+  - hostupdatepolicies/status
+  - preprovisioningimages/status
+  - provisionings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
   - bmceventsubscriptions
   - dataimages
   - firmwareschemas
@@ -132,19 +155,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - metal3.io
-  resources:
-  - bmceventsubscriptions/status
-  - dataimages/status
-  - hostfirmwarecomponents/status
-  - hostupdatepolicies/status
-  - preprovisioningimages/status
-  - provisionings/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - security.openshift.io
   resources:
