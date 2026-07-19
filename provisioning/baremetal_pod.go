@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
@@ -1003,4 +1004,58 @@ func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace s
 
 func DeleteMetal3Deployment(info *ProvisioningInfo) error {
 	return client.IgnoreNotFound(info.Client.AppsV1().Deployments(info.Namespace).Delete(context.Background(), baremetalDeploymentName, metav1.DeleteOptions{}))
+}
+
+// OperandImagesMatch checks whether the container images in the running
+// metal3 and BMO deployments match the desired images. Returns false when
+// images differ or deployments are absent, indicating a sync is needed.
+func OperandImagesMatch(client appsclientv1.DeploymentsGetter, targetNamespace string, images *Images) (bool, error) {
+	metal3, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	foundIronic := false
+	foundStaticIP := false
+	for _, c := range metal3.Spec.Template.Spec.Containers {
+		switch c.Name {
+		case "metal3-ironic":
+			foundIronic = true
+			if c.Image != images.Ironic {
+				return false, nil
+			}
+		case "metal3-static-ip-manager":
+			foundStaticIP = true
+			if c.Image != images.StaticIpManager {
+				return false, nil
+			}
+		}
+	}
+	if !foundIronic || !foundStaticIP {
+		return false, nil
+	}
+
+	bmo, err := client.Deployments(targetNamespace).Get(context.Background(), bmoDeploymentName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	foundBMO := false
+	for _, c := range bmo.Spec.Template.Spec.Containers {
+		if c.Name == "metal3-baremetal-operator" {
+			foundBMO = true
+			if c.Image != images.BaremetalOperator {
+				return false, nil
+			}
+		}
+	}
+	if !foundBMO {
+		return false, nil
+	}
+
+	return true, nil
 }

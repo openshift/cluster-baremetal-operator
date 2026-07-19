@@ -307,7 +307,12 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
-	if specChanged {
+	imagesMatch, err := provisioning.OperandImagesMatch(r.KubeClient.AppsV1(), ComponentNamespace, info.Images)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to check operand images: %w", err)
+	}
+
+	if specChanged || !imagesMatch {
 		if baremetalConfig.Spec.UnsupportedConfigOverrides != nil {
 			klog.Warningf("using unsupportedConfigOverrides in the configuration: %+v", *baremetalConfig.Spec.UnsupportedConfigOverrides)
 		}
