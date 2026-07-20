@@ -1009,6 +1009,8 @@ func DeleteMetal3Deployment(info *ProvisioningInfo) error {
 // OperandImagesMatch checks whether the container images in the running
 // metal3 and BMO deployments match the desired images. Returns false when
 // images differ or deployments are absent, indicating a sync is needed.
+// metal3-static-ip-manager is optional (only when provisioning network is
+// enabled with a provisioning IP); its absence is not a mismatch.
 func OperandImagesMatch(client appsclientv1.DeploymentsGetter, targetNamespace string, images *Images) (bool, error) {
 	metal3, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -1018,7 +1020,6 @@ func OperandImagesMatch(client appsclientv1.DeploymentsGetter, targetNamespace s
 		return false, err
 	}
 	foundIronic := false
-	foundStaticIP := false
 	for _, c := range metal3.Spec.Template.Spec.Containers {
 		switch c.Name {
 		case "metal3-ironic":
@@ -1027,13 +1028,12 @@ func OperandImagesMatch(client appsclientv1.DeploymentsGetter, targetNamespace s
 				return false, nil
 			}
 		case "metal3-static-ip-manager":
-			foundStaticIP = true
 			if c.Image != images.StaticIpManager {
 				return false, nil
 			}
 		}
 	}
-	if !foundIronic || !foundStaticIP {
+	if !foundIronic {
 		return false, nil
 	}
 
