@@ -115,6 +115,28 @@ webhooks:
     resources:
     - bmceventsubscriptions
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: baremetal-operator-webhook-service
+      namespace: test-namespace
+      path: /validate-metal3-io-v1alpha1-hostnetworkattachment
+  failurePolicy: Fail
+  name: hostnetworkattachment.metal3.io
+  rules:
+  - apiGroups:
+    - metal3.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - hostnetworkattachments
+  sideEffects: None
 `),
 		},
 	}
