@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 
@@ -31,7 +32,7 @@ const (
 	ironicProxyPortEnvVar    = "IRONIC_PROXY_PORT"
 )
 
-func createContainerIronicProxy(ironicIP string, images *Images) corev1.Container {
+func createContainerIronicProxy(ironicIP string, images *Images, tlsProfileSpec *configv1.TLSProfileSpec) corev1.Container {
 	container := corev1.Container{
 		Name:            "ironic-proxy",
 		Image:           images.Ironic,
@@ -87,6 +88,11 @@ func createContainerIronicProxy(ironicIP string, images *Images) corev1.Containe
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
+
+	if tlsProfileSpec != nil {
+		container.Env = append(container.Env, tlsProfileToApacheEnvVars(*tlsProfileSpec)...)
+	}
+
 	return container
 }
 
@@ -98,7 +104,7 @@ func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateS
 
 	containers := []corev1.Container{
 		// Even in a dual-stack environment, we don't really care which IP address to use since both are accessible internally.
-		createContainerIronicProxy(ironicIPs[0], info.Images),
+		createContainerIronicProxy(ironicIPs[0], info.Images, info.TLSProfileSpec),
 	}
 
 	tolerations := []corev1.Toleration{
