@@ -28,6 +28,15 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 )
 
+func switchManagementSpec(enabled bool) metal3iov1alpha1.ProvisioningSpec {
+	if !enabled {
+		return metal3iov1alpha1.ProvisioningSpec{}
+	}
+	return metal3iov1alpha1.ProvisioningSpec{
+		SwitchManagement: &metal3iov1alpha1.SwitchManagement{Enabled: true},
+	}
+}
+
 const testNamespace = "test-namespce"
 
 // Manually generated expired certificate
@@ -777,6 +786,280 @@ func TestNormalizeHost(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, normalizeHost(tc.input))
+		})
+	}
+}
+
+func TestEnsureSwitchConfigsSecret(t *testing.T) {
+	cases := []struct {
+		name                    string
+		switchManagementEnabled bool
+		existingSecret          *corev1.Secret
+		secretError             *apierrors.StatusError
+		expectedError           error
+		expectSecretExists      bool
+		expectSecretDeleted     bool
+		expectSecretContent     string
+	}{
+		{
+			name:                    "create-new-secret-when-enabled",
+			switchManagementEnabled: true,
+			expectSecretExists:      true,
+			expectSecretContent:     "# This file is managed by the Baremetal Operator\n",
+		},
+		{
+			name:                    "delete-secret-when-disabled",
+			switchManagementEnabled: false,
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      switchConfigsSecretName,
+					Namespace: testNamespace,
+				},
+			},
+			expectSecretDeleted: true,
+		},
+		{
+			name:                    "update-existing-secret-when-enabled",
+			switchManagementEnabled: true,
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      switchConfigsSecretName,
+					Namespace: testNamespace,
+					Annotations: map[string]string{
+						cboOwnedAnnotation: "",
+					},
+					Labels: map[string]string{
+						cboLabelName: stateService,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "v1",
+							Kind:       "Provisioning",
+							Name:       "test",
+						},
+					},
+				},
+				Data: map[string][]byte{
+					"switch-configs.conf": []byte("# Old content"),
+				},
+			},
+			expectSecretExists:  true,
+			expectSecretContent: "# Old content",
+		},
+		{
+			name:                    "no-op-when-disabled-and-no-secret",
+			switchManagementEnabled: false,
+		},
+		{
+			name:                    "error-fetching-secret",
+			switchManagementEnabled: true,
+			secretError:             apierrors.NewServiceUnavailable("an error"),
+			expectedError:           apierrors.NewServiceUnavailable("an error"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			baremetalCR := &metal3iov1alpha1.Provisioning{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Provisioning",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: switchManagementSpec(tc.switchManagementEnabled),
+			}
+
+			secretsResource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
+			var objects []runtime.Object
+			if tc.existingSecret != nil {
+				objects = append(objects, tc.existingSecret)
+			}
+			kubeClient := fakekube.NewSimpleClientset(objects...)
+
+			if tc.secretError != nil {
+				kubeClient.PrependReactor("get", "secrets", func(action faketesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &corev1.Secret{}, tc.secretError
+				})
+			}
+
+			info := &ProvisioningInfo{
+				Context:       context.Background(),
+				Client:        kubeClient,
+				Namespace:     testNamespace,
+				ProvConfig:    baremetalCR,
+				Scheme:        scheme,
+				EventRecorder: events.NewLoggingEventRecorder("tests", clock.RealClock{}),
+			}
+
+			err := ensureSwitchConfigSecret(info)
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError.Error())
+				return
+			}
+
+			assert.NoError(t, err)
+
+			if tc.expectSecretExists {
+				secret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, switchConfigsSecretName)
+				assert.NoError(t, err, "Secret should exist")
+
+				s := secret.(*corev1.Secret)
+				assert.Equal(t, tc.expectSecretContent, string(s.Data["switch-configs.conf"]), "Secret content should match expected")
+				assert.Equal(t, "", s.Annotations[cboOwnedAnnotation], "Secret should have CBO owned annotation")
+				assert.Equal(t, s.Labels[cboLabelName], stateService, "Secret should have correct label")
+
+				// Check controller reference
+				assert.Len(t, s.OwnerReferences, 1, "Secret should have owner reference")
+				assert.Equal(t, "Provisioning", s.OwnerReferences[0].Kind)
+				assert.Equal(t, "test", s.OwnerReferences[0].Name)
+			}
+
+			if tc.expectSecretDeleted {
+				_, err := kubeClient.Tracker().Get(secretsResource, testNamespace, switchConfigsSecretName)
+				assert.True(t, apierrors.IsNotFound(err), "Secret should be deleted")
+			}
+		})
+	}
+}
+
+func TestEnsureSwitchCredentialsSecret(t *testing.T) {
+	cases := []struct {
+		name                    string
+		switchManagementEnabled bool
+		existingSecret          *corev1.Secret
+		secretError             *apierrors.StatusError
+		expectedError           error
+		expectSecretExists      bool
+		expectSecretDeleted     bool
+	}{
+		{
+			name:                    "create-empty-secret-when-enabled",
+			switchManagementEnabled: true,
+			expectSecretExists:      true,
+		},
+		{
+			name:                    "delete-secret-when-disabled",
+			switchManagementEnabled: false,
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      switchCredentialsSecretName,
+					Namespace: testNamespace,
+				},
+			},
+			expectSecretDeleted: true,
+		},
+		{
+			name:                    "preserve-existing-secret-when-enabled",
+			switchManagementEnabled: true,
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      switchCredentialsSecretName,
+					Namespace: testNamespace,
+					Annotations: map[string]string{
+						cboOwnedAnnotation: "",
+					},
+					Labels: map[string]string{
+						cboLabelName: stateService,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "v1",
+							Kind:       "Provisioning",
+							Name:       "test",
+						},
+					},
+				},
+				Data: map[string][]byte{
+					"switch1-key": []byte("ssh-private-key-data"),
+				},
+			},
+			expectSecretExists: true,
+		},
+		{
+			name:                    "no-op-when-disabled-and-no-secret",
+			switchManagementEnabled: false,
+		},
+		{
+			name:                    "error-fetching-secret",
+			switchManagementEnabled: true,
+			secretError:             apierrors.NewServiceUnavailable("an error"),
+			expectedError:           apierrors.NewServiceUnavailable("an error"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			baremetalCR := &metal3iov1alpha1.Provisioning{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Provisioning",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: switchManagementSpec(tc.switchManagementEnabled),
+			}
+
+			secretsResource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
+			var objects []runtime.Object
+			if tc.existingSecret != nil {
+				objects = append(objects, tc.existingSecret)
+			}
+			kubeClient := fakekube.NewSimpleClientset(objects...)
+
+			if tc.secretError != nil {
+				kubeClient.PrependReactor("get", "secrets", func(action faketesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &corev1.Secret{}, tc.secretError
+				})
+			}
+
+			info := &ProvisioningInfo{
+				Context:       context.Background(),
+				Client:        kubeClient,
+				Namespace:     testNamespace,
+				ProvConfig:    baremetalCR,
+				Scheme:        scheme,
+				EventRecorder: events.NewLoggingEventRecorder("tests", clock.RealClock{}),
+			}
+
+			err := ensureSwitchCredentialsSecret(info)
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError.Error())
+				return
+			}
+
+			assert.NoError(t, err)
+
+			if tc.expectSecretExists {
+				secret, err := kubeClient.Tracker().Get(secretsResource, testNamespace, switchCredentialsSecretName)
+				assert.NoError(t, err, "Secret should exist")
+
+				s := secret.(*corev1.Secret)
+				assert.Equal(t, "", s.Annotations[cboOwnedAnnotation], "Secret should have CBO owned annotation")
+				assert.Equal(t, s.Labels[cboLabelName], stateService, "Secret should have correct label")
+
+				// When created fresh, the secret should have no data keys (BMO populates it)
+				if tc.existingSecret == nil {
+					assert.Empty(t, s.Data, "New credentials secret should be created empty")
+				} else {
+					// Existing data should be preserved (doNotUpdateData)
+					assert.Equal(t, string(tc.existingSecret.Data["switch1-key"]), string(s.Data["switch1-key"]), "Existing credential data should be preserved")
+				}
+
+				// Check controller reference
+				assert.Len(t, s.OwnerReferences, 1, "Secret should have owner reference")
+				assert.Equal(t, "Provisioning", s.OwnerReferences[0].Kind)
+				assert.Equal(t, "test", s.OwnerReferences[0].Name)
+			}
+
+			if tc.expectSecretDeleted {
+				_, err := kubeClient.Tracker().Get(secretsResource, testNamespace, switchCredentialsSecretName)
+				assert.True(t, apierrors.IsNotFound(err), "Secret should be deleted")
+			}
 		})
 	}
 }

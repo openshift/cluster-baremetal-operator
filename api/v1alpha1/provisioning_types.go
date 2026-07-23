@@ -24,6 +24,64 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 )
 
+// ProviderNetworkType identifies the provisioning stage a network configuration applies to.
+// +kubebuilder:validation:Enum=idle;inspection;cleaning;rescuing;servicing;provisioning
+type ProviderNetworkType string
+
+// SwitchPortMode defines the switchport mode for network interfaces.
+// +kubebuilder:validation:Enum=access;trunk;hybrid
+type SwitchPortMode string
+
+const (
+	SwitchPortModeAccess SwitchPortMode = "access"
+	SwitchPortModeTrunk  SwitchPortMode = "trunk"
+	SwitchPortModeHybrid SwitchPortMode = "hybrid"
+)
+
+// ProviderNetworkConfig defines the switch port configuration to be applied
+// when managing network connectivity for baremetal hosts.
+type ProviderNetworkConfig struct {
+	// Type specifies which provider network this configuration applies to.
+	Type ProviderNetworkType `json:"type"`
+
+	// Mode is the switch port mode.
+	// +kubebuilder:default=access
+	Mode SwitchPortMode `json:"mode"`
+
+	// NativeVLAN is the native VLAN for the switch port.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=4094
+	NativeVLAN int32 `json:"nativeVLAN"`
+
+	// AllowedVLANs is a list of VLANs that are allowed on the switch port.
+	// Each entry can be a single VLAN ID (e.g., "100") or a range (e.g., "100-200").
+	// +optional
+	AllowedVLANs []string `json:"allowedVLANs,omitempty"`
+
+	// MTU defines the MTU to be applied to the switch port configuration.
+	// +kubebuilder:validation:Minimum=68
+	// +kubebuilder:validation:Maximum=9216
+	MTU int32 `json:"mtu,omitempty"`
+}
+
+// SwitchManagement configures the network switch port management service.
+type SwitchManagement struct {
+	// Enabled controls whether the switch management service is active.
+	// When true, CBO deploys a dedicated service that manages switch port
+	// configurations for baremetal hosts.
+	Enabled bool `json:"enabled"`
+
+	// ProviderNetworks defines the switch port configuration that
+	// must be applied for provider networks (e.g., inspection, cleaning,
+	// rescuing, etc.).
+	ProviderNetworks []ProviderNetworkConfig `json:"providerNetworks,omitempty"`
+}
+
+// IsSwitchManagementEnabled returns true when switch management is configured and enabled.
+func (s *ProvisioningSpec) IsSwitchManagementEnabled() bool {
+	return s.SwitchManagement != nil && s.SwitchManagement.Enabled
+}
+
 // ProvisioningNetwork is the boot mode of the system
 // +kubebuilder:validation:Enum=Managed;Unmanaged;Disabled
 type ProvisioningNetwork string
@@ -246,6 +304,13 @@ type ProvisioningSpec struct {
 	// Most users will not need this set. It is recommended to leave this unset unless
 	// actually necessary.
 	ExternalIPs []string `json:"externalIPs,omitempty"`
+
+	// SwitchManagement configures the network switch port management service.
+	// When enabled, CBO deploys a dedicated service that manages switch port
+	// configurations for baremetal hosts during provisioning lifecycle stages.
+	// Switch configurations are stored in a Secret that is updated by the
+	// Baremetal Operator and consumed by the switch management service.
+	SwitchManagement *SwitchManagement `json:"switchManagement,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning

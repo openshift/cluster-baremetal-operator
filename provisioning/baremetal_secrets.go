@@ -151,6 +151,16 @@ func createRegistryPullSecret(info *ProvisioningInfo) (bool, error) {
 }
 
 func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
+	// Ensure switch-configs Secret lifecycle (created when networking enabled, deleted when disabled)
+	if err := ensureSwitchConfigSecret(info); err != nil {
+		return false, errors.Wrap(err, "failed to ensure switch-configs Secret")
+	}
+
+	// Ensure switch-credentials Secret lifecycle (created when networking enabled, deleted when disabled)
+	if err := ensureSwitchCredentialsSecret(info); err != nil {
+		return false, errors.Wrap(err, "failed to ensure switch-credentials Secret")
+	}
+
 	// Create a Secret for the Ironic Password
 	if err := createIronicSecret(info, ironicSecretName, ironicUsername); err != nil {
 		return false, errors.Wrap(err, "failed to create Ironic password")
@@ -172,7 +182,7 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 
 func DeleteAllSecrets(info *ProvisioningInfo) error {
 	var secretErrors []error
-	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName, tlsSecretName, PullSecretName} {
+	for _, sn := range []string{baremetalSecretName, ironicSecretName, inspectorSecretName, ironicrpcSecretName, tlsSecretName, PullSecretName, switchConfigsSecretName, switchCredentialsSecretName} {
 		if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), sn, metav1.DeleteOptions{})); err != nil {
 			secretErrors = append(secretErrors, err)
 		}
@@ -225,6 +235,13 @@ func buildTlsHosts(info *ProvisioningInfo) (sets.Set[string], error) {
 		if ip != "" {
 			hosts.Insert(normalizeHost(ip))
 		}
+	}
+
+	// Networking service hostname (when switch management is enabled, Ironic
+	// uses JSON-RPC over TLS to reach the networking service)
+	if info.ProvConfig.Spec.IsSwitchManagementEnabled() {
+		hosts.Insert(fmt.Sprintf("%s.%s.svc", ironicNetworkingServiceName, info.Namespace))
+		hosts.Insert(fmt.Sprintf("%s.%s.svc.%s", ironicNetworkingServiceName, info.Namespace, defaultClusterDomain))
 	}
 
 	// Ironic-proxy service hostnames and API server internal IPs
@@ -293,4 +310,59 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 		}
 		return !sansMatch, nil
 	})
+}
+
+// ensureNetworkingSecret creates or deletes a networking-related Secret based on
+// whether ironic networking is enabled. When enabled, it creates the secret with
+// the given name. If dataFileName is non-empty, the secret is seeded with an
+// initial placeholder file; otherwise it is created empty for BMO to populate.
+// When disabled, it deletes the secret if it exists.
+func ensureNetworkingSecret(info *ProvisioningInfo, secretName, dataFileName string) error {
+	if !info.ProvConfig.Spec.IsSwitchManagementEnabled() {
+		if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(
+			info.Context, secretName, metav1.DeleteOptions{})); err != nil {
+			return fmt.Errorf("failed to delete %s Secret: %w", secretName, err)
+		}
+		return nil
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: info.Namespace,
+			Annotations: map[string]string{
+				cboOwnedAnnotation: "",
+			},
+			Labels: map[string]string{
+				cboLabelName: stateService,
+			},
+		},
+	}
+
+	if dataFileName != "" {
+		secret.Data = map[string][]byte{
+			dataFileName: []byte("# This file is managed by the Baremetal Operator\n"),
+		}
+	}
+
+	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
+		return fmt.Errorf("unable to set controllerReference on %s Secret: %w", secretName, err)
+	}
+
+	if err := applySecret(info.Client.CoreV1(), info.EventRecorder, secret, doNotUpdateData); err != nil {
+		return fmt.Errorf("unable to apply %s Secret: %w", secretName, err)
+	}
+
+	return nil
+}
+
+// ensureSwitchConfigSecret creates a Secret for the switch-configs.
+func ensureSwitchConfigSecret(info *ProvisioningInfo) error {
+	return ensureNetworkingSecret(info, switchConfigsSecretName, switchConfigsFileName)
+}
+
+// ensureSwitchCredentialsSecret creates an empty Secret for the switch-credentials.
+// BMO populates it with individual SSH key files for each switch.
+func ensureSwitchCredentialsSecret(info *ProvisioningInfo) error {
+	return ensureNetworkingSecret(info, switchCredentialsSecretName, "")
 }

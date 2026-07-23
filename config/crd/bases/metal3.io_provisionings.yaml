@@ -232,6 +232,79 @@ spec:
                   Image used to boot baremetal host machines can be downloaded
                   by the metal3 cluster.
                 type: string
+              switchManagement:
+                description: |-
+                  SwitchManagement configures the network switch port management service.
+                  When enabled, CBO deploys a dedicated service that manages switch port
+                  configurations for baremetal hosts during provisioning lifecycle stages.
+                  Switch configurations are stored in a Secret that is updated by the
+                  Baremetal Operator and consumed by the switch management service.
+                properties:
+                  enabled:
+                    description: |-
+                      Enabled controls whether the switch management service is active.
+                      When true, CBO deploys a dedicated service that manages switch port
+                      configurations for baremetal hosts.
+                    type: boolean
+                  providerNetworks:
+                    description: |-
+                      ProviderNetworks defines the switch port configuration that
+                      must be applied for provider networks (e.g., inspection, cleaning,
+                      rescuing, etc.).
+                    items:
+                      description: |-
+                        ProviderNetworkConfig defines the switch port configuration to be applied
+                        when managing network connectivity for baremetal hosts.
+                      properties:
+                        allowedVLANs:
+                          description: |-
+                            AllowedVLANs is a list of VLANs that are allowed on the switch port.
+                            Each entry can be a single VLAN ID (e.g., "100") or a range (e.g., "100-200").
+                          items:
+                            type: string
+                          type: array
+                        mode:
+                          default: access
+                          description: Mode is the switch port mode.
+                          enum:
+                          - access
+                          - trunk
+                          - hybrid
+                          type: string
+                        mtu:
+                          description: MTU defines the MTU to be applied to the switch
+                            port configuration.
+                          format: int32
+                          maximum: 9216
+                          minimum: 68
+                          type: integer
+                        nativeVLAN:
+                          description: NativeVLAN is the native VLAN for the switch
+                            port.
+                          format: int32
+                          maximum: 4094
+                          minimum: 1
+                          type: integer
+                        type:
+                          description: Type specifies which provider network this
+                            configuration applies to.
+                          enum:
+                          - idle
+                          - inspection
+                          - cleaning
+                          - rescuing
+                          - servicing
+                          - provisioning
+                          type: string
+                      required:
+                      - mode
+                      - nativeVLAN
+                      - type
+                      type: object
+                    type: array
+                required:
+                - enabled
+                type: object
               unsupportedConfigOverrides:
                 description: |-
                   UnsupportedConfigOverrides are site-specific overrides that are not
