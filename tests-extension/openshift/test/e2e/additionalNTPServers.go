@@ -26,7 +26,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: sgoveas@redhat.com
-	g.It("Author:sgoveas-NonPreRelease-Medium-79243-Check Additional NTP servers were added in install-config.yaml", func() {
+	g.It("Author:sgoveas-NonPreRelease-Medium-79243-Check Additional NTP servers were added in install-config.yaml [Level0]", func() {
 		// Skip if not running on equinix-ocp-metal-qe profile
 		clusterProfileName := os.Getenv("CLUSTER_PROFILE_NAME")
 		if clusterProfileName != "equinix-ocp-metal-qe" {

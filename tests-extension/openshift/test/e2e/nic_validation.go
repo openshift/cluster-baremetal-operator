@@ -40,6 +40,22 @@ func maskMAC(mac string) string {
 	return fmt.Sprintf("%s:%s:**:**:**:%s", parts[0], parts[1], parts[5])
 }
 
+// isVLANInterface checks if a NIC name represents a VLAN sub-interface (e.g., ens1f0.1000)
+// BMH hardware inspection discovers these from firmware/LLDP but they may not exist as
+// OS-level interfaces on the node.
+func isVLANInterface(name string) bool {
+	parts := strings.SplitN(name, ".", 2)
+	if len(parts) != 2 {
+		return false
+	}
+	for _, c := range parts[1] {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return len(parts[1]) > 0
+}
+
 // deduplicateNICs removes duplicate NIC entries based on name
 func deduplicateNICs(nics []NICInfo) []NICInfo {
 	seen := make(map[string]bool)
@@ -268,7 +284,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: sgoveas@redhat.com
-	g.It("Author:sgoveas-Medium-88285-Verify NIC information in BMH, HardwareData and actual nodes match", func() {
+	g.It("Author:sgoveas-Medium-88285-Verify NIC information in BMH, HardwareData and actual nodes match [Level0]", func() {
 		g.By("Get all BareMetalHost resources")
 		bmhNamesOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get BMH names")
@@ -331,14 +347,24 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 			}
 			e2e.Logf("BMH %s corresponds to node %s", bmhName, nodeName)
 
+			// Filter out VLAN sub-interfaces before node comparison
+			var physicalNICs []NICInfo
+			for _, nic := range bmhNICs {
+				if isVLANInterface(nic.Name) {
+					e2e.Logf("Skipping VLAN sub-interface %s for node validation", nic.Name)
+					continue
+				}
+				physicalNICs = append(physicalNICs, nic)
+			}
+
 			// Get actual NIC info from the node
 			g.By(fmt.Sprintf("Verifying actual NIC information on node %s", nodeName))
-			actualNICs, err := getActualNICsFromNode(oc, nodeName, bmhNICs)
+			actualNICs, err := getActualNICsFromNode(oc, nodeName, physicalNICs)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get actual NICs from node %s: %v", nodeName, err))
 			o.Expect(actualNICs).NotTo(o.BeEmpty(), fmt.Sprintf("No actual NICs found on node %s", nodeName))
 
 			// Compare with actual node data
-			for _, bmhNIC := range bmhNICs {
+			for _, bmhNIC := range physicalNICs {
 				actualNIC, found := findActualNICByName(actualNICs, bmhNIC.Name)
 				o.Expect(found).To(o.BeTrue(),
 					fmt.Sprintf("NIC %s from BMH not found on node %s", bmhNIC.Name, nodeName))

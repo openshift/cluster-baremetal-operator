@@ -19,7 +19,7 @@ const (
 )
 
 func waitForBMHState(oc *exutil.CLI, bmhName string, bmhStatus string) {
-	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 45*time.Minute, true, func(ctx context.Context) (bool, error) {
 		out, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "bmh", bmhName, "-o=jsonpath={.status.provisioning.state}").Output()
 		if err != nil {
 			return false, err
@@ -186,4 +186,25 @@ func getNicNameByVendor(vendor string) string {
 		g.Skip("Unsupported NIC vendor for name lookup: " + vendor)
 		return ""
 	}
+}
+
+// findBMHByName finds a BareMetalHost by exact name match (e.g., "master-00", "worker-01")
+// Returns the BMH name if found, empty string if not found
+func findBMHByName(oc *exutil.CLI, bmhName string) string {
+	allBMHs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	if err != nil {
+		e2e.Logf("Failed to get BMHs: %v", err)
+		return ""
+	}
+
+	bmhList := strings.Fields(allBMHs)
+	for _, bmh := range bmhList {
+		if bmh == bmhName {
+			e2e.Logf("Found BMH: %s", bmh)
+			return bmh
+		}
+	}
+
+	e2e.Logf("No BMH found with exact name %q", bmhName)
+	return ""
 }

@@ -21,7 +21,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job on BareMetal", func() {
+var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = compat_otp.NewCLI("ironic-tls-certificate", compat_otp.KubeConfigPath())
@@ -31,8 +31,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 99.7% pass rate (369 runs last 60 days)
-	g.It("Author:jhajyahy-High-88555-Verify Ironic TLS certificate contains all required SANs (IPv4 and IPv6)", func() {
+	g.It("Author:jhajyahy-High-88555-Verify Ironic TLS certificate contains all required SANs (IPv4 and IPv6)][Level0]", func() {
 		g.By("Extract TLS certificate from metal3-ironic-tls secret")
 		certBase64, err := oc.AsAdmin().Run("get").Args("secret", "metal3-ironic-tls", "-n", machineAPINamespace, "-o=jsonpath={.data.tls\\.crt}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -223,7 +222,6 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=unknown - no data in BigQuery last 60 days
 	g.It("Author:jhajyahy-High-88556-Verify TLS certificate regenerates when SANs change (IPv4 and IPv6) [Disruptive]", func() {
 		certFile := "/tmp/ironic-tls-cert.pem"
 		defer func() {
@@ -401,8 +399,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 99.7% pass rate (369 runs last 60 days)
-	g.It("Author:jhajyahy-High-88557-Verify BareMetalHosts communicate successfully with Ironic using TLS certificate", func() {
+	g.It("Author:jhajyahy-High-88557-Verify BareMetalHosts communicate successfully with Ironic using TLS certificate [Level0]", func() {
 		g.By("Verify all BareMetalHosts are in valid state")
 		bmhList, err := oc.AsAdmin().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -482,8 +479,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 99.7% pass rate (369 runs last 60 days)
-	g.It("Author:jhajyahy-High-88558-Verify Ironic TLS certificate has 1-year validity period", func() {
+	g.It("Author:jhajyahy-High-88558-Verify Ironic TLS certificate has 1-year validity period [Level0]", func() {
 		certFile := "/tmp/ironic-tls-cert-validity.pem"
 		defer func() {
 			if err := os.Remove(certFile); err != nil {
