@@ -228,7 +228,45 @@ func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int) error {
 	return errNode
 }
 
-// checkNodeStatus
+func isNodeReady(oc *exutil.CLI, nodeName string) bool {
+	status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(status) == "True"
+}
+
+func getReadyNodes(oc *exutil.CLI, nodes []string) []string {
+	readyNodes := []string{}
+	for _, node := range nodes {
+		if isNodeReady(oc, node) {
+			readyNodes = append(readyNodes, node)
+		}
+	}
+	return readyNodes
+}
+
+func waitForPodReady(oc *exutil.CLI, podName string, namespace string, timeout time.Duration) error {
+	e2e.Logf("Waiting for pod %s in namespace %s to be ready (timeout: %v)", podName, namespace, timeout)
+	err := wait.Poll(10*time.Second, timeout, func() (bool, error) {
+		stdout, err := oc.AsAdmin().Run("get").Args("pod", podName, "-n", namespace, "-o", "jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'").Output()
+		if err != nil {
+			e2e.Logf("Error getting pod status: %v, will retry", err)
+			return false, nil
+		}
+		if strings.Contains(stdout, "True") {
+			e2e.Logf("Pod %s is ready!", podName)
+			return true, nil
+		}
+		e2e.Logf("Pod %s not ready yet, status: %s", podName, stdout)
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("Pod %s status is not ready after %v! Error: %v", podName, timeout, err)
+	}
+	return nil
+}
+
 func checkNodeStatus(oc *exutil.CLI, pollIntervalSec time.Duration, pollDurationMinute time.Duration, nodeName string, nodeStatus string) error {
 	e2e.Logf("Check status of node %s", nodeName)
 	errNode := wait.PollUntilContextTimeout(context.Background(), pollIntervalSec, pollDurationMinute, false, func(ctx context.Context) (bool, error) {

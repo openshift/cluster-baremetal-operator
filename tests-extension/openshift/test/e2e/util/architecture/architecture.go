@@ -1,6 +1,7 @@
 package architecture
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -71,11 +72,15 @@ func (a Architecture) GNUString() string {
 	return ""
 }
 
+func GetNodeArch(oc *exutil.CLI, nodeName string) Architecture {
+	arch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.nodeInfo.architecture}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("failed to get architecture for node %s", nodeName))
+	return Architecture(arch)
+}
+
 // GetControlPlaneArch get the architecture of the contol plane node
 func GetControlPlaneArch(oc *exutil.CLI) Architecture {
 	masterNode, err := compat_otp.GetFirstMasterNode(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	architecture, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", masterNode, "-o=jsonpath={.status.nodeInfo.architecture}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return Architecture(architecture)
+	return GetNodeArch(oc, masterNode)
 }
