@@ -135,6 +135,121 @@ func TestSplitCiphers(t *testing.T) {
 	}
 }
 
+func TestTlsGroupsToOpenSSLCurves(t *testing.T) {
+	tests := []struct {
+		name                string
+		groups              []configv1.TLSGroup
+		expected            string
+		expectedUnsupported []string
+	}{
+		{
+			name: "standard groups pass through",
+			groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1,
+				configv1.TLSGroupSecP384r1,
+			},
+			expected: "X25519:secp256r1:secp384r1",
+		},
+		{
+			name: "all supported groups",
+			groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1,
+				configv1.TLSGroupSecP384r1,
+				configv1.TLSGroupSecP521r1,
+				configv1.TLSGroupX25519MLKEM768,
+				configv1.TLSGroupSecP256r1MLKEM768,
+				configv1.TLSGroupSecP384r1MLKEM1024,
+			},
+			expected: "X25519:secp256r1:secp384r1:secp521r1:X25519MLKEM768:SecP256r1MLKEM768:SecP384r1MLKEM1024",
+		},
+		{
+			name: "hybrid PQC groups included",
+			groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1MLKEM768,
+				configv1.TLSGroupSecP384r1MLKEM1024,
+			},
+			expected: "X25519:SecP256r1MLKEM768:SecP384r1MLKEM1024",
+		},
+		{
+			name: "unknown groups filtered out",
+			groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroup("FutureGroup"),
+			},
+			expected:            "X25519",
+			expectedUnsupported: []string{"FutureGroup"},
+		},
+		{
+			name:     "empty input",
+			groups:   []configv1.TLSGroup{},
+			expected: "",
+		},
+		{
+			name:     "nil input",
+			groups:   nil,
+			expected: "",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, unsupported := tlsGroupsToOpenSSLCurves(tc.groups)
+			assert.Equal(t, tc.expected, result)
+			assert.Equal(t, tc.expectedUnsupported, unsupported)
+		})
+	}
+}
+
+func TestTlsGroupsToGoNames(t *testing.T) {
+	tests := []struct {
+		name                string
+		groups              []configv1.TLSGroup
+		expected            []string
+		expectedUnsupported []string
+	}{
+		{
+			name: "standard groups mapped to Go names",
+			groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1,
+				configv1.TLSGroupSecP384r1,
+				configv1.TLSGroupSecP521r1,
+				configv1.TLSGroupX25519MLKEM768,
+			},
+			expected: []string{"X25519", "CurveP256", "CurveP384", "CurveP521", "X25519MLKEM768"},
+		},
+		{
+			name: "forward-compat groups filtered out",
+			groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1MLKEM768,
+				configv1.TLSGroupSecP384r1MLKEM1024,
+			},
+			expected:            []string{"X25519"},
+			expectedUnsupported: []string{"SecP256r1MLKEM768", "SecP384r1MLKEM1024"},
+		},
+		{
+			name:     "empty input",
+			groups:   []configv1.TLSGroup{},
+			expected: nil,
+		},
+		{
+			name:     "nil input",
+			groups:   nil,
+			expected: nil,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, unsupported := tlsGroupsToGoNames(tc.groups)
+			assert.Equal(t, tc.expected, result)
+			assert.Equal(t, tc.expectedUnsupported, unsupported)
+		})
+	}
+}
+
 func TestTlsProfileToApacheEnvVars(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -194,6 +309,82 @@ func TestTlsProfileToApacheEnvVarsCipherSplit(t *testing.T) {
 	assert.Contains(t, envMap, "IRONIC_TLS_13_CIPHERS")
 	assert.NotContains(t, envMap["IRONIC_TLS_12_CIPHERS"], "TLS_AES")
 	assert.Contains(t, envMap["IRONIC_TLS_13_CIPHERS"], "TLS_AES_128_GCM_SHA256")
+}
+
+func TestTlsProfileToApacheEnvVarsCurves(t *testing.T) {
+	t.Run("curves env vars set when Groups is populated", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			MinTLSVersion: configv1.VersionTLS12,
+			Groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1,
+				configv1.TLSGroupSecP384r1,
+			},
+		}
+
+		envVars := tlsProfileToApacheEnvVars(profile)
+		envMap := map[string]string{}
+		for _, e := range envVars {
+			envMap[e.Name] = e.Value
+		}
+
+		assert.Equal(t, "X25519:secp256r1:secp384r1", envMap["IRONIC_TLS_CURVES"])
+		assert.Equal(t, "X25519:secp256r1:secp384r1", envMap["IRONIC_VMEDIA_CURVES"])
+	})
+
+	t.Run("curves env vars NOT set when Groups is nil", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			MinTLSVersion: configv1.VersionTLS12,
+		}
+
+		envVars := tlsProfileToApacheEnvVars(profile)
+		envMap := map[string]string{}
+		for _, e := range envVars {
+			envMap[e.Name] = e.Value
+		}
+
+		assert.NotContains(t, envMap, "IRONIC_TLS_CURVES")
+		assert.NotContains(t, envMap, "IRONIC_VMEDIA_CURVES")
+	})
+
+	t.Run("curves env vars NOT set when Groups is empty", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			MinTLSVersion: configv1.VersionTLS12,
+			Groups:        []configv1.TLSGroup{},
+		}
+
+		envVars := tlsProfileToApacheEnvVars(profile)
+		envMap := map[string]string{}
+		for _, e := range envVars {
+			envMap[e.Name] = e.Value
+		}
+
+		assert.NotContains(t, envMap, "IRONIC_TLS_CURVES")
+		assert.NotContains(t, envMap, "IRONIC_VMEDIA_CURVES")
+	})
+
+	t.Run("hybrid PQC groups included in curves env vars", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			MinTLSVersion: configv1.VersionTLS12,
+			Groups: []configv1.TLSGroup{
+				configv1.TLSGroupSecP256r1MLKEM768,
+				configv1.TLSGroupSecP384r1MLKEM1024,
+			},
+		}
+
+		envVars := tlsProfileToApacheEnvVars(profile)
+		envMap := map[string]string{}
+		for _, e := range envVars {
+			envMap[e.Name] = e.Value
+		}
+
+		assert.Equal(t, "SecP256r1MLKEM768:SecP384r1MLKEM1024", envMap["IRONIC_TLS_CURVES"])
+		assert.Equal(t, "SecP256r1MLKEM768:SecP384r1MLKEM1024", envMap["IRONIC_VMEDIA_CURVES"])
+	})
 }
 
 func TestTlsProfileToBMOArgs(t *testing.T) {
@@ -264,4 +455,110 @@ func TestTlsProfileToBMOArgsIANAConversion(t *testing.T) {
 		}
 	}
 	t.Fatal("--tls-cipher-suites not found in args")
+}
+
+func TestTlsProfileToBMOArgsCurves(t *testing.T) {
+	t.Run("curve preferences set when Groups is populated", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			MinTLSVersion: configv1.VersionTLS12,
+			Groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1,
+				configv1.TLSGroupSecP384r1,
+			},
+		}
+
+		args := tlsProfileToBMOArgs(profile)
+
+		// Find --tls-curve-preferences
+		found := false
+		for i, a := range args {
+			if a == "--tls-curve-preferences" {
+				found = true
+				assert.Equal(t, "X25519,CurveP256,CurveP384", args[i+1])
+				break
+			}
+		}
+		assert.True(t, found, "--tls-curve-preferences should be present")
+	})
+
+	t.Run("curve preferences NOT set when Groups is nil", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			MinTLSVersion: configv1.VersionTLS12,
+		}
+
+		args := tlsProfileToBMOArgs(profile)
+
+		for _, a := range args {
+			assert.NotEqual(t, "--tls-curve-preferences", a)
+		}
+	})
+
+	t.Run("curve preferences NOT set when Groups is empty", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			MinTLSVersion: configv1.VersionTLS12,
+			Groups:        []configv1.TLSGroup{},
+		}
+
+		args := tlsProfileToBMOArgs(profile)
+
+		for _, a := range args {
+			assert.NotEqual(t, "--tls-curve-preferences", a)
+		}
+	})
+
+	t.Run("curve preferences with TLS 1.3 still includes curves", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+			MinTLSVersion: configv1.VersionTLS13,
+			Groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1,
+			},
+		}
+
+		args := tlsProfileToBMOArgs(profile)
+
+		// Cipher suites should not be present (TLS 1.3)
+		for _, a := range args {
+			assert.NotEqual(t, "--tls-cipher-suites", a)
+		}
+
+		// But curve preferences should still be present
+		found := false
+		for i, a := range args {
+			if a == "--tls-curve-preferences" {
+				found = true
+				assert.Equal(t, "X25519,CurveP256", args[i+1])
+				break
+			}
+		}
+		assert.True(t, found, "--tls-curve-preferences should be present even with TLS 1.3")
+	})
+
+	t.Run("forward-compat groups filtered out", func(t *testing.T) {
+		profile := configv1.TLSProfileSpec{
+			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			MinTLSVersion: configv1.VersionTLS12,
+			Groups: []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1MLKEM768,
+				configv1.TLSGroupSecP384r1MLKEM1024,
+			},
+		}
+
+		args := tlsProfileToBMOArgs(profile)
+
+		for i, a := range args {
+			if a == "--tls-curve-preferences" {
+				// Forward-compat groups filtered — only X25519 remains
+				assert.Equal(t, "X25519", args[i+1])
+				return
+			}
+		}
+		t.Fatal("--tls-curve-preferences not found in args")
+	})
 }

@@ -443,6 +443,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 			return nil, fmt.Errorf("unable to get TLS profile from APIServer: %w", err)
 		}
 		tlsProfileSpec = &spec
+		provisioning.LogUnsupportedTLSGroups(spec.Groups)
 	}
 
 	infra, _ := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
