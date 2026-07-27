@@ -167,6 +167,7 @@ var metal3Volumes = []corev1.Volume{
 	imageVolume(),
 	ironicAgentPullSecretVolume(),
 	caTrustDirVolume(),
+	mirrorConfigVolume(),
 	{
 		Name: ironicCredentialsVolume,
 		VolumeSource: corev1.VolumeSource{
@@ -811,9 +812,17 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 		nodeSelector = map[string]string{"node-role.kubernetes.io/master": ""}
 	}
 
+	annotations := make(map[string]string, len(podTemplateAnnotations)+1)
+	for k, v := range podTemplateAnnotations {
+		annotations[k] = v
+	}
+	if info.MirrorConfigHash != "" {
+		annotations[mirrorConfigHashAnnotation] = info.MirrorConfigHash
+	}
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: podTemplateAnnotations,
+			Annotations: annotations,
 			Labels:      *labels,
 		},
 		Spec: corev1.PodSpec{
