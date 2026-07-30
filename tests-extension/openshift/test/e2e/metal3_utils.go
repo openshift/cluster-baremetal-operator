@@ -25,7 +25,7 @@ func skipIfNotBaremetal(oc *exutil.CLI) {
 	}
 }
 
-func getWorkerBMH(oc *exutil.CLI) (string, string) {
+func getWorkerBMH(oc *exutil.CLI) (host string, machineName string) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
 		"machines.machine.openshift.io", "-n", machineAPINamespace,
 		"-l", "machine.openshift.io/cluster-api-machine-role=worker",
@@ -36,7 +36,7 @@ func getWorkerBMH(oc *exutil.CLI) (string, string) {
 	if len(workerMachines) == 0 || workerMachines[0] == "" {
 		g.Skip("No worker machines found")
 	}
-	machineName := workerMachines[len(workerMachines)-1]
+	machineName = workerMachines[len(workerMachines)-1]
 
 	bmhOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
 		"bmh", "-n", machineAPINamespace,
@@ -44,7 +44,6 @@ func getWorkerBMH(oc *exutil.CLI) (string, string) {
 	).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	var host string
 	for _, line := range strings.Split(strings.TrimSpace(bmhOutput), "\n") {
 		parts := strings.SplitN(line, ",", 2)
 		if len(parts) == 2 && parts[1] == machineName {
@@ -53,7 +52,7 @@ func getWorkerBMH(oc *exutil.CLI) (string, string) {
 		}
 	}
 	if host == "" {
-		g.Skip(fmt.Sprintf("No BMH found for worker machine %s", machineName))
+		e2e.Failf("No BMH found for worker machine %s", machineName)
 	}
 	return host, machineName
 }
@@ -145,10 +144,10 @@ func buildFirmwareURL(vendor, currentVersion string) (string, string) {
 				fileName = "ilo6_157.bin"
 			}
 		} else {
-			g.Skip("Unsupported HPE BMC version")
+			e2e.Failf("Unsupported HPE BMC version: %s", currentVersion)
 		}
 	default:
-		g.Skip("Unsupported vendor")
+		e2e.Failf("Unsupported vendor: %s", vendor)
 	}
 
 	return url, fileName
@@ -169,8 +168,7 @@ func getHfsToggleValue(oc *exutil.CLI, vendor, machineAPINamespace, host string)
 	case "HPE":
 		settingName = "NetworkBootRetry"
 	default:
-		g.Skip("Unsupported vendor")
-		return "", "", nil
+		e2e.Failf("Unsupported vendor: %s", vendor)
 	}
 
 	currentValue, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, fmt.Sprintf("-o=jsonpath={.status.settings.%s}", settingName)).Output()
@@ -234,7 +232,7 @@ func getNicFwDetails(vendor, currentVersion string) (string, string) {
 			return mlx_28_40_1000, "fw-ConnectX7-rel-28_40_1000.bin" // Default to latest
 		}
 	default:
-		g.Skip("Unsupported NIC vendor: " + vendor)
+		e2e.Failf("Unsupported NIC vendor: %s", vendor)
 		return "", ""
 	}
 }
@@ -246,7 +244,7 @@ func getNicNameByVendor(vendor string) string {
 	case "Mellanox Technologies":
 		return "ConnectX-7"
 	default:
-		g.Skip("Unsupported NIC vendor for name lookup: " + vendor)
+		e2e.Failf("Unsupported NIC vendor for name lookup: %s", vendor)
 		return ""
 	}
 }

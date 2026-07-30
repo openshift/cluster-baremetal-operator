@@ -292,6 +292,21 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statusModified).Should(o.Equal(specModified))
 
+		compat_otp.By("Verify HFS ChangeDetected condition is False after update")
+		hfsResetErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+			cond, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, `-o=jsonpath={.status.conditions[?(@.type=="ChangeDetected")].status}`).Output()
+			if err != nil {
+				return false, err
+			}
+			if cond == "False" {
+				e2e.Logf("HFS ChangeDetected condition is False")
+				return true, nil
+			}
+			e2e.Logf("HFS ChangeDetected condition: %s, waiting for False...", cond)
+			return false, nil
+		})
+		o.Expect(hfsResetErr).NotTo(o.HaveOccurred(), "HFS ChangeDetected condition did not return to False after update")
+
 		compat_otp.By("Verify BMH operationalStatus is OK and no error")
 		opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -437,6 +452,21 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("annotated"))
 
+		compat_otp.By("Verify BMH operationalStatus transitions to servicing")
+		servicingErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+			opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
+			if err != nil {
+				return false, err
+			}
+			if opStatus == "servicing" {
+				e2e.Logf("BMH operationalStatus is now 'servicing'")
+				return true, nil
+			}
+			e2e.Logf("BMH operationalStatus: %s, waiting for 'servicing'...", opStatus)
+			return false, nil
+		})
+		o.Expect(servicingErr).NotTo(o.HaveOccurred(), "BMH did not transition to servicing state")
+
 		g.By("Waiting for the node to transition to NotReady state after reboot")
 		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
@@ -482,6 +512,21 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(pollErr).NotTo(o.HaveOccurred(), "Polling for firmware version update failed")
 		o.Expect(currentVersion).NotTo(o.BeEmpty(), "Firmware version must not be empty after update")
 		o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion))
+
+		compat_otp.By("Verify HFC ChangeDetected condition is False after update")
+		hfcResetErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+			cond, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, `-o=jsonpath={.status.conditions[?(@.type=="ChangeDetected")].status}`).Output()
+			if err != nil {
+				return false, err
+			}
+			if cond == "False" {
+				e2e.Logf("HFC ChangeDetected condition is False")
+				return true, nil
+			}
+			e2e.Logf("HFC ChangeDetected condition: %s, waiting for False...", cond)
+			return false, nil
+		})
+		o.Expect(hfcResetErr).NotTo(o.HaveOccurred(), "HFC ChangeDetected condition did not return to False after update")
 
 		compat_otp.By("Verify BMH operationalStatus is OK and no error")
 		opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
