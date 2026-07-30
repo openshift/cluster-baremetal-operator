@@ -20,8 +20,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
@@ -988,6 +990,188 @@ func TestCreateInitContainerMachineOsDownloader(t *testing.T) {
 			assert.NotNil(t, container.SecurityContext.ReadOnlyRootFilesystem)
 			assert.True(t, *container.SecurityContext.ReadOnlyRootFilesystem,
 				"ReadOnlyRootFilesystem should be true")
+		})
+	}
+}
+
+func TestOperandImagesMatch(t *testing.T) {
+	const namespace = "openshift-machine-api"
+
+	desiredImages := &Images{
+		Ironic:            "registry.example.com/ironic:v2",
+		StaticIpManager:   "registry.example.com/static-ip:v2",
+		BaremetalOperator: "registry.example.com/bmo:v2",
+	}
+
+	metal3Deployment := func(ironicImage string, staticIPImage *string) *appsv1.Deployment {
+		containers := []corev1.Container{
+			{Name: "metal3-ironic", Image: ironicImage},
+		}
+		if staticIPImage != nil {
+			containers = append(containers, corev1.Container{
+				Name:  "metal3-static-ip-manager",
+				Image: *staticIPImage,
+			})
+		}
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      baremetalDeploymentName,
+				Namespace: namespace,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: containers,
+					},
+				},
+			},
+		}
+	}
+
+	bmoDeployment := func(bmoImage string) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      bmoDeploymentName,
+				Namespace: namespace,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "metal3-baremetal-operator", Image: bmoImage},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	staticIP := desiredImages.StaticIpManager
+	oldStaticIP := "registry.example.com/static-ip:v1"
+
+	tCases := []struct {
+		name     string
+		objects  []*appsv1.Deployment
+		expected bool
+	}{
+		{
+			name:     "no deployments exist",
+			objects:  nil,
+			expected: false,
+		},
+		{
+			name: "all images match",
+			objects: []*appsv1.Deployment{
+				metal3Deployment(desiredImages.Ironic, &staticIP),
+				bmoDeployment(desiredImages.BaremetalOperator),
+			},
+			expected: true,
+		},
+		{
+			// Matches newMetal3Containers when ProvisioningNetwork is Disabled
+			// (vmedia): metal3-static-ip-manager is omitted and must not force
+			// OperandImagesMatch to return false.
+			name: "static-ip-manager is optional when absent",
+			objects: []*appsv1.Deployment{
+				metal3Deployment(desiredImages.Ironic, nil),
+				bmoDeployment(desiredImages.BaremetalOperator),
+			},
+			expected: true,
+		},
+		{
+			name: "ironic image differs",
+			objects: []*appsv1.Deployment{
+				metal3Deployment("registry.example.com/ironic:v1", &staticIP),
+				bmoDeployment(desiredImages.BaremetalOperator),
+			},
+			expected: false,
+		},
+		{
+			name: "static-ip-manager image differs when present",
+			objects: []*appsv1.Deployment{
+				metal3Deployment(desiredImages.Ironic, &oldStaticIP),
+				bmoDeployment(desiredImages.BaremetalOperator),
+			},
+			expected: false,
+		},
+		{
+			name: "bmo image differs",
+			objects: []*appsv1.Deployment{
+				metal3Deployment(desiredImages.Ironic, &staticIP),
+				bmoDeployment("registry.example.com/bmo:v1"),
+			},
+			expected: false,
+		},
+		{
+			name: "only metal3 exists and matches",
+			objects: []*appsv1.Deployment{
+				metal3Deployment(desiredImages.Ironic, &staticIP),
+			},
+			expected: false,
+		},
+		{
+			name: "only bmo exists and differs",
+			objects: []*appsv1.Deployment{
+				bmoDeployment("registry.example.com/bmo:v1"),
+			},
+			expected: false,
+		},
+		{
+			name: "metal3 missing ironic container",
+			objects: []*appsv1.Deployment{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      baremetalDeploymentName,
+						Namespace: namespace,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Name: "metal3-static-ip-manager", Image: desiredImages.StaticIpManager},
+								},
+							},
+						},
+					},
+				},
+				bmoDeployment(desiredImages.BaremetalOperator),
+			},
+			expected: false,
+		},
+		{
+			name: "bmo missing required container",
+			objects: []*appsv1.Deployment{
+				metal3Deployment(desiredImages.Ironic, &staticIP),
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      bmoDeploymentName,
+						Namespace: namespace,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Name: "unrelated-container", Image: "some-image"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var kubeObjects []runtime.Object
+			for _, d := range tc.objects {
+				kubeObjects = append(kubeObjects, d)
+			}
+			kubeClient := fakekube.NewSimpleClientset(kubeObjects...)
+			result, err := OperandImagesMatch(kubeClient.AppsV1(), namespace, desiredImages)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
