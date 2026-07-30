@@ -228,24 +228,3 @@ func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int) error {
 	return errNode
 }
 
-// checkNodeStatus
-func checkNodeStatus(oc *exutil.CLI, pollIntervalSec time.Duration, pollDurationMinute time.Duration, nodeName string, nodeStatus string) error {
-	e2e.Logf("Check status of node %s", nodeName)
-	errNode := wait.PollUntilContextTimeout(context.Background(), pollIntervalSec, pollDurationMinute, false, func(ctx context.Context) (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
-		if err != nil || string(output) != nodeStatus {
-			e2e.Logf("Node status: %s. Trying again", output)
-			return false, nil
-		}
-		if string(output) == nodeStatus {
-			e2e.Logf("Node status: %s", output)
-			return true, nil
-		}
-		return false, nil
-	})
-	if errNode != nil {
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	}
-	return errNode
-}
