@@ -115,7 +115,7 @@ func buildFirmwareURL(vendor, currentVersion string) (string, string) {
 		case "7.10.30.00":
 			url = iDRAC_71070
 		default:
-			url = iDRAC_71070 // Default to 7.10.70.00
+			e2e.Failf("Unsupported Dell iDRAC version: %s", currentVersion)
 		}
 	case "HPE":
 		// Extract the iLO version and assign the file name accordingly
@@ -128,8 +128,7 @@ func buildFirmwareURL(vendor, currentVersion string) (string, string) {
 				url = ilo5_305
 				fileName = "ilo5_305.bin"
 			default:
-				url = ilo5_305 // Default to v3.05
-				fileName = "ilo5_305.bin"
+				e2e.Failf("Unsupported iLO 5 version: %s", currentVersion)
 			}
 		} else if strings.Contains(currentVersion, "iLO 6") {
 			switch currentVersion {
@@ -140,8 +139,7 @@ func buildFirmwareURL(vendor, currentVersion string) (string, string) {
 				url = ilo6_157
 				fileName = "ilo6_157.bin"
 			default:
-				url = ilo6_157 // Default to 1.57
-				fileName = "ilo6_157.bin"
+				e2e.Failf("Unsupported iLO 6 version: %s", currentVersion)
 			}
 		} else {
 			e2e.Failf("Unsupported HPE BMC version: %s", currentVersion)
@@ -220,7 +218,8 @@ func getNicFwDetails(vendor, currentVersion string) (string, string) {
 		case "22.6.250":
 			return bcm_226_226, "bcm5751x-v22.6.226-esxi.zip"
 		default:
-			return bcm_226_250, "bcm5751x-v22.6.250-esxi.zip" // Default to latest
+			e2e.Failf("Unsupported Broadcom NIC firmware version: %s", currentVersion)
+			return "", ""
 		}
 	case "Mellanox Technologies":
 		switch currentVersion {
@@ -229,7 +228,8 @@ func getNicFwDetails(vendor, currentVersion string) (string, string) {
 		case "28.39.1014":
 			return mlx_28_40_1000, "fw-ConnectX7-rel-28_40_1000.bin"
 		default:
-			return mlx_28_40_1000, "fw-ConnectX7-rel-28_40_1000.bin" // Default to latest
+			e2e.Failf("Unsupported Mellanox NIC firmware version: %s", currentVersion)
+			return "", ""
 		}
 	default:
 		e2e.Failf("Unsupported NIC vendor: %s", vendor)
