@@ -36,6 +36,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -75,8 +76,7 @@ func main() {
 	var imagesJSONFilename string
 
 	klog.InitFlags(nil)
-	// Changing default metrics interface to loopback, so that we don't bypass kube-rbac-proxy
-	flag.StringVar(&metricsAddr, "metrics-addr", "[::1]:8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8443", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&imagesJSONFilename, "images-json", "/etc/cluster-baremetal-operator/images/images.json",
@@ -127,7 +127,7 @@ func main() {
 			klog.Infof("TLS configuration contains unsupported ciphers that will be ignored: %v", unsupportedCiphers)
 		}
 		webhookTLSOpts = append(webhookTLSOpts, tlsConfig)
-		klog.Info("Applying cluster TLS profile to webhook server")
+		klog.Info("Applying cluster TLS profile to webhook and metrics servers")
 	} else {
 		klog.Info("Cluster TLS adherence does not require enforcement, using defaults")
 	}
@@ -135,7 +135,11 @@ func main() {
 	controllerOptions := ctrl.Options{
 		Scheme: scheme,
 		Metrics: server.Options{
-			BindAddress: metricsAddr,
+			BindAddress:    metricsAddr,
+			SecureServing:  true,
+			FilterProvider: filters.WithAuthenticationAndAuthorization,
+			CertDir:        "/etc/tls/private",
+			TLSOpts:        webhookTLSOpts,
 		},
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port:    9443,

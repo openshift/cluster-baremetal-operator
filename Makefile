@@ -58,8 +58,8 @@ RBAC_LIST = rbac.authorization.k8s.io_v1_role_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_rolebinding_cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_clusterrolebinding_cluster-baremetal-operator.yaml
 
-PROMETHEUS_RBAC_LIST = rbac.authorization.k8s.io_v1_rolebinding_prometheus-k8s-cluster-baremetal-operator.yaml \
-	rbac.authorization.k8s.io_v1_role_prometheus-k8s-cluster-baremetal-operator.yaml
+PROMETHEUS_RBAC_LIST = rbac.authorization.k8s.io_v1_clusterrolebinding_prometheus-k8s-cluster-baremetal-operator.yaml \
+	rbac.authorization.k8s.io_v1_clusterrole_prometheus-k8s-cluster-baremetal-operator.yaml
 
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
@@ -75,8 +75,6 @@ manifests: generate
 	# manifests needed for monitoring
 	mv $(TMP_DIR)/monitoring.coreos.com_v1_servicemonitor_cluster-baremetal-operator-servicemonitor.yaml manifests/0000_90_cluster-baremetal-operator_03_servicemonitor.yaml
 	mv $(TMP_DIR)/v1_service_cluster-baremetal-operator-service.yaml manifests/0000_31_cluster-baremetal-operator_03_service.yaml
-	mv $(TMP_DIR)/v1_configmap_baremetal-kube-rbac-proxy.yaml manifests/0000_31_cluster-baremetal-operator_05_baremetal-kube-rbac-proxy-config.yaml
-
 	# manifests needed for the webhook
 	mv $(TMP_DIR)/v1_service_cluster-baremetal-webhook-service.yaml manifests/0000_31_cluster-baremetal-operator_03_webhookservice.yaml
 

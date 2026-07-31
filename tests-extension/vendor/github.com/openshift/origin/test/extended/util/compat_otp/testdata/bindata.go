@@ -11021,22 +11021,6 @@ func testExtendedTestdataInstallerBaremetalHostUpdatePolicyYaml() (*asset, error
 
 var _testExtendedTestdataInstallerBaremetalNginxFirmwareYaml = []byte(`---
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nginx-no-ssl
-data:
-  default.conf: |
-    server {
-        listen 8080;
-        server_name _;
-
-        location / {
-            root /usr/share/nginx/html;
-            autoindex on;
-        }
-    }
----
-apiVersion: v1
 kind: Pod
 metadata:
   name: nginx-pod
@@ -11051,13 +11035,6 @@ spec:
     - name: firmware-config
       configMap:
         name: firmware-download
-    - name: nginx-conf
-      configMap:
-        name: nginx-no-ssl
-    - name: nginx-cache
-      emptyDir: {}
-    - name: nginx-run
-      emptyDir: {}
   initContainers:
     - name: init-download-firmware
       image: ghcr.io/crazy-max/7zip
@@ -11068,41 +11045,22 @@ spec:
             configMapKeyRef:
               name: firmware-download
               key: firmware_url
-        - name: COMPONENT
-          valueFrom:
-            configMapKeyRef:
-              name: firmware-download
-              key: component
       command:
       - /bin/sh
       - -c
       - |
-        set -xe
-        rm -f /fw/*
-        wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36" \
-          --directory-prefix=/fw \
-          "${FIRMWARE_URL}"
-
-        if [ "${COMPONENT}" != "nic" ]; then
-          7za e /fw/* -o/fw
-        fi
+        rm -f /html/fw/* && wget $FIRMWARE_URL -P /html/fw && 7za e /html/fw/* -o/html/fw
       volumeMounts:
         - name: firmware-config
           mountPath: /config
         - name: firmware-dir
-          mountPath: /fw
+          mountPath: /html/fw
   containers:
     - name: nginx
-      image: quay.io/openshifttest/nginx-alpine:armbm
+      image: quay.io/openshifttest/nginx-alpine:latest
       volumeMounts:
         - name: firmware-dir
-          mountPath: /usr/share/nginx/html
-        - name: nginx-conf
-          mountPath: /etc/nginx/conf.d/
-        - name: nginx-cache
-          mountPath: /var/cache/nginx
-        - name: nginx-run
-          mountPath: /var/run
+          mountPath: /data/http
 ---
 apiVersion: v1
 kind: Service
