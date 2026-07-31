@@ -293,19 +293,9 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(statusModified).Should(o.Equal(specModified))
 
 		compat_otp.By("Verify HFS ChangeDetected condition is False after update")
-		hfsResetErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
-			cond, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, `-o=jsonpath={.status.conditions[?(@.type=="ChangeDetected")].status}`).Output()
-			if err != nil {
-				return false, err
-			}
-			if cond == "False" {
-				e2e.Logf("HFS ChangeDetected condition is False")
-				return true, nil
-			}
-			e2e.Logf("HFS ChangeDetected condition: %s, waiting for False...", cond)
-			return false, nil
-		})
-		o.Expect(hfsResetErr).NotTo(o.HaveOccurred(), "HFS ChangeDetected condition did not return to False after update")
+		hfsCond, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, `-o=jsonpath={.status.conditions[?(@.type=="ChangeDetected")].status}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(hfsCond).Should(o.Equal("False"), "HFS ChangeDetected condition should be False after update")
 
 		compat_otp.By("Verify BMH operationalStatus is OK and no error")
 		opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
@@ -514,19 +504,9 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion))
 
 		compat_otp.By("Verify HFC ChangeDetected condition is False after update")
-		hfcResetErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
-			cond, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, `-o=jsonpath={.status.conditions[?(@.type=="ChangeDetected")].status}`).Output()
-			if err != nil {
-				return false, err
-			}
-			if cond == "False" {
-				e2e.Logf("HFC ChangeDetected condition is False")
-				return true, nil
-			}
-			e2e.Logf("HFC ChangeDetected condition: %s, waiting for False...", cond)
-			return false, nil
-		})
-		o.Expect(hfcResetErr).NotTo(o.HaveOccurred(), "HFC ChangeDetected condition did not return to False after update")
+		hfcCond, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, `-o=jsonpath={.status.conditions[?(@.type=="ChangeDetected")].status}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(hfcCond).Should(o.Equal("False"), "HFC ChangeDetected condition should be False after update")
 
 		compat_otp.By("Verify BMH operationalStatus is OK and no error")
 		opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
