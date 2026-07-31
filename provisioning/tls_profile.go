@@ -79,16 +79,18 @@ func tlsGroupsToOpenSSLCurves(groups []configv1.TLSGroup) (string, []string) {
 	return strings.Join(supported, ":"), unsupported
 }
 
-// tlsGroupToGoName maps TLSGroup values to Go's crypto/tls CurveID constant names,
-// suitable for BMO's --tls-curve-preferences flag.
-// SecP256r1MLKEM768 and SecP384r1MLKEM1024 are excluded because Go's crypto/tls
-// does not support them until Go 1.26 (BMO currently uses Go 1.25).
+// tlsGroupToGoName maps TLSGroup values to Go's crypto/tls CurveID constant
+// names, suitable for BMO's --tls-curve-preferences flag.
+// List of Groups supported by Go's crypto/tls (requires Go >= 1.26, used by
+// BMO). Always check here when updating the list of supported groups.
 var tlsGroupToGoName = map[configv1.TLSGroup]string{
-	configv1.TLSGroupX25519:         "X25519",
-	configv1.TLSGroupSecP256r1:      "CurveP256",
-	configv1.TLSGroupSecP384r1:      "CurveP384",
-	configv1.TLSGroupSecP521r1:      "CurveP521",
-	configv1.TLSGroupX25519MLKEM768: "X25519MLKEM768",
+	configv1.TLSGroupX25519:             "X25519",
+	configv1.TLSGroupSecP256r1:          "CurveP256",
+	configv1.TLSGroupSecP384r1:          "CurveP384",
+	configv1.TLSGroupSecP521r1:          "CurveP521",
+	configv1.TLSGroupX25519MLKEM768:     "X25519MLKEM768",
+	configv1.TLSGroupSecP256r1MLKEM768:  "SecP256r1MLKEM768",
+	configv1.TLSGroupSecP384r1MLKEM1024: "SecP384r1MLKEM1024",
 }
 
 // tlsGroupsToGoNames converts TLSGroup values to Go crypto/tls CurveID constant
