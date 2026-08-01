@@ -180,7 +180,9 @@ func (r *ProvisioningReconciler) createClusterOperator() (*osconfigv1.ClusterOpe
 	return r.OSClient.ConfigV1().ClusterOperators().Create(context.Background(), defaultCO, metav1.CreateOptions{})
 }
 
-// ensureClusterOperator makes sure that the CO exists
+// ensureClusterOperator makes sure that the CO exists.
+// When the operator version changes (i.e. an upgrade), Progressing=True is set
+// alongside the version update so that any subsequent status update can clear it.
 func (r *ProvisioningReconciler) ensureClusterOperator() error {
 	co, err := r.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
 	if k8serrors.IsNotFound(err) {
@@ -195,13 +197,18 @@ func (r *ProvisioningReconciler) ensureClusterOperator() error {
 		needsUpdate = true
 		co.Status.RelatedObjects = relatedObjects()
 	}
-	if !equality.Semantic.DeepEqual(co.Status.Versions, operandVersions(r.ReleaseVersion)) {
-		needsUpdate = true
-		co.Status.Versions = operandVersions(r.ReleaseVersion)
-	}
 	if len(co.Status.Conditions) == 0 {
 		needsUpdate = true
 		co.Status.Conditions = defaultStatusConditions()
+	}
+	if !equality.Semantic.DeepEqual(co.Status.Versions, operandVersions(r.ReleaseVersion)) {
+		needsUpdate = true
+		if len(co.Status.Versions) > 0 {
+			v1helpers.SetStatusCondition(&co.Status.Conditions,
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(ReasonSyncing), "Operator upgraded"),
+				clock.RealClock{})
+		}
+		co.Status.Versions = operandVersions(r.ReleaseVersion)
 	}
 
 	if needsUpdate {
