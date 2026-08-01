@@ -30,24 +30,31 @@ type SettingSchema struct {
 
 	// The type of setting.
 	// +kubebuilder:validation:Enum=Enumeration;String;Integer;Boolean;Password
+	//nolint:tagliatelle
 	AttributeType string `json:"attribute_type,omitempty"`
 
+	//nolint:tagliatelle
 	// The allowable value for an Enumeration type setting.
 	AllowableValues []string `json:"allowable_values,omitempty"`
 
 	// The lowest value for an Integer type setting.
+	//nolint:tagliatelle
 	LowerBound *int `json:"lower_bound,omitempty"`
 
 	// The highest value for an Integer type setting.
+	//nolint:tagliatelle
 	UpperBound *int `json:"upper_bound,omitempty"`
 
 	// Minimum length for a String type setting.
+	//nolint:tagliatelle
 	MinLength *int `json:"min_length,omitempty"`
 
 	// Maximum length for a String type setting.
+	//nolint:tagliatelle
 	MaxLength *int `json:"max_length,omitempty"`
 
 	// Whether or not this setting is read only.
+	//nolint:tagliatelle
 	ReadOnly *bool `json:"read_only,omitempty"`
 
 	// Whether or not this setting's value is unique to this node, e.g.
@@ -81,7 +88,7 @@ func (schema *SettingSchema) Validate(name string, value intstr.IntOrString) err
 				return nil
 			}
 		}
-		return SchemaSettingError{name: name, message: fmt.Sprintf("unknown enumeration value - %s", value.String())}
+		return SchemaSettingError{name: name, message: "unknown enumeration value - " + value.String()}
 
 	case "Integer":
 		if value.Type == intstr.String {
@@ -111,7 +118,7 @@ func (schema *SettingSchema) Validate(name string, value intstr.IntOrString) err
 		if value.String() == "true" || value.String() == "false" {
 			return nil
 		}
-		return SchemaSettingError{name: name, message: fmt.Sprintf("%s is not a boolean", value.String())}
+		return SchemaSettingError{name: name, message: value.String() + " is not a boolean"}
 
 	case "Password":
 		// Prevent sets of password types
@@ -123,7 +130,7 @@ func (schema *SettingSchema) Validate(name string, value intstr.IntOrString) err
 
 	default:
 		// Unexpected attribute type
-		return SchemaSettingError{name: name, message: fmt.Sprintf("unexpected attribute type %s", schema.AttributeType)}
+		return SchemaSettingError{name: name, message: "unexpected attribute type " + schema.AttributeType}
 	}
 }
 

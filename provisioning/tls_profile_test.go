@@ -210,25 +210,17 @@ func TestTlsGroupsToGoNames(t *testing.T) {
 		expectedUnsupported []string
 	}{
 		{
-			name: "standard groups mapped to Go names",
+			name: "all groups mapped to Go names",
 			groups: []configv1.TLSGroup{
 				configv1.TLSGroupX25519,
 				configv1.TLSGroupSecP256r1,
 				configv1.TLSGroupSecP384r1,
 				configv1.TLSGroupSecP521r1,
 				configv1.TLSGroupX25519MLKEM768,
-			},
-			expected: []string{"X25519", "CurveP256", "CurveP384", "CurveP521", "X25519MLKEM768"},
-		},
-		{
-			name: "forward-compat groups filtered out",
-			groups: []configv1.TLSGroup{
-				configv1.TLSGroupX25519,
 				configv1.TLSGroupSecP256r1MLKEM768,
 				configv1.TLSGroupSecP384r1MLKEM1024,
 			},
-			expected:            []string{"X25519"},
-			expectedUnsupported: []string{"SecP256r1MLKEM768", "SecP384r1MLKEM1024"},
+			expected: []string{"X25519", "CurveP256", "CurveP384", "CurveP521", "X25519MLKEM768", "SecP256r1MLKEM768", "SecP384r1MLKEM1024"},
 		},
 		{
 			name:     "empty input",
@@ -539,7 +531,7 @@ func TestTlsProfileToBMOArgsCurves(t *testing.T) {
 		assert.True(t, found, "--tls-curve-preferences should be present even with TLS 1.3")
 	})
 
-	t.Run("forward-compat groups filtered out", func(t *testing.T) {
+	t.Run("hybrid PQC groups included", func(t *testing.T) {
 		profile := configv1.TLSProfileSpec{
 			Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
 			MinTLSVersion: configv1.VersionTLS12,
@@ -554,8 +546,7 @@ func TestTlsProfileToBMOArgsCurves(t *testing.T) {
 
 		for i, a := range args {
 			if a == "--tls-curve-preferences" {
-				// Forward-compat groups filtered — only X25519 remains
-				assert.Equal(t, "X25519", args[i+1])
+				assert.Equal(t, "X25519,SecP256r1MLKEM768,SecP384r1MLKEM1024", args[i+1])
 				return
 			}
 		}
