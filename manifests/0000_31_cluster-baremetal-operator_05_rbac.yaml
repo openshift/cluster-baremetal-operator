@@ -150,6 +150,7 @@ rules:
   resources:
   - clusteroperators
   - clusteroperators/status
+  - clusterversions
   verbs:
   - create
   - delete

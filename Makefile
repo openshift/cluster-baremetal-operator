@@ -20,13 +20,14 @@ TMP_DIR := $(shell mktemp -d -t manifests-$(date +%Y-%m-%d-%H-%M-%S)-XXXXXXXXXX)
 IMAGES_JSON ?= /etc/cluster-baremetal-operator/images/images.json
 
 # Set VERBOSE to -v to make tests produce more output
-VERBOSE ?= ""
+VERBOSE ?=
 
 all: generate lint build
 
 # Run unit tests
+TEST_PKGS := $(shell go list -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./...)
 unit:
-	go test $(VERBOSE) ./... -coverprofile cover.out
+	go test $(VERBOSE) $(TEST_PKGS) -coverprofile cover.out
 
 # Run tests
 test: generate lint manifests unit

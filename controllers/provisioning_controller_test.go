@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -315,4 +316,69 @@ func TestUpdateProvisioningMacAddresses(t *testing.T) {
 	err := r.updateProvisioningMacAddresses(context.TODO(), &baremetalCR)
 	assert.NoError(t, err, "ProvisioningReconciler.updateProvisioningMacAddresses()")
 	assert.ElementsMatch(t, baremetalCR.Spec.ProvisioningMacAddresses, want)
+}
+
+func TestGetSuccessStatus(t *testing.T) {
+	testCases := []struct {
+		name             string
+		imageCacheState  appsv1.DaemonSetConditionType
+		ironicProxyState appsv1.DaemonSetConditionType
+		expectedMsg      string
+	}{
+		{
+			name:             "All available",
+			imageCacheState:  provisioning.DaemonSetAvailable,
+			ironicProxyState: provisioning.DaemonSetAvailable,
+			expectedMsg:      "metal3 pod, image cache, ironic proxy are running",
+		},
+		{
+			name:             "Image cache disabled, ironic proxy available",
+			imageCacheState:  provisioning.DaemonSetDisabled,
+			ironicProxyState: provisioning.DaemonSetAvailable,
+			expectedMsg:      "metal3 pod, ironic proxy are running",
+		},
+		{
+			name:             "Image cache available, ironic proxy disabled",
+			imageCacheState:  provisioning.DaemonSetAvailable,
+			ironicProxyState: provisioning.DaemonSetDisabled,
+			expectedMsg:      "metal3 pod, image cache are running",
+		},
+		{
+			name:             "Both disabled",
+			imageCacheState:  provisioning.DaemonSetDisabled,
+			ironicProxyState: provisioning.DaemonSetDisabled,
+			expectedMsg:      "metal3 pod is running",
+		},
+		{
+			name:             "Image cache progressing blocks success",
+			imageCacheState:  provisioning.DaemonSetProgressing,
+			ironicProxyState: provisioning.DaemonSetAvailable,
+			expectedMsg:      "",
+		},
+		{
+			name:             "Ironic proxy progressing blocks success",
+			imageCacheState:  provisioning.DaemonSetAvailable,
+			ironicProxyState: provisioning.DaemonSetProgressing,
+			expectedMsg:      "",
+		},
+		{
+			name:             "Both progressing blocks success",
+			imageCacheState:  provisioning.DaemonSetProgressing,
+			ironicProxyState: provisioning.DaemonSetProgressing,
+			expectedMsg:      "",
+		},
+		{
+			name:             "Image cache replica failure blocks success",
+			imageCacheState:  provisioning.DaemonSetReplicaFailure,
+			ironicProxyState: provisioning.DaemonSetAvailable,
+			expectedMsg:      "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := getSuccessStatus(tc.imageCacheState, tc.ironicProxyState)
+			assert.Equal(t, tc.expectedMsg, msg)
+		})
+	}
 }

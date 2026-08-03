@@ -6,12 +6,16 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	osconfigv1 "github.com/openshift/api/config/v1"
 	fakeconfigclientset "github.com/openshift/client-go/config/clientset/versioned/fake"
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
+	"github.com/openshift/cluster-baremetal-operator/provisioning"
+	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
 func TestUpdateCOStatus(t *testing.T) {
@@ -131,10 +135,40 @@ func TestEnsureClusterOperator(t *testing.T) {
 		},
 	}
 
+	var progressingUpgradeConditions = []osconfigv1.ClusterOperatorStatusCondition{
+		setStatusCondition(
+			osconfigv1.OperatorProgressing,
+			osconfigv1.ConditionTrue,
+			string(ReasonSyncing),
+			"Upgrading to release version test-version",
+		),
+		setStatusCondition(
+			osconfigv1.OperatorDegraded,
+			osconfigv1.ConditionFalse,
+			"", "",
+		),
+		setStatusCondition(
+			osconfigv1.OperatorAvailable,
+			osconfigv1.ConditionFalse,
+			"", "",
+		),
+		setStatusCondition(
+			osconfigv1.OperatorUpgradeable,
+			osconfigv1.ConditionTrue,
+			"", "",
+		),
+		setStatusCondition(
+			OperatorDisabled,
+			osconfigv1.ConditionFalse,
+			"", "",
+		),
+	}
+
 	testCases := []struct {
-		name       string
-		existingCO *osconfigv1.ClusterOperator
-		expectedCO *osconfigv1.ClusterOperator
+		name            string
+		existingCO      *osconfigv1.ClusterOperator
+		machineConfigCO *osconfigv1.ClusterOperator
+		expectedCO      *osconfigv1.ClusterOperator
 	}{
 		{
 			name:       "No clusteroperator",
@@ -189,20 +223,118 @@ func TestEnsureClusterOperator(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Version upgrade sets Progressing",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}},
+				},
+			},
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     progressingUpgradeConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}},
+				},
+			},
+		},
+		{
+			name: "Version upgrade waits for MCO",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}},
+				},
+			},
+			machineConfigCO: machineConfigClusterOperatorProgressing(),
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}},
+				},
+			},
+		},
+		{
+			name: "First version set does not set Progressing",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{},
+				},
+			},
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+		},
+		{
+			name: "Same version does not update",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     defaultConditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var osClient *fakeconfigclientset.Clientset
-			if tc.existingCO != nil {
+			switch {
+			case tc.existingCO != nil && tc.machineConfigCO != nil:
+				osClient = fakeconfigclientset.NewSimpleClientset(tc.existingCO, tc.machineConfigCO)
+			case tc.existingCO != nil:
 				osClient = fakeconfigclientset.NewSimpleClientset(tc.existingCO)
-			} else {
+			case tc.machineConfigCO != nil:
+				osClient = fakeconfigclientset.NewSimpleClientset(tc.machineConfigCO)
+			default:
 				osClient = fakeconfigclientset.NewSimpleClientset()
 			}
 			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
 			reconciler.OSClient = osClient
 			reconciler.ReleaseVersion = "test-version"
 
-			err := reconciler.ensureClusterOperator()
+			err := reconciler.ensureClusterOperator(context.Background())
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -217,6 +349,305 @@ func TestEnsureClusterOperator(t *testing.T) {
 				t.Error(cmp.Diff(tc.expectedCO, co))
 			}
 		})
+	}
+}
+
+func machineConfigClusterOperatorProgressing() *osconfigv1.ClusterOperator {
+	return &osconfigv1.ClusterOperator{
+		ObjectMeta: metav1.ObjectMeta{Name: machineConfigClusterOperatorName},
+		Status: osconfigv1.ClusterOperatorStatus{
+			Conditions: []osconfigv1.ClusterOperatorStatusCondition{
+				setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(ReasonSyncing), "Updating nodes"),
+			},
+		},
+	}
+}
+
+func TestIsMachineConfigOperatorProgressing(t *testing.T) {
+	testCases := []struct {
+		name        string
+		mco         *osconfigv1.ClusterOperator
+		progressing bool
+	}{
+		{
+			name:        "missing machine-config CO",
+			progressing: false,
+		},
+		{
+			name:        "machine-config progressing",
+			mco:         machineConfigClusterOperatorProgressing(),
+			progressing: true,
+		},
+		{
+			name: "machine-config not progressing",
+			mco: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{Name: machineConfigClusterOperatorName},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions: []osconfigv1.ClusterOperatorStatusCondition{
+						setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionFalse, string(ReasonComplete), ""),
+					},
+				},
+			},
+			progressing: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			objects := []runtime.Object{}
+			if tc.mco != nil {
+				objects = append(objects, tc.mco)
+			}
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+			reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(objects...)
+
+			progressing, err := reconciler.isMachineConfigOperatorProgressing(context.Background())
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if progressing != tc.progressing {
+				t.Fatalf("expected progressing=%v, got %v", tc.progressing, progressing)
+			}
+		})
+	}
+}
+
+func TestIsOperatorVersionUpgradePending(t *testing.T) {
+	clusterVersion := &osconfigv1.ClusterVersion{
+		ObjectMeta: metav1.ObjectMeta{Name: "version"},
+		Status: osconfigv1.ClusterVersionStatus{
+			Desired: osconfigv1.Release{Version: "cluster-target-version"},
+		},
+	}
+
+	testCases := []struct {
+		name            string
+		releaseVersion  string
+		reportedVersion string
+		clusterVersion  *osconfigv1.ClusterVersion
+		pending         bool
+		target          string
+	}{
+		{
+			name:            "release version mismatch",
+			releaseVersion:  "new-version",
+			reportedVersion: "old-version",
+			clusterVersion:  clusterVersion,
+			pending:         true,
+			target:          "new-version",
+		},
+		{
+			name:            "cluster desired version mismatch",
+			releaseVersion:  "old-version",
+			reportedVersion: "old-version",
+			clusterVersion:  clusterVersion,
+			pending:         true,
+			target:          "cluster-target-version",
+		},
+		{
+			name:            "upgrade complete",
+			releaseVersion:  "target-version",
+			reportedVersion: "target-version",
+			clusterVersion: &osconfigv1.ClusterVersion{
+				ObjectMeta: metav1.ObjectMeta{Name: "version"},
+				Status: osconfigv1.ClusterVersionStatus{
+					Desired: osconfigv1.Release{Version: "target-version"},
+				},
+			},
+			pending: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			co := &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterOperatorName},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Versions: []osconfigv1.OperandVersion{{Name: "operator", Version: tc.reportedVersion}},
+				},
+			}
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+			reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co, tc.clusterVersion)
+			reconciler.ReleaseVersion = tc.releaseVersion
+
+			pending, target, err := reconciler.isOperatorVersionUpgradePending(context.Background(), co)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if pending != tc.pending {
+				t.Fatalf("expected pending=%v, got %v", tc.pending, pending)
+			}
+			if pending && target != tc.target {
+				t.Fatalf("expected target=%q, got %q", tc.target, target)
+			}
+		})
+	}
+}
+
+func TestUpdateCOProgressingStatusDuringUpgrade(t *testing.T) {
+	clusterVersion := &osconfigv1.ClusterVersion{
+		ObjectMeta: metav1.ObjectMeta{Name: "version"},
+		Status: osconfigv1.ClusterVersionStatus{
+			Desired: osconfigv1.Release{Version: "new-version"},
+		},
+	}
+
+	testCases := []struct {
+		name              string
+		rolloutInProgress bool
+		deploymentState   appsv1.DeploymentConditionType
+		bmoState          appsv1.DeploymentConditionType
+		machineConfigCO   *osconfigv1.ClusterOperator
+		expectProgressing bool
+		expectReportedVer string
+	}{
+		{
+			name:              "rollout in progress",
+			rolloutInProgress: true,
+			deploymentState:   appsv1.DeploymentAvailable,
+			bmoState:          appsv1.DeploymentAvailable,
+			expectProgressing: true,
+			expectReportedVer: "old-version",
+		},
+		{
+			name:              "operands rolled out",
+			rolloutInProgress: false,
+			deploymentState:   appsv1.DeploymentAvailable,
+			bmoState:          appsv1.DeploymentAvailable,
+			expectProgressing: false,
+			expectReportedVer: "new-version",
+		},
+		{
+			name:              "operands not ready",
+			rolloutInProgress: false,
+			deploymentState:   appsv1.DeploymentProgressing,
+			bmoState:          appsv1.DeploymentAvailable,
+			expectProgressing: true,
+			expectReportedVer: "old-version",
+		},
+		{
+			name:              "while MCO progressing",
+			rolloutInProgress: true,
+			machineConfigCO:   machineConfigClusterOperatorProgressing(),
+			deploymentState:   appsv1.DeploymentAvailable,
+			bmoState:          appsv1.DeploymentAvailable,
+			expectProgressing: false,
+			expectReportedVer: "old-version",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			co := &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterOperatorName},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions: defaultStatusConditions(),
+					Versions:   []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}},
+				},
+			}
+
+			reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+			objects := []runtime.Object{co, clusterVersion}
+			if tc.machineConfigCO != nil {
+				objects = append(objects, tc.machineConfigCO)
+			}
+			reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(objects...)
+			reconciler.ReleaseVersion = "new-version"
+
+			err := reconciler.updateCOProgressingStatus(
+				context.Background(),
+				tc.rolloutInProgress,
+				tc.deploymentState,
+				tc.bmoState,
+				provisioning.DaemonSetAvailable,
+				provisioning.DaemonSetAvailable,
+			)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			gotCO, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			progressing := v1helpers.FindStatusCondition(gotCO.Status.Conditions, osconfigv1.OperatorProgressing)
+			if tc.expectProgressing {
+				if progressing == nil || progressing.Status != osconfigv1.ConditionTrue {
+					t.Fatalf("expected Progressing=True, got %#v", progressing)
+				}
+			} else if progressing == nil || progressing.Status != osconfigv1.ConditionFalse {
+				t.Fatalf("expected Progressing=False, got %#v", progressing)
+			}
+			if got := getReportedOperatorVersion(gotCO); got != tc.expectReportedVer {
+				t.Fatalf("expected reported version %q, got %q", tc.expectReportedVer, got)
+			}
+		})
+	}
+}
+
+func TestUpdateCOProgressingStatusClusterVersionUpgrade(t *testing.T) {
+	co := &osconfigv1.ClusterOperator{
+		ObjectMeta: metav1.ObjectMeta{Name: clusterOperatorName},
+		Status: osconfigv1.ClusterOperatorStatus{
+			Conditions: defaultStatusConditions(),
+			Versions:   []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}},
+		},
+	}
+	clusterVersion := &osconfigv1.ClusterVersion{
+		ObjectMeta: metav1.ObjectMeta{Name: "version"},
+		Status: osconfigv1.ClusterVersionStatus{
+			Desired: osconfigv1.Release{Version: "new-version"},
+		},
+	}
+
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co, clusterVersion)
+	reconciler.ReleaseVersion = "old-version"
+
+	err := reconciler.updateCOProgressingStatus(
+		context.Background(),
+		false,
+		appsv1.DeploymentAvailable,
+		appsv1.DeploymentAvailable,
+		provisioning.DaemonSetAvailable,
+		provisioning.DaemonSetAvailable,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gotCO, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	progressing := v1helpers.FindStatusCondition(gotCO.Status.Conditions, osconfigv1.OperatorProgressing)
+	if progressing == nil || progressing.Status != osconfigv1.ConditionTrue {
+		t.Fatalf("expected Progressing=True while waiting for newer CBO pod, got %#v", progressing)
+	}
+	if got := getReportedOperatorVersion(gotCO); got != "old-version" {
+		t.Fatalf("expected reported version to remain %q, got %q", "old-version", got)
+	}
+}
+
+func TestUpdateCOStatusSetsVersionOnComplete(t *testing.T) {
+	reconciler := newFakeProvisioningReconciler(setUpSchemeForReconciler(), &osconfigv1.Infrastructure{})
+	co, _ := reconciler.createClusterOperator()
+	co.Status.Versions = []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}}
+	reconciler.OSClient = fakeconfigclientset.NewSimpleClientset(co)
+	reconciler.ReleaseVersion = "new-version"
+
+	if err := reconciler.updateCOStatus(ReasonComplete, "metal3 pod is running", ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gotCO, err := reconciler.OSClient.ConfigV1().ClusterOperators().Get(context.Background(), clusterOperatorName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := getReportedOperatorVersion(gotCO); got != "new-version" {
+		t.Fatalf("expected version %q after complete, got %q", "new-version", got)
 	}
 }
 
