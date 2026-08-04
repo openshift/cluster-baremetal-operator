@@ -8,6 +8,7 @@
 // testdata/fixtures.go
 // testdata/host-update-policy.yaml
 // testdata/nginx-firmware.yaml
+// testdata/nginx-ingress.yaml
 package testdata
 
 import (
@@ -562,6 +563,41 @@ func nginxFirmwareYaml() (*asset, error) {
 	return a, nil
 }
 
+var _nginxIngressYaml = []byte(`apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: sample-entry
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-service
+            port:
+              number: 80
+`)
+
+func nginxIngressYamlBytes() ([]byte, error) {
+	return _nginxIngressYaml, nil
+}
+
+func nginxIngressYaml() (*asset, error) {
+	bytes, err := nginxIngressYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "nginx-ingress.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 // Asset loads and returns the asset for the given name.
 // It returns an error if the asset could not be found or
 // could not be loaded.
@@ -621,6 +657,7 @@ var _bindata = map[string]func() (*asset, error){
 	"fixtures.go":             fixturesGo,
 	"host-update-policy.yaml": hostUpdatePolicyYaml,
 	"nginx-firmware.yaml":     nginxFirmwareYaml,
+	"nginx-ingress.yaml":      nginxIngressYaml,
 }
 
 // AssetDir returns the file names below a certain
@@ -673,6 +710,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 	"fixtures.go":             {fixturesGo, map[string]*bintree{}},
 	"host-update-policy.yaml": {hostUpdatePolicyYaml, map[string]*bintree{}},
 	"nginx-firmware.yaml":     {nginxFirmwareYaml, map[string]*bintree{}},
+	"nginx-ingress.yaml":      {nginxIngressYaml, map[string]*bintree{}},
 }}
 
 // RestoreAsset restores an asset under the given directory

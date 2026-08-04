@@ -147,7 +147,7 @@ func getNodeNameFromBMH(oc *exutil.CLI, bmhName string) (string, error) {
 	}
 
 	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
-		"machine", consumerRef.Name, "-n", machineAPINamespace,
+		"machines.machine.openshift.io", consumerRef.Name, "-n", machineAPINamespace,
 		"-o=jsonpath={.status.nodeRef.name}").Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to query Machine %s for BMH %s: %w", consumerRef.Name, bmhName, err)

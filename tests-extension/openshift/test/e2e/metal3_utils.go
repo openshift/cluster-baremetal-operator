@@ -262,3 +262,32 @@ func getBypathDeviceName(oc *exutil.CLI, bmhName string) string {
 func getHfsByVendor(oc *exutil.CLI, vendor, machineAPINamespace, host string) (string, string, error) {
 	return getHfsToggleValue(oc, vendor, machineAPINamespace, host)
 }
+
+func getReadyWorkerCount(oc *exutil.CLI) int {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"nodes", "-l", "node-role.kubernetes.io/worker",
+		"-o=jsonpath={range .items[*]}{.status.conditions[?(@.type==\"Ready\")].status}{\"\\n\"}{end}",
+	).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	count := 0
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		if strings.TrimSpace(line) == "True" {
+			count++
+		}
+	}
+	return count
+}
+
+func findBMHByName(oc *exutil.CLI, suffix string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"bmh", "-n", machineAPINamespace,
+		"-o=jsonpath={.items[*].metadata.name}",
+	).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, name := range strings.Fields(output) {
+		if strings.HasSuffix(name, suffix) {
+			return name
+		}
+	}
+	return ""
+}
