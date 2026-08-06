@@ -38,7 +38,11 @@ spec:
               apiVersion: v1
               fieldPath: metadata.namespace
         - name: METRICS_PORT
-          value: "8080"
+          value: "8443"
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
         resources:
           requests:
             cpu: 10m

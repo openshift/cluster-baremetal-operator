@@ -41,12 +41,15 @@ spec:
               apiVersion: v1
               fieldPath: metadata.namespace
         - name: METRICS_PORT
-          value: "8080"
+          value: "8443"
         image: registry.ci.openshift.org/openshift:cluster-baremetal-operator
         name: cluster-baremetal-operator
         ports:
         - containerPort: 9443
           name: webhook-server
+          protocol: TCP
+        - containerPort: 8443
+          name: https
           protocol: TCP
         resources:
           requests:
@@ -57,34 +60,12 @@ spec:
         - mountPath: /etc/cluster-baremetal-operator/tls
           name: cert
           readOnly: true
+        - mountPath: /etc/tls/private
+          name: cluster-baremetal-operator-tls
+          readOnly: true
         - mountPath: /etc/cluster-baremetal-operator/images
           name: images
           readOnly: true
-      - args:
-        - --secure-listen-address=0.0.0.0:8443
-        - --upstream=http://localhost:8080/
-        - --tls-cert-file=/etc/tls/private/tls.crt
-        - --tls-private-key-file=/etc/tls/private/tls.key
-        - --tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
-        - --config-file=/etc/baremetal-kube-rbac-proxy/config-file.yaml
-        - --logtostderr=true
-        - --v=10
-        image: registry.ci.openshift.org/openshift:kube-rbac-proxy
-        name: baremetal-kube-rbac-proxy
-        ports:
-        - containerPort: 8443
-          name: https
-          protocol: TCP
-        resources:
-          requests:
-            cpu: 10m
-            memory: 20Mi
-        terminationMessagePolicy: FallbackToLogsOnError
-        volumeMounts:
-        - mountPath: /etc/baremetal-kube-rbac-proxy
-          name: config
-        - mountPath: /etc/tls/private
-          name: cluster-baremetal-operator-tls
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: system-node-critical
@@ -110,10 +91,6 @@ spec:
         secret:
           defaultMode: 420
           secretName: cluster-baremetal-webhook-server-cert
-      - configMap:
-          defaultMode: 420
-          name: baremetal-kube-rbac-proxy
-        name: config
       - name: cluster-baremetal-operator-tls
         secret:
           defaultMode: 420
