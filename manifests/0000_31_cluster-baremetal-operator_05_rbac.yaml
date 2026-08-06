@@ -150,6 +150,7 @@ rules:
   - config.openshift.io
   resources:
   - apiservers
+  - imagedigestmirrorsets
   - infrastructures
   - networks
   - proxies

@@ -53,4 +53,5 @@ type ProvisioningInfo struct {
 	OSClient                osclientset.Interface
 	ResourceCache           resourceapply.ResourceCache
 	IsHyperShift            bool
+	MirrorConfigHash        string
 }
