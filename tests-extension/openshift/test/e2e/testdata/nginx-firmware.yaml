@@ -1,0 +1,193 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-no-ssl
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        server_name _;
+
+        location / {
+            root /usr/share/nginx/html;
+            autoindex on;
+        }
+    }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  nodeSelector:
+    nginx-node: "true"
+  volumes:
+    - name: firmware-dir
+      emptyDir: {}  # Empty directory to hold the downloaded firmware files
+    - name: firmware-config
+      configMap:
+        name: firmware-download
+    - name: nginx-conf
+      configMap:
+        name: nginx-no-ssl
+    - name: nginx-cache
+      emptyDir: {}
+    - name: nginx-run
+      emptyDir: {}
+    - name: init-tmp
+      emptyDir: {}
+  initContainers:
+    - name: init-download-firmware
+      image: ghcr.io/crazy-max/7zip
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 1000
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: true
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+      env:
+        - name: FIRMWARE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: firmware-download
+              key: firmware_url
+        - name: COMPONENT
+          valueFrom:
+            configMapKeyRef:
+              name: firmware-download
+              key: component
+      command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+
+        # Validate FIRMWARE_URL scheme and hostname
+        # Extract scheme
+        url_scheme=$(echo "${FIRMWARE_URL}" | sed -n 's|^\([^:]*\)://.*|\1|p')
+        if [ "${url_scheme}" != "http" ] && [ "${url_scheme}" != "https" ]; then
+          echo "ERROR: Invalid URL scheme '${url_scheme}'. Only http and https are allowed." >&2
+          exit 1
+        fi
+
+        # Extract hostname (with optional port, may include userinfo)
+        url_authority=$(echo "${FIRMWARE_URL}" | sed -n 's|^[^:]*://\([^/]*\).*|\1|p')
+
+        # Strip userinfo (credentials) from authority to get clean host
+        # Format: [user[:pass]@]host[:port] -> host[:port]
+        url_host=$(echo "${url_authority}" | sed 's|^.*@||')
+
+        # Strip port from hostname for validation (e.g., example.com:8080 -> example.com)
+        url_host_no_port=$(echo "${url_host}" | sed 's/:[0-9]*$//')
+
+        # Log redacted URL (scheme and host only, no credentials or query params)
+        echo "Validating FIRMWARE_URL: ${url_scheme}://${url_host}/..."
+
+        # Allowlist of expected firmware hosts
+        allowed_hosts="downloads.dell.com support.hpe.com fwupd.org cdn.redhat.com quay.io"
+
+        # Check if hostname is in allowlist (exact string match, not regex)
+        host_allowed=0
+        for allowed in ${allowed_hosts}; do
+          if [ "${url_host_no_port}" = "${allowed}" ]; then
+            host_allowed=1
+            break
+          fi
+        done
+
+        if [ ${host_allowed} -eq 0 ]; then
+          echo "ERROR: Hostname '${url_host_no_port}' is not in the allowlist: ${allowed_hosts}" >&2
+          exit 1
+        fi
+
+        echo "URL validation passed: scheme=${url_scheme}, host=${url_host_no_port}"
+
+        # Proceed with download (disable xtrace to prevent credential exposure)
+        set +x
+        rm -f /fw/*
+        wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36" \
+          --directory-prefix=/fw \
+          -- "${FIRMWARE_URL}"
+        set -x
+
+        if [ "${COMPONENT}" != "nic" ]; then
+          7za e /fw/* -o/fw
+        fi
+      volumeMounts:
+        - name: firmware-config
+          mountPath: /config
+        - name: firmware-dir
+          mountPath: /fw
+        - name: init-tmp
+          mountPath: /tmp
+  containers:
+    - name: nginx
+      image: quay.io/openshifttest/nginx-alpine:armbm
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 1000
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: true
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "50m"
+        limits:
+          memory: "256Mi"
+          cpu: "200m"
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 8080
+        initialDelaySeconds: 3
+        periodSeconds: 5
+      volumeMounts:
+        - name: firmware-dir
+          mountPath: /usr/share/nginx/html
+        - name: nginx-conf
+          mountPath: /etc/nginx/conf.d/
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

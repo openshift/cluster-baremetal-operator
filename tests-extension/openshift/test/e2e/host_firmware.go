@@ -3,12 +3,12 @@ package baremetal
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"github.com/openshift/cluster-baremetal-operator-tests-extension/openshift/test/e2e/testdata"
 	compat_otp "github.com/openshift/origin/test/extended/util/compat_otp"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -48,9 +48,8 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AddLabelToNode(oc, nginxNode, "nginx-node", "true")
 
 		compat_otp.By("Create web-server to host the fw file")
-		BaseDir := compat_otp.FixturePath("testdata", "installer")
-		fwConfigmap := filepath.Join(BaseDir, "baremetal", "firmware-cm.yaml")
-		nginxFW := filepath.Join(BaseDir, "baremetal", "nginx-firmware.yaml")
+		fwConfigmap := testdata.FixturePath("firmware-cm.yaml")
+		nginxFW := testdata.FixturePath("nginx-firmware.yaml")
 		compat_otp.ModifyYamlFileContent(fwConfigmap, []compat_otp.YamlReplace{
 			{
 				Path:  "data.firmware_url",
@@ -70,7 +69,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AssertPodToBeReady(oc, "nginx-pod", testNamespace)
 
 		compat_otp.By("Create ingress to access the iso file")
-		fileIngress := filepath.Join(BaseDir, "baremetal", "nginx-ingress.yaml")
+		fileIngress := testdata.FixturePath("nginx-ingress.yaml")
 		nginxIngress := CopyToFile(fileIngress, "nginx-ingress.yaml")
 		clusterDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config/cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -190,8 +189,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		compat_otp.By("Create host update policy")
-		BaseDir := compat_otp.FixturePath("testdata", "installer")
-		hostUpdatePolicy := filepath.Join(BaseDir, "baremetal", "host-update-policy.yaml")
+		hostUpdatePolicy := testdata.FixturePath("host-update-policy.yaml")
 		compat_otp.ModifyYamlFileContent(hostUpdatePolicy, []compat_otp.YamlReplace{
 			{
 				Path:  "metadata.name",
@@ -326,8 +324,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		e2e.Logf("Selected BMH: %s, Node: %s, Vendor: %s, FW: %s", host, nodeName, vendor, initialVersion)
 
 		compat_otp.By("Create host update policy")
-		BaseDir := compat_otp.FixturePath("testdata", "installer")
-		hostUpdatePolicy := filepath.Join(BaseDir, "baremetal", "host-update-policy.yaml")
+		hostUpdatePolicy := testdata.FixturePath("host-update-policy.yaml")
 		compat_otp.ModifyYamlFileContent(hostUpdatePolicy, []compat_otp.YamlReplace{
 			{
 				Path:  "metadata.name",
@@ -359,9 +356,8 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AddLabelToNode(oc, nginxNode, "nginx-node", "true")
 
 		compat_otp.By("Create web-server to host the fw file")
-		BaseDir = compat_otp.FixturePath("testdata", "installer")
-		fwConfigmap := filepath.Join(BaseDir, "baremetal", "firmware-cm.yaml")
-		nginxFW := filepath.Join(BaseDir, "baremetal", "nginx-firmware.yaml")
+		fwConfigmap := testdata.FixturePath("firmware-cm.yaml")
+		nginxFW := testdata.FixturePath("nginx-firmware.yaml")
 		compat_otp.ModifyYamlFileContent(fwConfigmap, []compat_otp.YamlReplace{
 			{
 				Path:  "data.firmware_url",
@@ -381,7 +377,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AssertPodToBeReady(oc, "nginx-pod", testNamespace)
 
 		compat_otp.By("Create ingress to access the iso file")
-		fileIngress := filepath.Join(BaseDir, "baremetal", "nginx-ingress.yaml")
+		fileIngress := testdata.FixturePath("nginx-ingress.yaml")
 		nginxIngress := CopyToFile(fileIngress, "nginx-ingress.yaml")
 		clusterDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config/cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -539,8 +535,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(initialVersion).NotTo(o.BeEmpty(), "NIC firmware version must not be empty")
 
 		compat_otp.By("Create host update policy")
-		BaseDir := compat_otp.FixturePath("testdata", "installer")
-		hostUpdatePolicy := filepath.Join(BaseDir, "baremetal", "host-update-policy.yaml")
+		hostUpdatePolicy := testdata.FixturePath("host-update-policy.yaml")
 		compat_otp.ModifyYamlFileContent(hostUpdatePolicy, []compat_otp.YamlReplace{
 			{
 				Path:  "metadata.name",
@@ -576,9 +571,8 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AddLabelToNode(oc, nginxNode, "nginx-node", "true")
 
 		compat_otp.By("Create web-server to host the fw file")
-		BaseDir = compat_otp.FixturePath("testdata", "installer")
-		fwConfigmap := filepath.Join(BaseDir, "baremetal", "firmware-cm.yaml")
-		nginxFW := filepath.Join(BaseDir, "baremetal", "nginx-firmware.yaml")
+		fwConfigmap := testdata.FixturePath("firmware-cm.yaml")
+		nginxFW := testdata.FixturePath("nginx-firmware.yaml")
 		compat_otp.ModifyYamlFileContent(fwConfigmap, []compat_otp.YamlReplace{
 			{
 				Path:  "data.firmware_url",
@@ -598,7 +592,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AssertPodToBeReady(oc, "nginx-pod", testNamespace)
 
 		compat_otp.By("Create ingress to access the iso file")
-		fileIngress := filepath.Join(BaseDir, "baremetal", "nginx-ingress.yaml")
+		fileIngress := testdata.FixturePath("nginx-ingress.yaml")
 		nginxIngress := CopyToFile(fileIngress, "nginx-ingress.yaml")
 		clusterDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config/cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -729,9 +723,8 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AddLabelToNode(oc, nginxNode, "nginx-node", "true")
 
 		compat_otp.By("Create web-server to host the fw file")
-		BaseDir := compat_otp.FixturePath("testdata", "installer")
-		fwConfigmap := filepath.Join(BaseDir, "baremetal", "firmware-cm.yaml")
-		nginxFW := filepath.Join(BaseDir, "baremetal", "nginx-firmware.yaml")
+		fwConfigmap := testdata.FixturePath("firmware-cm.yaml")
+		nginxFW := testdata.FixturePath("nginx-firmware.yaml")
 		compat_otp.ModifyYamlFileContent(fwConfigmap, []compat_otp.YamlReplace{
 			{
 				Path:  "data.firmware_url",
@@ -751,7 +744,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AssertPodToBeReady(oc, "nginx-pod", testNamespace)
 
 		compat_otp.By("Create ingress to access the iso file")
-		fileIngress := filepath.Join(BaseDir, "baremetal", "nginx-ingress.yaml")
+		fileIngress := testdata.FixturePath("nginx-ingress.yaml")
 		nginxIngress := CopyToFile(fileIngress, "nginx-ingress.yaml")
 		clusterDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config/cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

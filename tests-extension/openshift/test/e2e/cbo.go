@@ -17,7 +17,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		SkipIfNotBaremetalCluster(oc)
 	})
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-33516-Verify that cluster baremetal operator is active", func() {
+	g.It("Author:jhajyahy-Medium-33516-Verify that cluster baremetal operator is active [Level0]", func() {
 		g.By("Running oc get clusteroperators baremetal")
 		status, err := checkOperator(oc, "baremetal")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -30,7 +30,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-36446-Verify openshift-machine-api namespace is still there and Ready", func() {
+	g.It("Author:jhajyahy-Medium-36446-Verify openshift-machine-api namespace is still there and Ready [Level0]", func() {
 		g.By("Running oc get project openshift-machine-api")
 		nsStatus, err := oc.AsAdmin().Run("get").Args("project", machineAPINamespace, "-o=jsonpath={.status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -39,7 +39,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-36909-Verify metal3 pod is controlled by cluster baremetal operator", func() {
+	g.It("Author:jhajyahy-Medium-36909-Verify metal3 pod is controlled by cluster baremetal operator [Level0]", func() {
 		g.By("Running oc get deployment -n openshift-machine-api")
 		annotations, err := oc.AsAdmin().Run("get").Args("deployment", "-n", machineAPINamespace, "metal3", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -48,7 +48,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-36445-Verify new additions to openshift-machine-api project", func() {
+	g.It("Author:jhajyahy-Medium-36445-Verify new additions to openshift-machine-api project [Level0]", func() {
 		g.By("Running oc get serviceaccount -n openshift-machine-api cluster-baremetal-operator")
 		serviceAccount, err := oc.AsAdmin().Run("get").Args("serviceaccount", "-n", machineAPINamespace, "cluster-baremetal-operator", "-o=jsonpath={.metadata.name}:{.kind}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
