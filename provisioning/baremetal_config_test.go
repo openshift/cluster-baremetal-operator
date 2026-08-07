@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
 	metal3iov1alpha1 "github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -259,6 +260,18 @@ func (pb *provisioningBuilder) PrometheusExporter(enabled bool, interval int) *p
 	return pb
 }
 
+func (pb *provisioningBuilder) SwitchManagementEnabled(value bool) *provisioningBuilder {
+	if value {
+		if pb.SwitchManagement == nil {
+			pb.SwitchManagement = &metal3iov1alpha1.SwitchManagement{}
+		}
+		pb.SwitchManagement.Enabled = true
+	} else {
+		pb.SwitchManagement = nil
+	}
+	return pb
+}
+
 func enableMultiNamespace() *provisioningBuilder {
 	return &provisioningBuilder{
 		metal3iov1alpha1.ProvisioningSpec{
@@ -323,5 +336,28 @@ func TestWatchAllNamespaces(t *testing.T) {
 			assert.NotNil(t, tc.spec.WatchAllNamespaces)
 			assert.Equal(t, tc.expectedValue, tc.spec.WatchAllNamespaces, fmt.Sprintf("WatchAllNamespaces : Expected : %s Actual : %s", strconv.FormatBool(tc.expectedValue), strconv.FormatBool(tc.spec.WatchAllNamespaces)))
 		})
+	}
+}
+
+func assertEnvVar(t *testing.T, envs []corev1.EnvVar, name, value string) {
+	t.Helper()
+	var matches []corev1.EnvVar
+	for _, env := range envs {
+		if env.Name == name {
+			matches = append(matches, env)
+		}
+	}
+	if assert.Len(t, matches, 1, "env var %s must occur exactly once", name) {
+		assert.Equal(t, value, matches[0].Value, "env var %s has wrong value", name)
+	}
+}
+
+func assertNoEnvVar(t *testing.T, envs []corev1.EnvVar, name string) {
+	t.Helper()
+	for _, env := range envs {
+		if env.Name == name {
+			t.Errorf("env var %s should not be present, but found with value %q", name, env.Value)
+			return
+		}
 	}
 }
