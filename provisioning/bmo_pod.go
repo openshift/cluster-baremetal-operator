@@ -283,9 +283,6 @@ func newBMODeployment(info *ProvisioningInfo) (*appsv1.Deployment, error) {
 			Replicas: ptr.To[int32](1),
 			Selector: selector,
 			Template: *template,
-			Strategy: appsv1.DeploymentStrategy{
-				Type: appsv1.RecreateDeploymentStrategyType,
-			},
 		},
 	}, nil
 }
