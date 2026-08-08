@@ -165,7 +165,7 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 	}
 	// Delete ironic-inspector Secret if it still exists
 	if err := client.IgnoreNotFound(info.Client.CoreV1().Secrets(info.Namespace).Delete(context.Background(), inspectorSecretName, metav1.DeleteOptions{})); err != nil {
-		return false, errors.Wrap(err, "Error occured while deleting Ironic Inspector Secret")
+		return false, errors.Wrap(err, "Error occurred while deleting Ironic Inspector Secret")
 	}
 	return false, nil // ApplySecret does not use Generation, so just return false for updated
 }
