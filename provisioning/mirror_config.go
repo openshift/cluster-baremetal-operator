@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
 
+	osconfigv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
@@ -61,6 +62,8 @@ func EnsureMirrorConfig(info *ProvisioningInfo) (bool, error) {
 		return false, nil
 	}
 
+	stripVolatileMetadata(idmsList)
+
 	idmsYAML, err := yaml.Marshal(idmsList)
 	if err != nil {
 		return false, fmt.Errorf("failed to serialize ImageDigestMirrorSets: %w", err)
@@ -91,4 +94,20 @@ func EnsureMirrorConfig(info *ProvisioningInfo) (bool, error) {
 		return false, fmt.Errorf("failed to apply mirror config ConfigMap: %w", err)
 	}
 	return updated, nil
+}
+
+// stripVolatileMetadata removes server-set metadata fields (resourceVersion,
+// uid, generation, creationTimestamp, managedFields) from every item in the
+// list so that the serialized YAML is stable across API reads. Without this,
+// resourceVersion changes on every ConfigMap write and causes an infinite
+// reconciliation loop.
+func stripVolatileMetadata(list *osconfigv1.ImageDigestMirrorSetList) {
+	list.ResourceVersion = ""
+	for i := range list.Items {
+		list.Items[i].ResourceVersion = ""
+		list.Items[i].UID = ""
+		list.Items[i].Generation = 0
+		list.Items[i].CreationTimestamp = metav1.Time{}
+		list.Items[i].ManagedFields = nil
+	}
 }
