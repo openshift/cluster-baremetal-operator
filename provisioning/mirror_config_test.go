@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	fakekube "k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/clock"
@@ -122,4 +123,72 @@ func TestEnsureMirrorConfigIdempotent(t *testing.T) {
 	updated, err := EnsureMirrorConfig(info)
 	require.NoError(t, err)
 	assert.False(t, updated, "second call should be a no-op")
+}
+
+func TestStripVolatileMetadata(t *testing.T) {
+	ts := metav1.Now()
+	list := &osconfigv1.ImageDigestMirrorSetList{
+		ListMeta: metav1.ListMeta{
+			ResourceVersion: "99999",
+		},
+		Items: []osconfigv1.ImageDigestMirrorSet{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "mirror-a",
+					ResourceVersion:   "12345",
+					UID:               types.UID("abc-def"),
+					Generation:        3,
+					CreationTimestamp: ts,
+					ManagedFields:     []metav1.ManagedFieldsEntry{{Manager: "test"}},
+				},
+				Spec: osconfigv1.ImageDigestMirrorSetSpec{
+					ImageDigestMirrors: []osconfigv1.ImageDigestMirrors{
+						{Source: "quay.io/example"},
+					},
+				},
+			},
+		},
+	}
+
+	stripVolatileMetadata(list)
+
+	assert.Empty(t, list.ResourceVersion)
+	item := list.Items[0]
+	assert.Equal(t, "mirror-a", item.Name, "name must be preserved")
+	assert.Empty(t, item.ResourceVersion)
+	assert.Empty(t, string(item.UID))
+	assert.Zero(t, item.Generation)
+	assert.True(t, item.CreationTimestamp.IsZero())
+	assert.Nil(t, item.ManagedFields)
+	assert.Len(t, item.Spec.ImageDigestMirrors, 1, "spec must be preserved")
+}
+
+func TestEnsureMirrorConfigStableWithVolatileMetadata(t *testing.T) {
+	idms := osconfigv1.ImageDigestMirrorSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-mirror",
+			ResourceVersion: "100",
+			UID:             types.UID("uid-1"),
+			Generation:      1,
+		},
+		Spec: osconfigv1.ImageDigestMirrorSetSpec{
+			ImageDigestMirrors: []osconfigv1.ImageDigestMirrors{
+				{
+					Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
+					Mirrors: []osconfigv1.ImageMirror{"mirror.local/openshift/release"},
+				},
+			},
+		},
+	}
+	info := newTestProvisioningInfo(idms)
+
+	updated, err := EnsureMirrorConfig(info)
+	require.NoError(t, err)
+	assert.True(t, updated, "first call should create the ConfigMap")
+	firstHash := info.MirrorConfigHash
+
+	updated, err = EnsureMirrorConfig(info)
+	require.NoError(t, err)
+	assert.False(t, updated, "second call must be a no-op despite server-set metadata")
+	assert.Equal(t, firstHash, info.MirrorConfigHash, "hash must be stable across calls")
 }
