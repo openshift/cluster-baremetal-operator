@@ -71,6 +71,7 @@ const (
 	bmcCACertMountPath               = "/certs/ca/bmc"
 	bmcCACertConfigMapName           = "bmc-verify-ca"
 	bmcCACertVolume                  = "bmc-verify-ca"
+	ironicTlsCertHashAnnotation      = "baremetal.openshift.io/ironic-tls-cert-hash"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -818,6 +819,9 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 	}
 	if info.MirrorConfigHash != "" {
 		annotations[mirrorConfigHashAnnotation] = info.MirrorConfigHash
+	}
+	if info.TlsCertHash != "" {
+		annotations[ironicTlsCertHashAnnotation] = info.TlsCertHash
 	}
 
 	return &corev1.PodTemplateSpec{

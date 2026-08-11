@@ -2,6 +2,7 @@ package provisioning
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -156,9 +157,11 @@ func EnsureAllSecrets(info *ProvisioningInfo) (bool, error) {
 		return false, errors.Wrap(err, "failed to create Ironic password")
 	}
 	// Generate/update TLS certificate
-	if err := createOrUpdateTlsSecret(info); err != nil {
+	certBytes, err := createOrUpdateTlsSecret(info)
+	if err != nil {
 		return false, errors.Wrap(err, "failed to create TLS certificate")
 	}
+	info.TlsCertHash = fmt.Sprintf("%x", sha256.Sum256(certBytes))
 	// Create a Secret for the Registry Pull Secret
 	if _, err := createRegistryPullSecret(info); err != nil {
 		return false, errors.Wrap(err, "failed to create Registry pull secret")
@@ -247,16 +250,17 @@ func buildTlsHosts(info *ProvisioningInfo) (sets.Set[string], error) {
 }
 
 // createOrUpdateTlsSecret creates a Secret for the Ironic TLS.
-// It updates the secret if the existing certificate is close to expiration.
-func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
+// It updates the secret if the existing certificate is close to expiration or has stale SANs.
+// It returns the certificate bytes that are active in the cluster after the call.
+func createOrUpdateTlsSecret(info *ProvisioningInfo) ([]byte, error) {
 	hosts, err := buildTlsHosts(info)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	cert, err := generateTlsCertificate(hosts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	secret := &corev1.Secret{
@@ -275,10 +279,14 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 	}
 
 	if err := controllerutil.SetControllerReference(info.ProvConfig, secret, info.Scheme); err != nil {
-		return err
+		return nil, err
 	}
 
-	return applySecret(info.Client.CoreV1(), info.EventRecorder, secret, func(existing *corev1.Secret) (bool, error) {
+	// existingCert captures the cert bytes from an existing, still-valid secret so
+	// we can return the cert that is actually active in the cluster (not the freshly
+	// generated one that was discarded).
+	var existingCert []byte
+	err = applySecret(info.Client.CoreV1(), info.EventRecorder, secret, func(existing *corev1.Secret) (bool, error) {
 		expired, err := isTlsCertificateExpired(existing.Data[corev1.TLSCertKey])
 		if err != nil {
 			return false, err
@@ -291,6 +299,17 @@ func createOrUpdateTlsSecret(info *ProvisioningInfo) error {
 		if err != nil {
 			return false, err
 		}
+		if sansMatch {
+			existingCert = existing.Data[corev1.TLSCertKey]
+		}
 		return !sansMatch, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	if existingCert != nil {
+		return existingCert, nil
+	}
+	return cert.certificate, nil
 }
