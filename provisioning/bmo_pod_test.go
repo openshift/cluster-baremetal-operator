@@ -39,7 +39,6 @@ func TestNewBMOContainers(t *testing.T) {
 				envWithFieldValue("POD_NAME", "metadata.name"),
 				{Name: "OPERATOR_NAME", Value: "baremetal-operator"},
 				{Name: "IRONIC_CACERT_FILE", Value: "/certs/ironic/tls.crt"},
-				{Name: "IRONIC_INSECURE", Value: "true"},
 				{Name: "DEPLOY_KERNEL_URL", Value: "file:///shared/html/images/ironic-python-agent.kernel"},
 				{Name: "IRONIC_ENDPOINT", Value: "https://metal3-state.openshift-machine-api.svc.cluster.local:6385/v1/"},
 				{Name: "LIVE_ISO_FORCE_PERSISTENT_BOOT_DEVICE", Value: "Never"},

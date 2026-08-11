@@ -169,7 +169,7 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 				EventRecorder: events.NewLoggingEventRecorder("tests", clock.RealClock{}),
 			}
 
-			err := createOrUpdateTlsSecret(info)
+			_, err := createOrUpdateTlsSecret(info)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
@@ -194,7 +194,7 @@ func TestCreateAndUpdateTlsSecret(t *testing.T) {
 				original = []byte(expiredTlsCertificate)
 			}
 
-			err = createOrUpdateTlsSecret(info)
+			_, err = createOrUpdateTlsSecret(info)
 			if err != nil {
 				t.Errorf("unexpected error when re-creating: %v", err)
 				return
