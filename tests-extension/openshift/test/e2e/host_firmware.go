@@ -2,7 +2,6 @@ package baremetal
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -53,10 +52,10 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "--type=json", "-p", patchConfig).Execute()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 		specUpdates, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "hostfirmwarecomponents", host, "-o=jsonpath={.spec.updates}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(specUpdates).Should(o.ContainSubstring(bmcFwUrl))
-		o.Expect(specUpdates).Should(o.ContainSubstring(biosFwUrl))
-		o.Expect(specUpdates).Should(o.ContainSubstring(nicFwUrl))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get HFC spec updates")
+		o.Expect(specUpdates).Should(o.ContainSubstring(bmcFwUrl), "HFC spec should contain BMC firmware URL")
+		o.Expect(specUpdates).Should(o.ContainSubstring(biosFwUrl), "HFC spec should contain BIOS firmware URL")
+		o.Expect(specUpdates).Should(o.ContainSubstring(nicFwUrl), "HFC spec should contain NIC firmware URL")
 
 		defer func() {
 			patchConfig := `[{"op": "replace", "path": "/spec/updates", "value": []}]`
@@ -113,66 +112,15 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 
 		compat_otp.By("Verify BMC firmware version changed")
-		bmcJsonPath := `{.status.components[?(@.component=="bmc")].currentVersion}`
-		var currentBmcVersion string
-		pollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
-			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+bmcJsonPath).Output()
-			if err != nil {
-				e2e.Logf("Error getting BMC version: %v", err)
-				return false, err
-			}
-			if ver != "" && ver != initialBmcVersion {
-				currentBmcVersion = ver
-				return true, nil
-			}
-			e2e.Logf("BMC version: %s, waiting for change from %s...", ver, initialBmcVersion)
-			return false, nil
-		})
-		o.Expect(pollErr).NotTo(o.HaveOccurred(), "BMC firmware version did not change")
-		o.Expect(currentBmcVersion).NotTo(o.BeEmpty())
-		o.Expect(currentBmcVersion).ShouldNot(o.Equal(initialBmcVersion))
+		currentBmcVersion := pollForFirmwareVersionChange(oc, host, "bmc", initialBmcVersion)
 		e2e.Logf("BMC firmware updated: %s -> %s", initialBmcVersion, currentBmcVersion)
 
 		compat_otp.By("Verify BIOS firmware version changed")
-		biosJsonPath := `{.status.components[?(@.component=="bios")].currentVersion}`
-		var currentBiosVersion string
-		biosPollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
-			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+biosJsonPath).Output()
-			if err != nil {
-				e2e.Logf("Error getting BIOS version: %v", err)
-				return false, err
-			}
-			if ver != "" && ver != initialBiosVersion {
-				currentBiosVersion = ver
-				return true, nil
-			}
-			e2e.Logf("BIOS version: %s, waiting for change from %s...", ver, initialBiosVersion)
-			return false, nil
-		})
-		o.Expect(biosPollErr).NotTo(o.HaveOccurred(), "BIOS firmware version did not change")
-		o.Expect(currentBiosVersion).NotTo(o.BeEmpty())
-		o.Expect(currentBiosVersion).ShouldNot(o.Equal(initialBiosVersion))
+		currentBiosVersion := pollForFirmwareVersionChange(oc, host, "bios", initialBiosVersion)
 		e2e.Logf("BIOS firmware updated: %s -> %s", initialBiosVersion, currentBiosVersion)
 
 		compat_otp.By("Verify NIC firmware version changed")
-		nicJsonPath := fmt.Sprintf(`{.status.components[?(@.component=="%s")].currentVersion}`, nicComponent)
-		var currentNicVersion string
-		nicPollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
-			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+nicJsonPath).Output()
-			if err != nil {
-				e2e.Logf("Error getting NIC version: %v", err)
-				return false, err
-			}
-			if ver != "" && ver != initialNicVersion {
-				currentNicVersion = ver
-				return true, nil
-			}
-			e2e.Logf("NIC version: %s, waiting for change from %s...", ver, initialNicVersion)
-			return false, nil
-		})
-		o.Expect(nicPollErr).NotTo(o.HaveOccurred(), "NIC firmware version did not change")
-		o.Expect(currentNicVersion).NotTo(o.BeEmpty())
-		o.Expect(currentNicVersion).ShouldNot(o.Equal(initialNicVersion))
+		currentNicVersion := pollForFirmwareVersionChange(oc, host, nicComponent, initialNicVersion)
 		e2e.Logf("NIC firmware updated: %s -> %s", initialNicVersion, currentNicVersion)
 
 	})
@@ -359,10 +307,10 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "--type=json", "-p", patchConfig).Execute()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 		specUpdates, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "hostfirmwarecomponents", host, "-o=jsonpath={.spec.updates}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(specUpdates).Should(o.ContainSubstring(bmcFwUrl))
-		o.Expect(specUpdates).Should(o.ContainSubstring(biosFwUrl))
-		o.Expect(specUpdates).Should(o.ContainSubstring(nicFwUrl))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get HFC spec updates")
+		o.Expect(specUpdates).Should(o.ContainSubstring(bmcFwUrl), "HFC spec should contain BMC firmware URL")
+		o.Expect(specUpdates).Should(o.ContainSubstring(biosFwUrl), "HFC spec should contain BIOS firmware URL")
+		o.Expect(specUpdates).Should(o.ContainSubstring(nicFwUrl), "HFC spec should contain NIC firmware URL")
 
 		compat_otp.By("Wait for HFC ChangeDetected condition")
 		hfcCondErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
@@ -434,66 +382,15 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		compat_otp.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 
 		compat_otp.By("Verify BMC firmware version changed")
-		bmcJsonPath := `{.status.components[?(@.component=="bmc")].currentVersion}`
-		var currentBmcVersion string
-		pollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
-			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+bmcJsonPath).Output()
-			if err != nil {
-				e2e.Logf("Error getting BMC version: %v", err)
-				return false, err
-			}
-			if ver != "" && ver != initialBmcVersion {
-				currentBmcVersion = ver
-				return true, nil
-			}
-			e2e.Logf("BMC version: %s, waiting for change from %s...", ver, initialBmcVersion)
-			return false, nil
-		})
-		o.Expect(pollErr).NotTo(o.HaveOccurred(), "BMC firmware version did not change")
-		o.Expect(currentBmcVersion).NotTo(o.BeEmpty())
-		o.Expect(currentBmcVersion).ShouldNot(o.Equal(initialBmcVersion))
+		currentBmcVersion := pollForFirmwareVersionChange(oc, host, "bmc", initialBmcVersion)
 		e2e.Logf("BMC firmware updated: %s -> %s", initialBmcVersion, currentBmcVersion)
 
 		compat_otp.By("Verify BIOS firmware version changed")
-		biosJsonPath := `{.status.components[?(@.component=="bios")].currentVersion}`
-		var currentBiosVersion string
-		biosPollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
-			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+biosJsonPath).Output()
-			if err != nil {
-				e2e.Logf("Error getting BIOS version: %v", err)
-				return false, err
-			}
-			if ver != "" && ver != initialBiosVersion {
-				currentBiosVersion = ver
-				return true, nil
-			}
-			e2e.Logf("BIOS version: %s, waiting for change from %s...", ver, initialBiosVersion)
-			return false, nil
-		})
-		o.Expect(biosPollErr).NotTo(o.HaveOccurred(), "BIOS firmware version did not change")
-		o.Expect(currentBiosVersion).NotTo(o.BeEmpty())
-		o.Expect(currentBiosVersion).ShouldNot(o.Equal(initialBiosVersion))
+		currentBiosVersion := pollForFirmwareVersionChange(oc, host, "bios", initialBiosVersion)
 		e2e.Logf("BIOS firmware updated: %s -> %s", initialBiosVersion, currentBiosVersion)
 
 		compat_otp.By("Verify NIC firmware version changed")
-		nicJsonPath := fmt.Sprintf(`{.status.components[?(@.component=="%s")].currentVersion}`, nicComponent)
-		var currentNicVersion string
-		nicPollErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
-			ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+nicJsonPath).Output()
-			if err != nil {
-				e2e.Logf("Error getting NIC version: %v", err)
-				return false, err
-			}
-			if ver != "" && ver != initialNicVersion {
-				currentNicVersion = ver
-				return true, nil
-			}
-			e2e.Logf("NIC version: %s, waiting for change from %s...", ver, initialNicVersion)
-			return false, nil
-		})
-		o.Expect(nicPollErr).NotTo(o.HaveOccurred(), "NIC firmware version did not change")
-		o.Expect(currentNicVersion).NotTo(o.BeEmpty())
-		o.Expect(currentNicVersion).ShouldNot(o.Equal(initialNicVersion))
+		currentNicVersion := pollForFirmwareVersionChange(oc, host, nicComponent, initialNicVersion)
 		e2e.Logf("NIC firmware updated: %s -> %s", initialNicVersion, currentNicVersion)
 
 		compat_otp.By("Verify HFC ChangeDetected condition is False after update")
