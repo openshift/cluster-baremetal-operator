@@ -257,7 +257,7 @@ func bastionBiosFirmwareURL(vendor, currentVersion string) string {
 		case "1.20.2":
 			return bastionFirmwareBaseURL + "/BIOS_DCFN9_WN64_1.21.1.EXE"
 		case "1.21.1":
-		return bastionFirmwareBaseURL + "/BIOS_GWT21_WN64_1.20.2.EXE"
+			return bastionFirmwareBaseURL + "/BIOS_GWT21_WN64_1.20.2.EXE"
 		default:
 			e2e.Failf("Unsupported Dell BIOS version for bastion firmware: %s", currentVersion)
 		}
@@ -265,6 +265,8 @@ func bastionBiosFirmwareURL(vendor, currentVersion string) string {
 		switch currentVersion {
 		case "U46 v2.24":
 			return bastionFirmwareBaseURL + "/U46_2.64_04_01_2026.fwpkg"
+		case "U46 v2.64":
+			return bastionFirmwareBaseURL + "/U46_2.24_10_04_2024.fwpkg"
 		default:
 			e2e.Failf("Unsupported HPE BIOS version for bastion firmware: %s", currentVersion)
 		}
@@ -274,21 +276,39 @@ func bastionBiosFirmwareURL(vendor, currentVersion string) string {
 	return ""
 }
 
+var nicFirmwareArtifacts = map[string]string{
+	"16.35.80.02": "/Network_Firmware_XY16R_WN64_16.35.30.06_01.EXE",
+	"16.35.30.06": "/Network_Firmware_P5F14_WN64_16.35.80.02_A00.EXE",
+}
+
 func bastionNicFirmwareURL(currentVersion string) string {
-	switch currentVersion {
-	case "16.35.80.02":
-		return bastionFirmwareBaseURL + "/Network_Firmware_XY16R_WN64_16.35.30.06_01.EXE"
-	case "16.35.30.06":
-		return bastionFirmwareBaseURL + "/Network_Firmware_P5F14_WN64_16.35.80.02_A00.EXE"
-	default:
-		e2e.Failf("Unsupported NIC firmware version for bastion firmware: %s", currentVersion)
+	if artifact, ok := nicFirmwareArtifacts[currentVersion]; ok {
+		return bastionFirmwareBaseURL + artifact
 	}
+	e2e.Failf("Unsupported NIC firmware version for bastion firmware: %s", currentVersion)
 	return ""
 }
 
-var supportedNicVersions = map[string]bool{
-	"16.35.80.02": true,
-	"16.35.30.06": true,
+func pollForFirmwareVersionChange(oc *exutil.CLI, host, component, initialVersion string) string {
+	jsonPath := fmt.Sprintf(`{.status.components[?(@.component=="%s")].currentVersion}`, component)
+	var currentVersion string
+	pollErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+jsonPath).Output()
+		if err != nil {
+			e2e.Logf("Transient error getting %s version: %v", component, err)
+			return false, nil
+		}
+		if ver != "" && ver != initialVersion {
+			currentVersion = ver
+			return true, nil
+		}
+		e2e.Logf("%s version: %s, waiting for change from %s...", component, ver, initialVersion)
+		return false, nil
+	})
+	o.Expect(pollErr).NotTo(o.HaveOccurred(), "%s firmware version did not change from %s", component, initialVersion)
+	o.Expect(currentVersion).NotTo(o.BeEmpty(), "%s firmware version must not be empty after update", component)
+	o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion), "%s firmware version should have changed from %s", component, initialVersion)
+	return currentVersion
 }
 
 func getBastionNicComponent(oc *exutil.CLI, host string) (string, string) {
@@ -304,7 +324,7 @@ func getBastionNicComponent(oc *exutil.CLI, host string) (string, string) {
 	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to parse HFC status components")
 
 	for _, c := range components {
-		if strings.HasPrefix(c.Component, "nic:") && supportedNicVersions[c.CurrentVersion] {
+		if strings.HasPrefix(c.Component, "nic:") && nicFirmwareArtifacts[c.CurrentVersion] != "" {
 			e2e.Logf("Found supported NIC component: %s at version %s", c.Component, c.CurrentVersion)
 			return c.Component, c.CurrentVersion
 		}
