@@ -36,7 +36,7 @@ func NewRunSuiteCommand(registry *extension.Registry) *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "run-suite NAME",
 		Short: "Run a group of tests by suite. This is more limited than origin, and intended for light local " +
-			"development use. Orchestration parameters, scheduling, isolation, etc are not obeyed, and Ginkgo tests are executed serially.",
+			"development use. Ginkgo tests are executed in parallel, controlled by --max-concurrency (default 10).",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancelCause := context.WithCancelCause(context.Background())
@@ -126,7 +126,11 @@ func NewRunSuiteCommand(registry *extension.Registry) *cobra.Command {
 			if suite.Parallelism > 0 {
 				concurrency = min(concurrency, suite.Parallelism)
 			}
-			results, runErr := specs.Run(ctx, compositeWriter, concurrency)
+			var runOpts []extensiontests.SchedulerOption
+			if len(suite.ResourcePools) > 0 {
+				runOpts = append(runOpts, extensiontests.WithResourcePoolCapacity(suite.ResourcePools))
+			}
+			results, runErr := specs.Run(ctx, compositeWriter, concurrency, runOpts...)
 			if opts.junitPath != "" {
 				// we want to commit the results to disk regardless of the success or failure of the specs
 				if err := writeResults(opts.junitPath, results); err != nil {
