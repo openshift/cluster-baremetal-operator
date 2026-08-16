@@ -25,7 +25,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 	})
 	// author: jhajyahy@redhat.com
 	// port=unknown - no data in BigQuery last 60 days
-	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-75430-DAY1 Update host firmware of bmc, bios and nic with reboot annotation [Disruptive]", func() {
+	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-75430-DAY1 Update host firmware of bmc, bios and nic [Disruptive]", func() {
 		dirname = "OCP-75430.log"
 		host, machineName := getWorkerBMH(oc)
 		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hardwaredata", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.hardware.firmware.bios.vendor}").Output()
@@ -515,7 +515,8 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		servicingErr := wait.Poll(5*time.Second, 5*time.Minute, func() (bool, error) {
 			opStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.operationalStatus}").Output()
 			if err != nil {
-				return false, err
+				e2e.Logf("Transient error getting BMH operationalStatus: %v", err)
+				return false, nil
 			}
 			if opStatus == "servicing" {
 				e2e.Logf("BMH operationalStatus is now 'servicing'")
