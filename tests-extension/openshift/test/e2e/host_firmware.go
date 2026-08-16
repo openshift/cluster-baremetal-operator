@@ -25,7 +25,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 	})
 	// author: jhajyahy@redhat.com
 	// port=unknown - no data in BigQuery last 60 days
-	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-75430-DAY1 Update host FW of bmc, bios and nic with reboot annotation [Disruptive]", func() {
+	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-75430-DAY1 Update host firmware of bmc, bios and nic with reboot annotation [Disruptive]", func() {
 		dirname = "OCP-75430.log"
 		host, machineName := getWorkerBMH(oc)
 		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hardwaredata", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.hardware.firmware.bios.vendor}").Output()
@@ -255,7 +255,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 
 	// author: jhajyahy@redhat.com
 	// port=unknown - no data in BigQuery last 60 days
-	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-78361-DAY2 Update host FW of bmc, bios and nic with reboot annotation  [Disruptive]", func() {
+	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-78361-DAY2 Update host firmware of bmc, bios and nic with reboot annotation  [Disruptive]", func() {
 		dirname = "OCP-78361.log"
 		compat_otp.By("Find a provisioned worker BareMetalHost for testing")
 		host, machineName := getWorkerBMH(oc)
