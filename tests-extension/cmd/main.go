@@ -156,6 +156,14 @@ func registerSuites(ext *e.Extension) {
 			},
 		},
 		{
+			Name:        "cluster-baremetal-operator/firmware",
+			Parents:     []string{"openshift/disruptive"},
+			Description: "Firmware update tests only (BMC, BIOS, NIC firmware via HFC/HUP)",
+			Qualifiers: []string{
+				`name.contains("FW") || name.contains("firmware")`,
+			},
+		},
+		{
 			Name:        "cluster-baremetal-operator/all",
 			Description: "All cluster-baremetal-operator tests",
 			// No qualifiers means all tests from this extension will be included
