@@ -2,6 +2,7 @@ package baremetal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -93,62 +94,6 @@ func getFirstDeviceName(oc *exutil.CLI, bmhName string) string {
 	deviceName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hardwaredata", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.spec.hardware.storage[0].name}").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	return deviceName
-}
-
-func buildFirmwareURL(vendor, currentVersion string) (string, string) {
-	var url, fileName string
-
-	iDRAC_71070 := "https://dl.dell.com/FOLDER11965413M/1/iDRAC_7.10.70.00_A00.exe"
-	iDRAC_71030 := "https://dl.dell.com/FOLDER11319105M/1/iDRAC_7.10.30.00_A00.exe"
-	ilo5_305 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p991377599/v247527/ilo5_305.fwpkg"
-	ilo5_302 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p991377599/v243854/ilo5_302.fwpkg"
-	ilo6_157 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v243858/ilo6_157.fwpkg"
-	ilo6_160 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v247531/ilo6_160.fwpkg"
-
-
-	switch vendor {
-	case "Dell Inc.":
-		fileName = "firmimgFIT.d9"
-		switch currentVersion {
-		case "7.10.70.00":
-			url = iDRAC_71030
-		case "7.10.30.00":
-			url = iDRAC_71070
-		default:
-			e2e.Failf("Unsupported Dell iDRAC version: %s", currentVersion)
-		}
-	case "HPE":
-		// Extract the iLO version and assign the file name accordingly
-		if strings.Contains(currentVersion, "iLO 5") {
-			switch currentVersion {
-			case "iLO 5 v3.05":
-				url = ilo5_302
-				fileName = "ilo5_302.bin"
-			case "iLO 5 v3.02":
-				url = ilo5_305
-				fileName = "ilo5_305.bin"
-			default:
-				e2e.Failf("Unsupported iLO 5 version: %s", currentVersion)
-			}
-		} else if strings.Contains(currentVersion, "iLO 6") {
-			switch currentVersion {
-			case "iLO 6 v1.57":
-				url = ilo6_160
-				fileName = "ilo6_160.bin"
-			case "iLO 6 v1.60":
-				url = ilo6_157
-				fileName = "ilo6_157.bin"
-			default:
-				e2e.Failf("Unsupported iLO 6 version: %s", currentVersion)
-			}
-		} else {
-			e2e.Failf("Unsupported HPE BMC version: %s", currentVersion)
-		}
-	default:
-		e2e.Failf("Unsupported vendor: %s", vendor)
-	}
-
-	return url, fileName
 }
 
 // getHfsToggleValue returns a vendor-specific HostFirmwareSettings field name and its toggled value.
@@ -261,4 +206,129 @@ func getBypathDeviceName(oc *exutil.CLI, bmhName string) string {
 // This is a convenience wrapper around getHfsToggleValue for tests that use this naming
 func getHfsByVendor(oc *exutil.CLI, vendor, machineAPINamespace, host string) (string, string, error) {
 	return getHfsToggleValue(oc, vendor, machineAPINamespace, host)
+}
+
+const bastionFirmwareBaseURL = "http://192.168.70.1/firmware"
+
+func bastionBmcFirmwareURL(vendor, currentVersion string) string {
+	switch vendor {
+	case "Dell Inc.":
+		switch currentVersion {
+		case "7.00.00.183":
+			return bastionFirmwareBaseURL + "/iDRAC-with-Lifecycle-Controller_Firmware_FWMWV_WN64_7.00.00.184_A00.EXE"
+		case "7.00.00.184":
+			return bastionFirmwareBaseURL + "/iDRAC-with-Lifecycle-Controller_Firmware_VP556_WN64_7.00.00.183_A00.EXE"
+		case "7.30.10.50":
+			return bastionFirmwareBaseURL + "/iDRAC-with-Lifecycle-Controller_Firmware_CPCHX_WN64_7.30.30.51_A00.EXE"
+		case "7.30.30.51":
+			return bastionFirmwareBaseURL + "/iDRAC-with-Lifecycle-Controller_Firmware_924YT_WN64_7.30.10.50_A00.EXE"
+		default:
+			e2e.Failf("Unsupported Dell iDRAC version for bastion firmware: %s", currentVersion)
+		}
+	case "HPE":
+		if strings.Contains(currentVersion, "iLO 5") {
+			switch currentVersion {
+			case "iLO 5 v3.05":
+				return bastionFirmwareBaseURL + "/ilo5_321.fwpkg"
+			case "iLO 5 v3.21":
+				return bastionFirmwareBaseURL + "/ilo5_305.fwpkg"
+			default:
+				e2e.Failf("Unsupported iLO 5 version for bastion firmware: %s", currentVersion)
+			}
+		} else if strings.Contains(currentVersion, "iLO 6") {
+			e2e.Failf("No iLO 6 firmware staged on bastion for version: %s", currentVersion)
+		} else {
+			e2e.Failf("Unsupported HPE BMC version for bastion firmware: %s", currentVersion)
+		}
+	default:
+		e2e.Failf("Unsupported vendor for bastion firmware: %s", vendor)
+	}
+	return ""
+}
+
+func bastionBiosFirmwareURL(vendor, currentVersion string) string {
+	switch vendor {
+	case "Dell Inc.":
+		switch currentVersion {
+		case "2.26.1":
+			return bastionFirmwareBaseURL + "/BIOS_N5C9K_WN64_2.27.0_01.EXE"
+		case "2.27.0":
+			return bastionFirmwareBaseURL + "/BIOS_W3XYW_WN64_2.26.1.EXE"
+		case "1.20.2":
+			return bastionFirmwareBaseURL + "/BIOS_DCFN9_WN64_1.21.1.EXE"
+		case "1.21.1":
+			return bastionFirmwareBaseURL + "/BIOS_GWT21_WN64_1.20.2.EXE"
+		default:
+			e2e.Failf("Unsupported Dell BIOS version for bastion firmware: %s", currentVersion)
+		}
+	case "HPE":
+		switch currentVersion {
+		case "U46 v2.24":
+			return bastionFirmwareBaseURL + "/U46_2.64_04_01_2026.fwpkg"
+		case "U46 v2.64":
+			return bastionFirmwareBaseURL + "/U46_2.24_10_04_2024.fwpkg"
+		default:
+			e2e.Failf("Unsupported HPE BIOS version for bastion firmware: %s", currentVersion)
+		}
+	default:
+		e2e.Failf("Unsupported vendor for bastion BIOS firmware: %s", vendor)
+	}
+	return ""
+}
+
+var nicFirmwareArtifacts = map[string]string{
+	"16.35.80.02": "/Network_Firmware_XY16R_WN64_16.35.30.06_01.EXE",
+	"16.35.30.06": "/Network_Firmware_P5F14_WN64_16.35.80.02_A00.EXE",
+}
+
+func bastionNicFirmwareURL(currentVersion string) string {
+	if artifact, ok := nicFirmwareArtifacts[currentVersion]; ok {
+		return bastionFirmwareBaseURL + artifact
+	}
+	e2e.Failf("Unsupported NIC firmware version for bastion firmware: %s", currentVersion)
+	return ""
+}
+
+func pollForFirmwareVersionChange(oc *exutil.CLI, host, component, initialVersion string) string {
+	jsonPath := fmt.Sprintf(`{.status.components[?(@.component=="%s")].currentVersion}`, component)
+	var currentVersion string
+	pollErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath="+jsonPath).Output()
+		if err != nil {
+			e2e.Logf("Transient error getting %s version: %v", component, err)
+			return false, nil
+		}
+		if ver != "" && ver != initialVersion {
+			currentVersion = ver
+			return true, nil
+		}
+		e2e.Logf("%s version: %s, waiting for change from %s...", component, ver, initialVersion)
+		return false, nil
+	})
+	o.Expect(pollErr).NotTo(o.HaveOccurred(), "%s firmware version did not change from %s", component, initialVersion)
+	o.Expect(currentVersion).NotTo(o.BeEmpty(), "%s firmware version must not be empty after update", component)
+	o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion), "%s firmware version should have changed from %s", component, initialVersion)
+	return currentVersion
+}
+
+func getBastionNicComponent(oc *exutil.CLI, host string) (string, string) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).NotTo(o.BeEmpty(), "HFC status components must not be empty")
+
+	var components []struct {
+		Component      string `json:"component"`
+		CurrentVersion string `json:"currentVersion"`
+	}
+	err = json.Unmarshal([]byte(output), &components)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to parse HFC status components")
+
+	for _, c := range components {
+		if strings.HasPrefix(c.Component, "nic:") && nicFirmwareArtifacts[c.CurrentVersion] != "" {
+			e2e.Logf("Found supported NIC component: %s at version %s", c.Component, c.CurrentVersion)
+			return c.Component, c.CurrentVersion
+		}
+	}
+	e2e.Failf("No NIC component with supported firmware version found on host %s", host)
+	return "", ""
 }
