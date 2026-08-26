@@ -54,4 +54,5 @@ type ProvisioningInfo struct {
 	ResourceCache           resourceapply.ResourceCache
 	IsHyperShift            bool
 	MirrorConfigHash        string
+	TlsCertHash             string
 }

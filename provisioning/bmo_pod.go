@@ -140,10 +140,6 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 				Name:  ironicCertEnvVar,
 				Value: metal3TlsRootDir + "/ironic/" + corev1.TLSCertKey,
 			},
-			{
-				Name:  ironicInsecureEnvVar,
-				Value: "true",
-			},
 			buildEnvVar(deployKernelUrl, &info.ProvConfig.Spec),
 			{
 				Name:  ironicEndpoint,
@@ -225,6 +221,9 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 	}
 
 	podAnnotations["openshift.io/required-scc"] = "hostnetwork-v2"
+	if info.TlsCertHash != "" {
+		podAnnotations[ironicTlsCertHashAnnotation] = info.TlsCertHash
+	}
 
 	nodeSelector := map[string]string{}
 	if !info.IsHyperShift {
