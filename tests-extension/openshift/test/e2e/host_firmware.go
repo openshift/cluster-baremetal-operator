@@ -13,7 +13,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on BareMetal", func() {
+var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc      = compat_otp.NewCLI("host-firmware-components", compat_otp.KubeConfigPath())

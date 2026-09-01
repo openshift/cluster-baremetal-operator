@@ -2,13 +2,14 @@ package baremetal
 
 import (
 	"fmt"
+	"net"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	compat_otp "github.com/openshift/origin/test/extended/util/compat_otp"
 )
 
-var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job on BareMetal", func() {
+var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc         = compat_otp.NewCLI("baremetal-ironic-authentication", compat_otp.KubeConfigPath())
@@ -26,12 +27,14 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 		hostIP, err := oc.AsAdmin().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].status.hostIP}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(hostIP).ShouldNot(o.BeEmpty(), "Failed to get metal3 pod hostIP")
-		endpointIP = []string{"", hostIP + ":6385"} // [0] is full match (unused), [1] is the endpoint
+
+		// Format endpoint for URL - net.JoinHostPort handles IPv6 brackets automatically
+		endpoint := net.JoinHostPort(hostIP, "6385")
+		endpointIP = []string{"", endpoint} // [0] is full match (unused), [1] is the endpoint
 
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 96.1% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-40655-An unauthenticated user can't do actions in the ironic-api when using --insecure flag with https", func() {
 		// Get metal3 pod name
 		metal3Pod, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "pods", "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
@@ -46,7 +49,6 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 96.1% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-40560-An unauthenticated user can't do actions in the ironic-api when using http", func() {
 		// Get metal3 pod name
 		metal3Pod, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "pods", "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
@@ -62,7 +64,6 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 96.1% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-40561-An authenticated user can't do actions in the ironic-api when using http", func() {
 		// Get metal3 pod name
 		metal3Pod, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "pods", "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
@@ -79,7 +80,6 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=yes - 95.9% pass rate (724 runs last 60 days)
 	g.It("Author:jhajyahy-Medium-40562-An authenticated user can do actions in the ironic-api when using --insecure flag with https", func() {
 		// Get metal3 pod name
 		metal3Pod, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "pods", "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()

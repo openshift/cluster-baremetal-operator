@@ -74,6 +74,23 @@ func waitForBMHState(oc *exutil.CLI, bmhName string, bmhStatus string) {
 	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("The BMH state of %v is not as expected", bmhName))
 }
 
+func waitForBMHOperationalStatus(oc *exutil.CLI, bmhName string, opStatus string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.status.operationalStatus}").Output()
+		if err != nil {
+			e2e.Logf("Transient error getting BMH operationalStatus: %v", err)
+			return false, nil
+		}
+		if out != opStatus {
+			e2e.Logf("bmh %v operationalStatus is %v, waiting for %v", bmhName, out, opStatus)
+			return false, nil
+		}
+		e2e.Logf("bmh %v operationalStatus is %v", bmhName, out)
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("The BMH operationalStatus of %v did not become %v", bmhName, opStatus))
+}
+
 func waitForBMHDeletion(oc *exutil.CLI, bmhName string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Minute, true, func(ctx context.Context) (bool, error) {
 		out, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "bmh", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -347,4 +364,39 @@ func getBastionNicComponent(oc *exutil.CLI, host, vendor string) (string, string
 	}
 	e2e.Failf("No NIC component with supported firmware version found on host %s vendor %s", host, vendor)
 	return "", ""
+}
+
+func getReadyWorkerCount(oc *exutil.CLI) int {
+	// Get Ready status and schedulability (spec.unschedulable) for each worker node
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"nodes", "-l", "node-role.kubernetes.io/worker",
+		"-o=jsonpath={range .items[*]}{.status.conditions[?(@.type==\"Ready\")].status},{.spec.unschedulable}{\"\\n\"}{end}",
+	).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	count := 0
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		parts := strings.Split(strings.TrimSpace(line), ",")
+		// Count only if Ready=True and not unschedulable (cordoned)
+		if len(parts) == 2 && parts[0] == "True" && parts[1] != "true" {
+			count++
+		}
+	}
+	return count
+}
+
+// findBMHBySuffix finds a BareMetalHost whose name ends with the given suffix.
+// For example, suffix "worker-00" will match "openshift-worker-00" or "cluster-worker-00".
+// Returns the full BMH name if found, or empty string if not found.
+func findBMHBySuffix(oc *exutil.CLI, suffix string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"bmh", "-n", machineAPINamespace,
+		"-o=jsonpath={.items[*].metadata.name}",
+	).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, name := range strings.Fields(output) {
+		if strings.HasSuffix(name, suffix) {
+			return name
+		}
+	}
+	return ""
 }
