@@ -39,13 +39,13 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(initialBiosVersion).NotTo(o.BeEmpty(), "BIOS firmware version must not be empty")
 
-		nicComponent, initialNicVersion := getBastionNicComponent(oc, host)
+		nicComponent, initialNicVersion := getBastionNicComponent(oc, host, vendor)
 
 		e2e.Logf("Selected BMH: %s, Vendor: %s, BMC FW: %s, BIOS FW: %s, NIC: %s FW: %s", host, vendor, initialBmcVersion, initialBiosVersion, nicComponent, initialNicVersion)
 
 		bmcFwUrl := bastionBmcFirmwareURL(vendor, initialBmcVersion)
 		biosFwUrl := bastionBiosFirmwareURL(vendor, initialBiosVersion)
-		nicFwUrl := bastionNicFirmwareURL(initialNicVersion)
+		nicFwUrl := bastionNicFirmwareURL(vendor, initialNicVersion)
 
 		compat_otp.By("Update HFC CRD with BMC, BIOS and NIC firmware")
 		patchConfig := fmt.Sprintf(`[{"op": "replace", "path": "/spec/updates", "value": [{"component":"bmc","url":"%s"},{"component":"bios","url":"%s"},{"component":"%s","url":"%s"}]}]`, bmcFwUrl, biosFwUrl, nicComponent, nicFwUrl)
@@ -273,7 +273,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(initialBiosVersion).NotTo(o.BeEmpty(), "BIOS firmware version must not be empty")
 
-		nicComponent, initialNicVersion := getBastionNicComponent(oc, host)
+		nicComponent, initialNicVersion := getBastionNicComponent(oc, host, vendor)
 
 		e2e.Logf("Selected BMH: %s, Node: %s, Vendor: %s, BMC FW: %s, BIOS FW: %s, NIC: %s FW: %s", host, nodeName, vendor, initialBmcVersion, initialBiosVersion, nicComponent, initialNicVersion)
 
@@ -300,7 +300,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 
 		bmcFwUrl := bastionBmcFirmwareURL(vendor, initialBmcVersion)
 		biosFwUrl := bastionBiosFirmwareURL(vendor, initialBiosVersion)
-		nicFwUrl := bastionNicFirmwareURL(initialNicVersion)
+		nicFwUrl := bastionNicFirmwareURL(vendor, initialNicVersion)
 
 		compat_otp.By("Update HFC CRD with BMC, BIOS and NIC firmware")
 		patchConfig := fmt.Sprintf(`[{"op": "replace", "path": "/spec/updates", "value": [{"component":"bmc","url":"%s"},{"component":"bios","url":"%s"},{"component":"%s","url":"%s"}]}]`, bmcFwUrl, biosFwUrl, nicComponent, nicFwUrl)
@@ -427,7 +427,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(initialBiosVersion).NotTo(o.BeEmpty(), "BIOS firmware version must not be empty")
 
-		nicComponent, initialNicVersion := getBastionNicComponent(oc, host)
+		nicComponent, initialNicVersion := getBastionNicComponent(oc, host, vendor)
 
 		e2e.Logf("Selected BMH: %s, Node: %s, Vendor: %s, BMC FW: %s, BIOS FW: %s, NIC: %s FW: %s", host, nodeName, vendor, initialBmcVersion, initialBiosVersion, nicComponent, initialNicVersion)
 
@@ -454,7 +454,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED j
 
 		bmcFwUrl := bastionBmcFirmwareURL(vendor, initialBmcVersion)
 		biosFwUrl := bastionBiosFirmwareURL(vendor, initialBiosVersion)
-		nicFwUrl := bastionNicFirmwareURL(initialNicVersion)
+		nicFwUrl := bastionNicFirmwareURL(vendor, initialNicVersion)
 
 		compat_otp.By("Update HFC CRD with BMC, BIOS and NIC firmware")
 		patchConfig := fmt.Sprintf(`[{"op": "replace", "path": "/spec/updates", "value": [{"component":"bmc","url":"%s"},{"component":"bios","url":"%s"},{"component":"%s","url":"%s"}]}]`, bmcFwUrl, biosFwUrl, nicComponent, nicFwUrl)
