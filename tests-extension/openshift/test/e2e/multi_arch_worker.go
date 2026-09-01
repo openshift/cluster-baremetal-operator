@@ -180,7 +180,7 @@ func verifyMultiArchWorker(oc *exutil.CLI, expectedBootMethod string) {
 	e2e.Logf("Successfully verified arm64 worker node(s) added to x86_64 cluster using %s", expectedBootMethod)
 }
 
-var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
+var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = compat_otp.NewCLI("multi-arch-worker", compat_otp.KubeConfigPath())
@@ -196,7 +196,6 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: sgoveas@redhat.com
-	// port=unknown - no data in BigQuery last 60 days
 	g.It("Author:sgoveas-Medium-87524-Verify arm64 worker node added successfully to x86_64 cluster with vmedia", func() {
 		verifyMultiArchWorker(oc, bootMethodVMedia)
 	})

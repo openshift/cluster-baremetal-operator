@@ -228,3 +228,24 @@ func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int) error {
 	return errNode
 }
 
+
+func waitForMetal3PodsRunning(oc *exutil.CLI, namespace string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		pods, err := oc.AsAdmin().Run("get").Args("pods", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		if err != nil {
+			return false, nil
+		}
+		for _, pod := range strings.Fields(pods) {
+			if !strings.HasPrefix(pod, "metal3-") {
+				continue
+			}
+			status := getPodStatus(oc, namespace, pod)
+			if status != "Running" {
+				e2e.Logf("Pod %s is %s, waiting...", pod, status)
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, "metal3 pods did not reach Running state")
+}
