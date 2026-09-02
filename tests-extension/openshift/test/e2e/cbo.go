@@ -1,8 +1,6 @@
 package baremetal
 
 import (
-	"strings"
-
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	compat_otp "github.com/openshift/origin/test/extended/util/compat_otp"
@@ -17,7 +15,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		SkipIfNotBaremetalCluster(oc)
 	})
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-33516-Verify that cluster baremetal operator is active", func() {
+	g.It("Author:jhajyahy-Medium-33516-Verify that cluster baremetal operator is active [Level0]", func() {
 		g.By("Running oc get clusteroperators baremetal")
 		status, err := checkOperator(oc, "baremetal")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -30,7 +28,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-36446-Verify openshift-machine-api namespace is still there and Ready", func() {
+	g.It("Author:jhajyahy-Medium-36446-Verify openshift-machine-api namespace is still there and Ready [Level0]", func() {
 		g.By("Running oc get project openshift-machine-api")
 		nsStatus, err := oc.AsAdmin().Run("get").Args("project", machineAPINamespace, "-o=jsonpath={.status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -39,7 +37,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-36909-Verify metal3 pod is controlled by cluster baremetal operator", func() {
+	g.It("Author:jhajyahy-Medium-36909-Verify metal3 pod is controlled by cluster baremetal operator [Level0]", func() {
 		g.By("Running oc get deployment -n openshift-machine-api")
 		annotations, err := oc.AsAdmin().Run("get").Args("deployment", "-n", machineAPINamespace, "metal3", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -48,7 +46,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-36445-Verify new additions to openshift-machine-api project", func() {
+	g.It("Author:jhajyahy-Medium-36445-Verify new additions to openshift-machine-api project [Level0]", func() {
 		g.By("Running oc get serviceaccount -n openshift-machine-api cluster-baremetal-operator")
 		serviceAccount, err := oc.AsAdmin().Run("get").Args("serviceaccount", "-n", machineAPINamespace, "cluster-baremetal-operator", "-o=jsonpath={.metadata.name}:{.kind}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -119,20 +117,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		o.Expect(secretErr).NotTo(o.HaveOccurred())
 		o.Expect(metal3Secrets).Should(o.ContainSubstring("metal3"))
 
-		pods, err := oc.AsAdmin().Run("get").Args("pods", "-n", machineAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		podlist := strings.Fields(pods)
-		// Filter to only check metal3-related pods to avoid failures from unrelated pods
-		metal3Pods := []string{}
-		for _, pod := range podlist {
-			if strings.HasPrefix(pod, "metal3-") {
-				metal3Pods = append(metal3Pods, pod)
-			}
-		}
-		for _, pod := range metal3Pods {
-			podStatus := getPodStatus(oc, machineAPINamespace, pod)
-			o.Expect(podStatus).Should(o.Equal("Running"))
-		}
+		waitForMetal3PodsRunning(oc, machineAPINamespace)
 
 		g.By("Check cluster baremetal operator is available")
 		cboStatus, err := checkOperator(oc, "baremetal")

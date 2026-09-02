@@ -12,7 +12,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job on BareMetal", func() {
+var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = compat_otp.NewCLI("ironic-prometheus-exporter", compat_otp.KubeConfigPath())
@@ -22,8 +22,7 @@ var _ = g.Describe("[OTP][sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job
 	})
 
 	// author: jhajyahy@redhat.com
-	// port=unknown - no data in BigQuery last 60 days
-	g.It("Author:jhajyahy-Medium-88191-Verify Ironic Prometheus Exporter can be enabled and metrics are exposed[Serial]", func() {
+	g.It("Author:jhajyahy-Medium-88191-Verify Ironic Prometheus Exporter can be enabled and metrics are exposed [Serial]", func() {
 		g.By("Save current provisioning-configuration")
 		_, err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration", "-o=yaml").OutputToFile("prov-backup.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())

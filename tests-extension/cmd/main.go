@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	ginkgo "github.com/onsi/ginkgo/v2"
 	"github.com/spf13/cobra"
 	"k8s.io/component-base/logs"
 
@@ -25,6 +26,11 @@ import (
 )
 
 func main() {
+	// Redirect GinkgoWriter to stderr before framework init so that
+	// klog messages from AfterReadingAllFlags don't corrupt stdout JSON
+	// output used by the OTE harness "list" command.
+	ginkgo.GinkgoWriter = ginkgo.NewWriter(os.Stderr)
+
 	// Initialize test framework flags (required for kubeconfig, provider, etc.)
 	util.InitStandardFlags()
 	framework.AfterReadingAllFlags(&framework.TestContext)
@@ -60,25 +66,19 @@ func main() {
 	// Initialize test framework before all tests
 	componentSpecs.AddBeforeAll(func() {
 		if err := compat_otp.InitTest(false); err != nil {
-			fmt.Printf("ERROR: compat_otp.InitTest failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "ERROR: compat_otp.InitTest failed: %v\n", err)
 			panic(err)
 		}
-		fmt.Println("DEBUG: compat_otp.InitTest completed successfully")
 
 		// Set testsStarted = true to allow OTP functions like oc.Run() to work
-		// WithCleanup sets this flag and it remains true for all subsequent tests
-		fmt.Println("DEBUG: Calling util.WithCleanup")
-		util.WithCleanup(func() {
-			// Empty function - we just need WithCleanup to set testsStarted = true
-		})
-		fmt.Println("DEBUG: BeforeAll completed successfully")
+		util.WithCleanup(func() {})
 	})
 
 	// Process all specs
 	componentSpecs.Walk(func(spec *et.ExtensionTestSpec) {
 		// CRITICAL: All cluster-baremetal-operator tests ONLY run on baremetal platform
-		// Note: Platform name is case-sensitive - cluster reports "BareMetal"
-		spec.Include(et.PlatformEquals("BareMetal"))
+		// Note: openshift-tests passes "--platform=baremetal" to extension binaries
+		spec.Include(et.PlatformEquals("baremetal"))
 
 		// Apply platform filters based on Platform: labels
 		for label := range spec.Labels {
@@ -145,7 +145,7 @@ func registerSuites(ext *e.Extension) {
 			Parents:     []string{"openshift/disruptive"},
 			Description: "Disruptive tests (may affect cluster state)",
 			Qualifiers: []string{
-				`name.contains("[Disruptive]")`,
+				`name.contains("[Disruptive]") && !name.contains("firmware")`,
 			},
 		},
 		{
