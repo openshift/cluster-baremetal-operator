@@ -614,7 +614,7 @@ func (pb *provisioningBuilder) PreProvisioningOSDownloadURLs(value PreProvisioni
 }
 
 func (pb *provisioningBuilder) IronicAgentImage(value string) *provisioningBuilder {
-	pb.ProvisioningSpec.UnsupportedConfigOverrides = &UnsupportedConfigOverrides{IronicAgentImage: value}
+	pb.UnsupportedConfigOverrides = &UnsupportedConfigOverrides{IronicAgentImage: value}
 	return pb
 }
 
@@ -734,6 +734,12 @@ func TestValidateProvisioningFieldFormats(t *testing.T) {
 			spec:          managedProvisioning().PreProvisioningOSDownloadURLs(PreProvisioningOSDownloadURLs{IsoURL: "gopher://example.com/rhcos.iso"}).build(),
 			expectedError: true,
 			expectedMsg:   "preProvisioningOSDownloadURLs.isoURL",
+		},
+		{
+			name:          "InvalidPreProvisioningURLMissingHost",
+			spec:          managedProvisioning().PreProvisioningOSDownloadURLs(PreProvisioningOSDownloadURLs{IsoURL: "http:/rhcos.iso"}).build(),
+			expectedError: true,
+			expectedMsg:   "must include a host",
 		},
 		{
 			name:          "InvalidIronicAgentImageWithNewline",

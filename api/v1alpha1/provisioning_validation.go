@@ -263,6 +263,16 @@ func validateExternalIPs(ips []string) []error {
 	return errs
 }
 
+func validateHTTPURLHost(field string, parsedURL *url.URL) error {
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("unsupported scheme %q in %s", parsedURL.Scheme, field)
+	}
+	if parsedURL.Host == "" {
+		return fmt.Errorf("%s must include a host", field)
+	}
+	return nil
+}
+
 func validatePreProvisioningOSDownloadURLs(urls PreProvisioningOSDownloadURLs) []error {
 	var errs []error
 	fields := []struct {
@@ -287,8 +297,8 @@ func validatePreProvisioningOSDownloadURLs(urls PreProvisioningOSDownloadURLs) [
 			errs = append(errs, fmt.Errorf("%s %q is not a valid URL", f.name, f.uri))
 			continue
 		}
-		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-			errs = append(errs, fmt.Errorf("unsupported scheme %q in %s %s", parsedURL.Scheme, f.name, f.uri))
+		if err := validateHTTPURLHost(f.name, parsedURL); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return errs
@@ -312,9 +322,8 @@ func validateProvisioningOSDownloadURL(uri string) []error {
 		// If it's not a valid URI lets just return.
 		return errs
 	}
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		errs = append(errs, fmt.Errorf("unsupported scheme %q in provisioningOSDownloadURL %s", parsedURL.Scheme, uri))
-		// Again it's not worth it if it's not http(s)
+	if err := validateHTTPURLHost("provisioningOSDownloadURL", parsedURL); err != nil {
+		errs = append(errs, err)
 		return errs
 	}
 	var sha256Checksum string
