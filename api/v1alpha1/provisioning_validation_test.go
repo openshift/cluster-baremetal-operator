@@ -592,3 +592,175 @@ func (pb *provisioningBuilder) ProvisioningNetworkGateway(value string) *provisi
 	pb.ProvisioningSpec.ProvisioningNetworkGateway = value
 	return pb
 }
+
+func (pb *provisioningBuilder) AdditionalNTPServers(value []string) *provisioningBuilder {
+	pb.ProvisioningSpec.AdditionalNTPServers = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningMacAddresses(value []string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningMacAddresses = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ExternalIPs(value []string) *provisioningBuilder {
+	pb.ProvisioningSpec.ExternalIPs = value
+	return pb
+}
+
+func (pb *provisioningBuilder) PreProvisioningOSDownloadURLs(value PreProvisioningOSDownloadURLs) *provisioningBuilder {
+	pb.ProvisioningSpec.PreProvisioningOSDownloadURLs = value
+	return pb
+}
+
+func (pb *provisioningBuilder) IronicAgentImage(value string) *provisioningBuilder {
+	pb.ProvisioningSpec.UnsupportedConfigOverrides = &UnsupportedConfigOverrides{IronicAgentImage: value}
+	return pb
+}
+
+func allProvisioningNetworkFeatures() EnabledFeatures {
+	return EnabledFeatures{
+		ProvisioningNetwork: map[ProvisioningNetwork]bool{
+			ProvisioningNetworkManaged:   true,
+			ProvisioningNetworkUnmanaged: true,
+			ProvisioningNetworkDisabled:  true,
+		},
+	}
+}
+
+func TestValidateProvisioningFieldFormats(t *testing.T) {
+	baremetalCR := &Provisioning{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Provisioning",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testBaremetalProvisioningCR,
+		},
+	}
+
+	tCases := []struct {
+		name          string
+		spec          *ProvisioningSpec
+		expectedError bool
+		expectedMsg   string
+	}{
+		{
+			name:          "ValidInterfaceVariants",
+			spec:          managedProvisioning().ProvisioningInterface("br-ex").build(),
+			expectedError: false,
+		},
+		{
+			name:          "ValidVlanInterface",
+			spec:          managedProvisioning().ProvisioningInterface("eno1.100").build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidInterfaceWithSpace",
+			spec:          managedProvisioning().ProvisioningInterface("eth 0").build(),
+			expectedError: true,
+			expectedMsg:   "provisioningInterface",
+		},
+		{
+			name:          "InvalidInterfaceWithNewline",
+			spec:          managedProvisioning().ProvisioningInterface("eth0\neth1").build(),
+			expectedError: true,
+			expectedMsg:   "provisioningInterface",
+		},
+		{
+			name:          "InvalidInterfaceWithShellMetacharacters",
+			spec:          managedProvisioning().ProvisioningInterface("eth0;id").build(),
+			expectedError: true,
+			expectedMsg:   "not a valid interface name",
+		},
+		{
+			name:          "InvalidInterfaceTooLong",
+			spec:          managedProvisioning().ProvisioningInterface("enx0011223344556").build(),
+			expectedError: true,
+			expectedMsg:   "not a valid interface name",
+		},
+		{
+			name:          "ValidNTPServers",
+			spec:          managedProvisioning().AdditionalNTPServers([]string{"192.168.1.1", "pool.ntp.org", "2001:db8::1"}).build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidNTPServerNotHostOrIP",
+			spec:          managedProvisioning().AdditionalNTPServers([]string{"not_a_host"}).build(),
+			expectedError: true,
+			expectedMsg:   "additionalNTPServers[0]",
+		},
+		{
+			name:          "InvalidNTPServerWithNewline",
+			spec:          managedProvisioning().AdditionalNTPServers([]string{"pool.ntp.org\nmalicious"}).build(),
+			expectedError: true,
+			expectedMsg:   "additionalNTPServers[0]",
+		},
+		{
+			name:          "InvalidEmptyNTPServer",
+			spec:          managedProvisioning().AdditionalNTPServers([]string{""}).build(),
+			expectedError: true,
+			expectedMsg:   "additionalNTPServers[0] must not be empty",
+		},
+		{
+			name:          "ValidMacAddresses",
+			spec:          managedProvisioning().ProvisioningMacAddresses([]string{"00:11:22:33:44:55", "aa:bb:cc:dd:ee:ff"}).build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidMacAddress",
+			spec:          managedProvisioning().ProvisioningMacAddresses([]string{"not-a-mac"}).build(),
+			expectedError: true,
+			expectedMsg:   "not a valid MAC address",
+		},
+		{
+			name:          "ValidExternalIPs",
+			spec:          managedProvisioning().ExternalIPs([]string{"192.0.2.10", "2001:db8::10"}).build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidExternalIP",
+			spec:          managedProvisioning().ExternalIPs([]string{"not-an-ip"}).build(),
+			expectedError: true,
+			expectedMsg:   "externalIPs[0]",
+		},
+		{
+			name:          "ValidPreProvisioningURLs",
+			spec:          managedProvisioning().PreProvisioningOSDownloadURLs(PreProvisioningOSDownloadURLs{IsoURL: "https://example.com/rhcos.iso"}).build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidPreProvisioningURLScheme",
+			spec:          managedProvisioning().PreProvisioningOSDownloadURLs(PreProvisioningOSDownloadURLs{IsoURL: "gopher://example.com/rhcos.iso"}).build(),
+			expectedError: true,
+			expectedMsg:   "preProvisioningOSDownloadURLs.isoURL",
+		},
+		{
+			name:          "InvalidIronicAgentImageWithNewline",
+			spec:          managedProvisioning().IronicAgentImage("quay.io/example/ironic-agent:latest\nmalicious").build(),
+			expectedError: true,
+			expectedMsg:   "unsupportedConfigOverrides.ironicAgentImage",
+		},
+		{
+			name:          "DisabledEmptyNetworkStillValidatesInterface",
+			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").ProvisioningInterface("eth0;id").build(),
+			expectedError: true,
+			expectedMsg:   "not a valid interface name",
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			baremetalCR.Spec = *tc.spec
+			err := baremetalCR.ValidateBaremetalProvisioningConfig(allProvisioningNetworkFeatures())
+			if !tc.expectedError && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+				return
+			}
+			if tc.expectedError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedMsg)
+			}
+		})
+	}
+}
