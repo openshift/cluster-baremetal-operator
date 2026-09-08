@@ -19,8 +19,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	v1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-baremetal-operator/api/v1alpha1"
@@ -52,6 +54,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		imageRegistriesVolumeMount,
 		imageVolumeMount,
 		ironicAgentPullSecretMount,
+		ironicTlsMount,
 		caTrustDirVolumeMount,
 	}
 
@@ -73,6 +76,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_CA_BUNDLE", Value: "/certs/ironic/ca.crt"},
 			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
@@ -97,6 +101,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_CA_BUNDLE", Value: "/certs/ironic/ca.crt"},
 			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
@@ -124,6 +129,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_CA_BUNDLE", Value: "/certs/ironic/ca.crt"},
 			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
@@ -148,6 +154,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: "192.168.1.252,192.168.1.253"},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_CA_BUNDLE", Value: "/certs/ironic/ca.crt"},
 			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
@@ -173,6 +180,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_CA_BUNDLE", Value: "/certs/ironic/ca.crt"},
 			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
@@ -259,6 +267,63 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			assert.Equal(t, tc.expectedContainer.VolumeMounts, actualContainer.VolumeMounts)
 		})
 	}
+}
+
+func TestImageCustomizationTLSResources(t *testing.T) {
+	info := &ProvisioningInfo{
+		Namespace:    "openshift-machine-api",
+		Images:       &Images{},
+		ProvConfig:   &v1alpha1.Provisioning{},
+		NetworkStack: NetworkStackV4,
+		TlsCertHash:  "initial-cert-hash",
+	}
+	deployment := newImageCustomizationDeployment(info, []string{"192.0.2.1"})
+	require.Len(t, deployment.Spec.Template.Spec.Containers, 1)
+	container := deployment.Spec.Template.Spec.Containers[0]
+	assert.Equal(t, []string{
+		"/machine-image-customization-controller",
+		"-images-bind-addr", ":8084",
+		"-images-publish-addr", "https://metal3-image-customization-service.openshift-machine-api.svc.cluster.local/",
+		"-images-tls-cert-file", "/certs/ironic/tls.crt",
+		"-images-tls-key-file", "/certs/ironic/tls.key",
+	}, container.Command)
+	assert.Contains(t, container.Env, corev1.EnvVar{Name: "IRONIC_CA_BUNDLE", Value: "/certs/ironic/ca.crt"})
+	assert.Contains(t, container.VolumeMounts, corev1.VolumeMount{
+		Name:      "metal3-ironic-tls",
+		MountPath: "/certs/ironic",
+		ReadOnly:  true,
+	})
+	assert.Contains(t, deployment.Spec.Template.Spec.Volumes, corev1.Volume{
+		Name: "metal3-ironic-tls",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{SecretName: "metal3-ironic-tls"},
+		},
+	})
+	assert.Equal(t, []corev1.ContainerPort{{Name: "https", ContainerPort: 8084}}, container.Ports)
+
+	service := newImageCustomizationService(info.Namespace)
+	assert.Equal(t, "metal3-image-customization-service", service.Name)
+	assert.Equal(t, info.Namespace, service.Namespace)
+	assert.Equal(t, []corev1.ServicePort{{
+		Name:       "https",
+		Port:       443,
+		TargetPort: intstr.FromInt(8084),
+	}}, service.Spec.Ports)
+	require.NotEmpty(t, service.Spec.Selector)
+	for key, value := range service.Spec.Selector {
+		assert.Equal(t, value, deployment.Spec.Template.Labels[key], "Service must select the ICC pods")
+	}
+
+	const hashAnnotation = "baremetal.openshift.io/ironic-tls-cert-hash"
+	assert.Equal(t, "initial-cert-hash", deployment.Spec.Template.Annotations[hashAnnotation])
+	info.TlsCertHash = "rotated-cert-hash"
+	rotated := newImageCustomizationDeployment(info, []string{"192.0.2.1"})
+	assert.Equal(t, "rotated-cert-hash", rotated.Spec.Template.Annotations[hashAnnotation])
+	assert.NotEqual(t, deployment.Spec.Template, rotated.Spec.Template, "certificate rotation must trigger an ICC rollout")
+
+	info.TlsCertHash = ""
+	withoutHash := newImageCustomizationDeployment(info, []string{"192.0.2.1"})
+	assert.NotContains(t, withoutHash.Spec.Template.Annotations, hashAnnotation)
 }
 
 func TestGetUrlFromIP(t *testing.T) {
