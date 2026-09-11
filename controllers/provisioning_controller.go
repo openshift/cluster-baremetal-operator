@@ -428,6 +428,9 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 }
 
 func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfig *metal3iov1alpha1.Provisioning, images *provisioning.Images, sshkey string) (*provisioning.ProvisioningInfo, error) {
+	if provConfig.Spec.UnsupportedConfigOverrides != nil && provConfig.Spec.UnsupportedConfigOverrides.IronicImage != "" {
+		images.Ironic = provConfig.Spec.UnsupportedConfigOverrides.IronicImage
+	}
 	proxy, err := r.OSClient.ConfigV1().Proxies().Get(ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
