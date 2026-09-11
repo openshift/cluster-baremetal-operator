@@ -317,7 +317,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if specChanged || !imagesMatch {
 		if baremetalConfig.Spec.UnsupportedConfigOverrides != nil {
-			klog.Warningf("using unsupportedConfigOverrides in the configuration: %+v", *baremetalConfig.Spec.UnsupportedConfigOverrides)
+			klog.Warningf("unsupportedConfigOverrides are active in the Provisioning configuration")
 		}
 
 		err = r.updateCOStatus(ReasonSyncing, "", "Applying metal3 resources")
