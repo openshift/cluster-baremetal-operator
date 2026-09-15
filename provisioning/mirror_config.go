@@ -1,6 +1,7 @@
 package provisioning
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -64,7 +65,7 @@ func EnsureMirrorConfig(info *ProvisioningInfo) (bool, error) {
 
 	stripVolatileMetadata(idmsList)
 
-	idmsYAML, err := yaml.Marshal(idmsList)
+	idmsYAML, err := marshalIDMSMultiDoc(idmsList.Items)
 	if err != nil {
 		return false, fmt.Errorf("failed to serialize ImageDigestMirrorSets: %w", err)
 	}
@@ -94,6 +95,26 @@ func EnsureMirrorConfig(info *ProvisioningInfo) (bool, error) {
 		return false, fmt.Errorf("failed to apply mirror config ConfigMap: %w", err)
 	}
 	return updated, nil
+}
+
+// marshalIDMSMultiDoc serializes each ImageDigestMirrorSet as an individual
+// YAML document separated by "---". oc image extract --idms-file expects
+// top-level ImageDigestMirrorSet objects, not a Kubernetes List wrapper.
+func marshalIDMSMultiDoc(items []osconfigv1.ImageDigestMirrorSet) ([]byte, error) {
+	var buf bytes.Buffer
+	for i := range items {
+		if i > 0 {
+			buf.WriteString("---\n")
+		}
+		items[i].APIVersion = "config.openshift.io/v1"
+		items[i].Kind = "ImageDigestMirrorSet"
+		doc, err := yaml.Marshal(&items[i])
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal ImageDigestMirrorSet %q: %w", items[i].Name, err)
+		}
+		buf.Write(doc)
+	}
+	return buf.Bytes(), nil
 }
 
 // stripVolatileMetadata removes server-set metadata fields (resourceVersion,
