@@ -801,7 +801,7 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: podTemplateAnnotations,
+			Annotations: podAnnotationsWithRequiredSCC(privilegedSCC),
 			Labels:      *labels,
 		},
 		Spec: corev1.PodSpec{
@@ -815,8 +815,9 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: ptr.To(false),
 			},
-			ServiceAccountName: "cluster-baremetal-operator",
-			Tolerations:        tolerations,
+			ServiceAccountName:           metal3ServiceAccountName,
+			AutomountServiceAccountToken: ptr.To(false),
+			Tolerations:                  tolerations,
 		},
 	}
 }

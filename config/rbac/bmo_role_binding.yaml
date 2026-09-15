@@ -1,0 +1,39 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: baremetal-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: baremetal-operator
+subjects:
+- kind: ServiceAccount
+  name: baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: baremetal-operator-leader-election
+  namespace: openshift-machine-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: baremetal-operator-leader-election
+subjects:
+- kind: ServiceAccount
+  name: baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: baremetal-operator-scc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: baremetal-operator-scc
+subjects:
+- kind: ServiceAccount
+  name: baremetal-operator
+  namespace: openshift-machine-api

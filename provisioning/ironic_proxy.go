@@ -126,7 +126,7 @@ func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateS
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: podTemplateAnnotations,
+			Annotations: podAnnotationsWithRequiredSCC(hostNetworkV2SCC),
 			Labels: map[string]string{
 				"k8s-app":    metal3AppName,
 				cboLabelName: ironicProxyService,
@@ -177,8 +177,9 @@ func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateS
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: ptr.To(false),
 			},
-			ServiceAccountName: "cluster-baremetal-operator",
-			Tolerations:        tolerations,
+			ServiceAccountName:           metal3ServiceAccountName,
+			AutomountServiceAccountToken: ptr.To(false),
+			Tolerations:                  tolerations,
 		},
 	}, nil
 }

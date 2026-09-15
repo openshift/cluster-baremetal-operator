@@ -45,6 +45,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - monitoring.coreos.com
   resources:
   - prometheusrules
@@ -57,12 +65,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - security.openshift.io
-  resources:
-  - securitycontextconstraints
-  verbs:
-  - use
 - apiGroups:
   - coordination.k8s.io
   resources:
@@ -89,20 +91,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - configmaps
-  - secrets
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - events
   verbs:
   - create
@@ -115,25 +103,20 @@ rules:
   - validatingwebhookconfigurations
   verbs:
   - create
-  - delete
-  - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
-  - apps
+  - admissionregistration.k8s.io
+  resourceNames:
+  - baremetal-operator-validating-webhook-configuration
+  - cluster-baremetal-validating-webhook-configuration
   resources:
-  - daemonsets
-  - deployments
+  - validatingwebhookconfigurations
   verbs:
-  - create
   - delete
   - get
-  - list
   - patch
   - update
-  - watch
 - apiGroups:
   - config.openshift.io
   resources:
@@ -175,35 +158,6 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
-  - baremetalhosts
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
-  - baremetalhosts/finalizers
-  - baremetalhosts/status
-  - dataimages/finalizers
-  - hostfirmwarecomponents/finalizers
-  - hostfirmwaresettings/status
-  - hostupdatepolicies/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - metal3.io
-  resources:
-  - bmceventsubscriptions
-  - dataimages
-  - firmwareschemas
-  - hardwaredata
-  - hostfirmwarecomponents
-  - hostfirmwaresettings
-  - hostupdatepolicies
-  - preprovisioningimages
   - provisionings
   - provisionings/finalizers
   verbs:
@@ -217,22 +171,11 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
-  - bmceventsubscriptions/status
-  - dataimages/status
-  - hostfirmwarecomponents/status
-  - hostupdatepolicies/status
-  - preprovisioningimages/status
   - provisionings/status
   verbs:
   - get
   - patch
   - update
-- apiGroups:
-  - security.openshift.io
-  resources:
-  - securitycontextconstraints
-  verbs:
-  - use
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -262,7 +205,6 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
   name: cluster-baremetal-operator
-  namespace: openshift-machine-api
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -270,5 +212,435 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: cluster-baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-baremetal-operator-pull-secret
+  namespace: openshift-config
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - pull-secret
+  resources:
+  - secrets
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-baremetal-operator-cluster-config
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - cluster-config-v1
+  resources:
+  - configmaps
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-baremetal-operator-scc
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - anyuid
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-baremetal-operator-pull-secret
+  namespace: openshift-config
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-baremetal-operator-pull-secret
+subjects:
+- kind: ServiceAccount
+  name: cluster-baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-baremetal-operator-cluster-config
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-baremetal-operator-cluster-config
+subjects:
+- kind: ServiceAccount
+  name: cluster-baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-baremetal-operator-scc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-baremetal-operator-scc
+subjects:
+- kind: ServiceAccount
+  name: cluster-baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: baremetal-operator-leader-election
+  namespace: openshift-machine-api
+rules:
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: baremetal-operator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  - bmceventsubscriptions
+  - dataimages
+  - firmwareschemas
+  - hardwaredata
+  - hostfirmwarecomponents
+  - hostfirmwaresettings
+  - preprovisioningimages
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts/finalizers
+  - dataimages/finalizers
+  - hardware/finalizers
+  - hostfirmwarecomponents/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts/status
+  - bmceventsubscriptions/status
+  - dataimages/status
+  - firmwareschemas/status
+  - hostfirmwarecomponents/status
+  - hostfirmwaresettings/status
+  - preprovisioningimages/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostupdatepolicies
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: baremetal-operator-scc
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - restricted-v2
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: baremetal-operator-leader-election
+  namespace: openshift-machine-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: baremetal-operator-leader-election
+subjects:
+- kind: ServiceAccount
+  name: baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: baremetal-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: baremetal-operator
+subjects:
+- kind: ServiceAccount
+  name: baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: baremetal-operator-scc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: baremetal-operator-scc
+subjects:
+- kind: ServiceAccount
+  name: baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: metal3-image-customization
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - preprovisioningimages
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - preprovisioningimages/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: metal3-image-customization
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metal3-image-customization
+subjects:
+- kind: ServiceAccount
+  name: metal3-image-customization
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: metal3-privileged-scc
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - privileged
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: metal3-hostnetwork-v2-scc
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - hostnetwork-v2
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: metal3-privileged-scc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metal3-privileged-scc
+subjects:
+- kind: ServiceAccount
+  name: metal3
+  namespace: openshift-machine-api
+- kind: ServiceAccount
+  name: metal3-image-customization
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: metal3-hostnetwork-v2-scc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metal3-hostnetwork-v2-scc
+subjects:
+- kind: ServiceAccount
+  name: metal3
   namespace: openshift-machine-api
 ---

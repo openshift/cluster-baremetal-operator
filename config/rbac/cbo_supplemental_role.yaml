@@ -1,0 +1,43 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-baremetal-operator-pull-secret
+  namespace: openshift-config
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - pull-secret
+  resources:
+  - secrets
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-baremetal-operator-cluster-config
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - cluster-config-v1
+  resources:
+  - configmaps
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-baremetal-operator-scc
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - anyuid
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use

@@ -98,43 +98,22 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups="",resources=pods,verbs=get;list;watch
-// +kubebuilder:rbac:namespace=openshift-machine-api,groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors;prometheusrules,verbs=create;watch;get;list;patch;delete;update
+// +kubebuilder:rbac:namespace=openshift-machine-api,groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch
 
 // +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=networks,verbs=get;list;watch
-// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;infrastructures/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;watch;list;patch
-// +kubebuilder:rbac:groups="",resources=configmaps;secrets;services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=deployments;daemonsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=machine.openshift.io,resources=machines,verbs=get;list;watch
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings;provisionings/finalizers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=metal3.io,resources=provisionings/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts/status;baremetalhosts/finalizers,verbs=update
-// +kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings,verbs=get;create;list;watch;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings/status,verbs=update
-// +kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;create;list;watch;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=preprovisioningimages,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=preprovisioningimages/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=metal3.io,resources=bmceventsubscriptions,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=bmceventsubscriptions/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;update;patch;create;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=hardwaredata,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents/finalizers,verbs=update
-// +kubebuilder:rbac:groups=metal3.io,resources=dataimages,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=dataimages/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=metal3.io,resources=dataimages/finalizers,verbs=update
-// +kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies/finalizers,verbs=update
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=create;list;watch
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=baremetal-operator-validating-webhook-configuration;cluster-baremetal-validating-webhook-configuration,verbs=get;update;patch;delete
 
 func (r *ProvisioningReconciler) readProvisioningCR(ctx context.Context) (*metal3iov1alpha1.Provisioning, error) {
 	// Fetch the Provisioning instance

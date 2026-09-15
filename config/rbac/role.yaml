@@ -7,20 +7,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - configmaps
-  - secrets
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - events
   verbs:
   - create
@@ -33,25 +19,20 @@ rules:
   - validatingwebhookconfigurations
   verbs:
   - create
-  - delete
-  - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
-  - apps
+  - admissionregistration.k8s.io
+  resourceNames:
+  - baremetal-operator-validating-webhook-configuration
+  - cluster-baremetal-validating-webhook-configuration
   resources:
-  - daemonsets
-  - deployments
+  - validatingwebhookconfigurations
   verbs:
-  - create
   - delete
   - get
-  - list
   - patch
   - update
-  - watch
 - apiGroups:
   - config.openshift.io
   resources:
@@ -93,35 +74,6 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
-  - baremetalhosts
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
-  - baremetalhosts/finalizers
-  - baremetalhosts/status
-  - dataimages/finalizers
-  - hostfirmwarecomponents/finalizers
-  - hostfirmwaresettings/status
-  - hostupdatepolicies/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - metal3.io
-  resources:
-  - bmceventsubscriptions
-  - dataimages
-  - firmwareschemas
-  - hardwaredata
-  - hostfirmwarecomponents
-  - hostfirmwaresettings
-  - hostupdatepolicies
-  - preprovisioningimages
   - provisionings
   - provisionings/finalizers
   verbs:
@@ -135,22 +87,11 @@ rules:
 - apiGroups:
   - metal3.io
   resources:
-  - bmceventsubscriptions/status
-  - dataimages/status
-  - hostfirmwarecomponents/status
-  - hostupdatepolicies/status
-  - preprovisioningimages/status
   - provisionings/status
   verbs:
   - get
   - patch
   - update
-- apiGroups:
-  - security.openshift.io
-  resources:
-  - securitycontextconstraints
-  verbs:
-  - use
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -194,6 +135,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - monitoring.coreos.com
   resources:
   - prometheusrules
@@ -206,9 +155,3 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - security.openshift.io
-  resources:
-  - securitycontextconstraints
-  verbs:
-  - use

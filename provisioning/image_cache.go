@@ -228,7 +228,7 @@ func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSp
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: podTemplateAnnotations,
+			Annotations: podAnnotationsWithRequiredSCC(privilegedSCC),
 			Labels: map[string]string{
 				"k8s-app":    metal3AppName,
 				cboLabelName: imageCacheService,
@@ -247,8 +247,9 @@ func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSp
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: ptr.To(false),
 			},
-			ServiceAccountName: "cluster-baremetal-operator",
-			Tolerations:        tolerations,
+			ServiceAccountName:           metal3ServiceAccountName,
+			AutomountServiceAccountToken: ptr.To(false),
+			Tolerations:                  tolerations,
 		},
 	}, nil
 }

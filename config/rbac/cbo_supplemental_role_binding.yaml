@@ -1,12 +1,26 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: cluster-baremetal-operator
-  namespace: openshift-machine-api
+  name: cluster-baremetal-operator-pull-secret
+  namespace: openshift-config
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
+  name: cluster-baremetal-operator-pull-secret
+subjects:
+- kind: ServiceAccount
   name: cluster-baremetal-operator
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-baremetal-operator-cluster-config
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-baremetal-operator-cluster-config
 subjects:
 - kind: ServiceAccount
   name: cluster-baremetal-operator
@@ -15,11 +29,11 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: cluster-baremetal-operator
+  name: cluster-baremetal-operator-scc
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cluster-baremetal-operator
+  name: cluster-baremetal-operator-scc
 subjects:
 - kind: ServiceAccount
   name: cluster-baremetal-operator
