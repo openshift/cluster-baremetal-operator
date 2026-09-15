@@ -55,4 +55,9 @@ type ProvisioningInfo struct {
 	IsHyperShift            bool
 	MirrorConfigHash        string
 	TlsCertHash             string
+	// ReleaseImage is the cluster release payload pullspec from
+	// ClusterVersion.status.desired.image. The machine-os-images init
+	// container uses it with oc adm release info --idms-file to detect a
+	// multi-arch payload. Empty when ClusterVersion is unavailable.
+	ReleaseImage string
 }

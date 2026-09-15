@@ -109,6 +109,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=networks,verbs=get;list;watch
+// +kubebuilder:rbac:groups=config.openshift.io,resources=clusterversions,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators;clusteroperators/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;infrastructures/status,verbs=get
@@ -460,6 +461,17 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 	}
 	enableBaremetalWebhook := provisioning.BaremetalWebhookDependenciesReady(r.OSClient)
 
+	releaseImage := ""
+	cv, err := r.OSClient.ConfigV1().ClusterVersions().Get(ctx, "version", metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("unable to read ClusterVersion for release image: %w", err)
+		}
+		klog.Info("ClusterVersion not found; machine-os-images will not run oc adm release info")
+	} else {
+		releaseImage = cv.Status.Desired.Image
+	}
+
 	return &provisioning.ProvisioningInfo{
 		Client:                  r.KubeClient,
 		DynamicClient:           r.DynamicClient,
@@ -476,6 +488,7 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		OSClient:                r.OSClient,
 		ResourceCache:           r.ResourceCache,
 		IsHyperShift:            isHyperShift,
+		ReleaseImage:            releaseImage,
 	}, nil
 }
 
@@ -758,6 +771,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&osconfigv1.Proxy{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&osconfigv1.APIServer{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&osconfigv1.ImageDigestMirrorSet{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
+		Watches(&osconfigv1.ClusterVersion{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton), builder.WithPredicates(pullSecretFilter)).
 		Complete(r)
 }

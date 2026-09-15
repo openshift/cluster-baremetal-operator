@@ -32,6 +32,10 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 				Name:  "MACHINE_OS_IMAGES_IMAGE",
 				Value: info.Images.MachineOSImages,
 			},
+			{
+				Name:  "RELEASE_IMAGE",
+				Value: info.ReleaseImage,
+			},
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
