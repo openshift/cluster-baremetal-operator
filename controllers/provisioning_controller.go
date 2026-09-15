@@ -91,6 +91,7 @@ type ProvisioningReconciler struct {
 	WebHookEnabled  bool
 	NetworkStack    provisioning.NetworkStackType
 	EnabledFeatures metal3iov1alpha1.EnabledFeatures
+	FeatureGates    FeatureGates
 	ResourceCache   resourceapply.ResourceCache
 }
 
@@ -107,6 +108,7 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=imagedigestmirrorsets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
+// +kubebuilder:rbac:groups=config.openshift.io,resources=featuregates,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=networks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
