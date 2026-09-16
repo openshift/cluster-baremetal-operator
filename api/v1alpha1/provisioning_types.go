@@ -76,6 +76,10 @@ type UnsupportedConfigOverrides struct {
 	// rebased and updated immediately, before any BareMetalHosts are
 	// enrolled, provisioned or deprovisioned.
 	IronicAgentImage string `json:"ironicAgentImage,omitempty"`
+
+	// Override for the Ironic container image (the conductor that runs
+	// in the metal3 pod). Same lifecycle constraints as IronicAgentImage.
+	IronicImage string `json:"ironicImage,omitempty"`
 }
 
 // PrometheusExporter defines configuration for Prometheus metrics export
