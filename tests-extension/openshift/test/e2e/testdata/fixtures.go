@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	fixtureDir    string
-	fixtureMutex  sync.Map // Map of path -> *sync.Mutex for per-fixture synchronization
+	fixtureDir   string
+	fixtureMutex sync.Map // Map of path -> *sync.Mutex for per-fixture synchronization
 )
 
 func init() {
