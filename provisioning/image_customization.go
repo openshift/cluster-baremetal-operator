@@ -65,10 +65,12 @@ var (
 	imageRegistriesVolumeMount = corev1.VolumeMount{
 		Name:      imageCustomizationVolume,
 		MountPath: containerRegistriesConfPath,
+		ReadOnly:  true,
 	}
 	caTrustDirVolumeMount = corev1.VolumeMount{
 		Name:      containerCATrustDirVolume,
 		MountPath: containerCATrustDirPath,
+		ReadOnly:  true,
 	}
 	ironicAgentPullSecretMount = corev1.VolumeMount{
 		Name:      ironicAgentPullSecret,
@@ -151,6 +153,9 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		agentImage = info.ProvConfig.Spec.UnsupportedConfigOverrides.IronicAgentImage
 	}
 
+	readOnlyImageVolumeMount := imageVolumeMount
+	readOnlyImageVolumeMount.ReadOnly = true
+
 	container := corev1.Container{
 		Name:  "machine-image-customization-controller",
 		Image: images.ImageCustomizationController,
@@ -172,7 +177,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			imageRegistriesVolumeMount,
-			imageVolumeMount,
+			readOnlyImageVolumeMount,
 			ironicAgentPullSecretMount,
 			caTrustDirVolumeMount,
 		},
