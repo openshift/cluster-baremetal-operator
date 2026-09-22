@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -127,7 +128,21 @@ func TestCreatePasswordSecret(t *testing.T) {
 				if apierrors.IsNotFound(err) {
 					t.Errorf("Error creating Ironic secret.")
 				}
-				assert.True(t, strings.Compare(string(secret.(*corev1.Secret).Data[ironicUsernameKey]), ironicUsername) == 0, "ironic password created incorrectly")
+				created := secret.(*corev1.Secret)
+				assert.Equal(t, ironicUsername, string(created.Data[ironicUsernameKey]), "ironic username created incorrectly")
+
+				htpasswd := string(created.Data[ironicHtpasswdKey])
+				username, hash, found := strings.Cut(htpasswd, ":")
+				require.True(t, found, "htpasswd should be username:hash")
+				assert.Equal(t, ironicUsername, username)
+				assert.True(t, strings.HasPrefix(hash, "$2y$"), "htpasswd hash should use the $2y$ bcrypt version")
+
+				cost, err := bcrypt.Cost([]byte(hash))
+				require.NoError(t, err)
+				assert.Equal(t, bcrypt.DefaultCost, cost, "htpasswd hash should use bcrypt.DefaultCost")
+
+				err = bcrypt.CompareHashAndPassword([]byte(hash), created.Data[ironicPasswordKey])
+				assert.NoError(t, err, "htpasswd hash should match the generated password")
 			}
 		})
 	}
