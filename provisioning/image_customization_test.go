@@ -56,6 +56,12 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 	}
 
 	ntpServers := []string{"192.168.1.252", "192.168.1.253"}
+	watchNamespaceEnv := corev1.EnvVar{
+		Name: "WATCH_NAMESPACE",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
+		},
+	}
 
 	container1 := corev1.Container{
 		Name: "image-customization-controller",
@@ -64,6 +70,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"},
 			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
@@ -88,6 +95,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Name: "image-customization-controller",
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
@@ -115,6 +123,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"},
 			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2,2001:db8::2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
@@ -139,6 +148,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Name: "image-customization-controller",
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
@@ -164,6 +174,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Name: "image-customization-controller",
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
 			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
@@ -251,9 +262,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 				},
 			}
 			actualContainer := createImageCustomizationContainer(&images, info, tc.ironicIPs)
-			for e := range actualContainer.Env {
-				assert.EqualValues(t, tc.expectedContainer.Env[e], actualContainer.Env[e])
-			}
+			assert.Equal(t, tc.expectedContainer.Env, actualContainer.Env)
 			actualSecret := newImageCustomizationConfig(info, tc.ironicIPs)
 			assert.Equal(t, tc.expectedSecret, actualSecret.StringData)
 			assert.Equal(t, tc.expectedContainer.VolumeMounts, actualContainer.VolumeMounts)
