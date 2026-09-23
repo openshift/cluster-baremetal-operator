@@ -186,6 +186,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			Name:  deployISOEnvVar,
 			Value: deployISOFile,
 		},
+			getWatchNamespace(&info.ProvConfig.Spec),
 			corev1.EnvVar{
 				Name:  deployInitrdEnvVar,
 				Value: deployInitrdFile,
