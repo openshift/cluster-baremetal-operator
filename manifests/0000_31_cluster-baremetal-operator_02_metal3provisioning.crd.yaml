@@ -253,6 +253,11 @@ spec:
                       rebased and updated immediately, before any BareMetalHosts are
                       enrolled, provisioned or deprovisioned.
                     type: string
+                  ironicImage:
+                    description: |-
+                      Override for the Ironic container image (the conductor that runs
+                      in the metal3 pod). Same lifecycle constraints as ironicAgentImage.
+                    type: string
                 type: object
               virtualMediaViaExternalNetwork:
                 description: |-
