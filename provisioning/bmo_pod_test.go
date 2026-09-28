@@ -363,7 +363,7 @@ func TestNewBMOContainersNoTLSProfile(t *testing.T) {
 	}
 }
 
-func TestBMOIronicNetworkingEnvVar(t *testing.T) {
+func TestBMOIronicNetworkingFeatureGate(t *testing.T) {
 	images := Images{
 		BaremetalOperator: expectedBaremetalOperator,
 	}
@@ -401,7 +401,8 @@ func TestBMOIronicNetworkingEnvVar(t *testing.T) {
 	container, err := createContainerBaremetalOperator(info)
 	assert.NoError(t, err)
 
-	assertEnvVar(t, container.Env, ironicNetworkingEnabledEnvVar, "true")
+	assert.Contains(t, container.Args, "--feature-gates=IronicNetworking=true")
+	assertNoEnvVar(t, container.Env, ironicNetworkingEnabledEnvVar)
 	assertEnvVar(t, container.Env, switchConfigsSecretEnvVar, switchConfigsSecretName)
 	assertEnvVar(t, container.Env, switchCredentialsSecretEnvVar, switchCredentialsSecretName)
 	assertEnvVar(t, container.Env, switchCredentialsMountPathEnvVar, switchCredentialsMountPath)
@@ -411,6 +412,7 @@ func TestBMOIronicNetworkingEnvVar(t *testing.T) {
 	container, err = createContainerBaremetalOperator(info)
 	assert.NoError(t, err)
 
+	assert.NotContains(t, container.Args, "--feature-gates=IronicNetworking=true")
 	assertNoEnvVar(t, container.Env, ironicNetworkingEnabledEnvVar)
 	assertNoEnvVar(t, container.Env, switchConfigsSecretEnvVar)
 	assertNoEnvVar(t, container.Env, switchCredentialsSecretEnvVar)
