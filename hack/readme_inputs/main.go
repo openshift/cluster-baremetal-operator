@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"log"
 	"os"
+	"strings"
 )
 
 const (
@@ -31,11 +32,25 @@ func generatedDocs(apiPath string) []string {
 			}
 			structType := t.Decl.Specs[0].(*ast.TypeSpec).Type.(*ast.StructType)
 			for _, field := range structType.Fields.List {
-				docs = append(docs, "- "+field.Doc.Text())
+				docs = append(docs, "- "+stripMarkers(field.Doc.Text()))
 			}
 		}
 	}
 	return append(docs, "")
+}
+
+// stripMarkers removes kubebuilder and similar marker lines from field docs
+// so they do not appear in the generated README.
+func stripMarkers(text string) string {
+	var keep []string
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "+") {
+			continue
+		}
+		keep = append(keep, line)
+	}
+	return strings.TrimRight(strings.Join(keep, "\n"), "\n") + "\n"
 }
 
 func readmeContent(readmePath, apiPath string) ([]string, error) {

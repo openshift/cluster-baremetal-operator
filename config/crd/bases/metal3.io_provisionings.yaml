@@ -54,6 +54,15 @@ spec:
                 items:
                   type: string
                 type: array
+              bmoConcurrency:
+                description: |-
+                  BMOConcurrency sets the number of BareMetalHost resources that the
+                  Bare Metal Operator (BMO) may reconcile concurrently. When unset, BMO
+                  uses its built-in default. This is the supported way to tune
+                  provisioning throughput for virtual-media environments, where
+                  PROVISIONING_LIMIT does not apply.
+                minimum: 1
+                type: integer
               bootIsoSource:
                 description: |-
                   BootIsoSource provides a way to set the location where the iso image

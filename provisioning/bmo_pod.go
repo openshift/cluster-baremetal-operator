@@ -29,6 +29,7 @@ const (
 	baremetalWebhookSecretName    = "baremetal-operator-webhook-server-cert"
 	baremetalWebhookLabelName     = "baremetal.openshift.io/metal3-validating-webhook"
 	baremetalWebhookServiceLabel  = "metal3-validating-webhook"
+	bmoConcurrencyEnvVar          = "BMO_CONCURRENCY"
 )
 
 var baremetalWebhookCertMount = corev1.VolumeMount{
@@ -167,6 +168,13 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 			},
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+	}
+
+	if info.ProvConfig.Spec.BMOConcurrency != nil {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  bmoConcurrencyEnvVar,
+			Value: strconv.Itoa(*info.ProvConfig.Spec.BMOConcurrency),
+		})
 	}
 
 	if info.TLSProfileSpec != nil {
