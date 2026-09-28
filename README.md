@@ -180,6 +180,12 @@ ironic-prometheus-exporter container, and creates supporting resources
 Most users will not need this set. It is recommended to leave this unset unless
 actually necessary.
 
+- BMOConcurrency sets the number of BareMetalHost resources that the
+Bare Metal Operator (BMO) may reconcile concurrently. When unset, BMO
+uses its built-in default. This is the supported way to tune
+provisioning throughput for virtual-media environments, where
+PROVISIONING_LIMIT does not apply.
+
 
 ## What are its outputs?
 
@@ -253,4 +259,6 @@ in turn, update any modified components.
 
 Once finished with the testing, remove the override, wait for CVO to
 reconfigure the ConfigMap, and restart the pod again.
+
+ the ConfigMap, and restart the pod again.
 

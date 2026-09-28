@@ -130,6 +130,17 @@ func TestNewBMOContainers(t *testing.T) {
 			},
 			sshkey: "",
 		},
+		{
+			name:   "ManagedSpec with BMOConcurrency",
+			config: managedProvisioning().BMOConcurrency(8).build(),
+			expectedContainers: []corev1.Container{
+				withEnv(
+					containers["metal3-baremetal-operator"],
+					envWithValue("BMO_CONCURRENCY", "8"),
+				),
+			},
+			sshkey: "sshkey",
+		},
 	}
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
