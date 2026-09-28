@@ -48,9 +48,11 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 	ironicIP := "192.168.0.2"
 	ironicIP6 := "2001:db8::2"
 
+	readOnlyImageVolumeMount := imageVolumeMount
+	readOnlyImageVolumeMount.ReadOnly = true
 	expectedVolumeMounts := []corev1.VolumeMount{
 		imageRegistriesVolumeMount,
-		imageVolumeMount,
+		readOnlyImageVolumeMount,
 		ironicAgentPullSecretMount,
 		caTrustDirVolumeMount,
 	}
