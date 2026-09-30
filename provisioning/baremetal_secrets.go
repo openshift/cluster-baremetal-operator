@@ -217,6 +217,8 @@ func buildTlsHosts(info *ProvisioningInfo) (sets.Set[string], error) {
 	// Service hostnames (always included for in-cluster access)
 	hosts.Insert(fmt.Sprintf("%s.%s.svc", stateService, info.Namespace))
 	hosts.Insert(fmt.Sprintf("%s.%s.svc.%s", stateService, info.Namespace, defaultClusterDomain))
+	hosts.Insert(fmt.Sprintf("%s.%s.svc", imageCustomizationService, info.Namespace))
+	hosts.Insert(fmt.Sprintf("%s.%s.svc.%s", imageCustomizationService, info.Namespace, defaultClusterDomain))
 
 	// Provisioning IP
 	if info.ProvConfig.Spec.ProvisioningIP != "" {

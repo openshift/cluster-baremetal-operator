@@ -42,9 +42,11 @@ const (
 	containerRegistriesConfPath      = "/etc/containers/registries.conf"
 	containerRegistriesEnvVar        = "REGISTRIES_CONF_PATH"
 	containerUserCaBundlePath        = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
+	containerIronicCaBundlePath      = metal3TlsRootDir + "/ironic/ca.crt"
 	containerCATrustDirPath          = "/etc/pki/ca-trust/"
 	containerCATrustDirVolume        = "ca-trust"
 	containerUserCaBundleEnvVar      = "CA_BUNDLE"
+	containerIronicCaBundleEnvVar    = "IRONIC_CA_BUNDLE"
 	imageSharedDir                   = "/shared/html/images"
 	deployISOEnvVar                  = "DEPLOY_ISO"
 	deployISOFile                    = imageSharedDir + "/ironic-python-agent.iso"
@@ -162,7 +164,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		Command: []string{"/machine-image-customization-controller",
 			"-images-bind-addr", fmt.Sprintf(":%d", imageCustomizationPort),
 			"-images-publish-addr",
-			fmt.Sprintf("http://%s.%s.svc.cluster.local/",
+			fmt.Sprintf("https://%s.%s.svc.cluster.local/",
 				imageCustomizationService, info.Namespace)},
 
 		// TODO: This container does not have to run in privileged mode when the i-c-c has
@@ -179,6 +181,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			imageRegistriesVolumeMount,
 			readOnlyImageVolumeMount,
 			ironicAgentPullSecretMount,
+			ironicTlsMount,
 			caTrustDirVolumeMount,
 		},
 		ImagePullPolicy: "IfNotPresent",
@@ -224,13 +227,17 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 				Value: containerUserCaBundlePath,
 			},
 			corev1.EnvVar{
+				Name:  containerIronicCaBundleEnvVar,
+				Value: containerIronicCaBundlePath,
+			},
+			corev1.EnvVar{
 				Name:  ironicRootfsEnvVar,
 				Value: getRootfsURL(ironicIPs),
 			},
 			buildSSHKeyEnvVar(info.SSHKey)),
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          "http",
+				Name:          "https",
 				ContainerPort: imageCustomizationPort,
 			},
 		},
@@ -242,6 +249,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
+	container.Command = append(container.Command,
+		"-images-tls-cert-file", metal3TlsRootDir+"/ironic/tls.crt",
+		"-images-tls-key-file", metal3TlsRootDir+"/ironic/tls.key")
+
 	return container
 }
 
@@ -292,6 +303,9 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 	if info.MirrorConfigHash != "" {
 		annotations[mirrorConfigHashAnnotation] = info.MirrorConfigHash
 	}
+	if info.TlsCertHash != "" {
+		annotations[ironicTlsCertHashAnnotation] = info.TlsCertHash
+	}
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -311,6 +325,12 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 				imageRegistriesVolume(),
 				imageVolume(),
 				ironicAgentPullSecretVolume(),
+				{
+					Name: ironicTlsVolume,
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{SecretName: tlsSecretName},
+					},
+				},
 				caTrustDirVolume(),
 				mirrorConfigVolume(),
 			},

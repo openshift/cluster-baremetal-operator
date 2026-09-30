@@ -761,12 +761,16 @@ func TestBuildTlsHosts(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			expectedHosts := append([]string{}, tc.expectedHosts...)
+			expectedHosts = append(expectedHosts,
+				fmt.Sprintf("%s.%s.svc", imageCustomizationService, tc.info.Namespace),
+				fmt.Sprintf("%s.%s.svc.%s", imageCustomizationService, tc.info.Namespace, defaultClusterDomain))
 
-			for _, expected := range tc.expectedHosts {
+			for _, expected := range expectedHosts {
 				assert.True(t, hosts.Has(expected), "expected host %q to be in the SAN set, got: %v", expected, hosts.UnsortedList())
 			}
-			assert.Equal(t, len(tc.expectedHosts), hosts.Len(),
-				"expected %d hosts but got %d: %v", len(tc.expectedHosts), hosts.Len(), hosts.UnsortedList())
+			assert.Equal(t, len(expectedHosts), hosts.Len(),
+				"expected %d hosts but got %d: %v", len(expectedHosts), hosts.Len(), hosts.UnsortedList())
 		})
 	}
 }
