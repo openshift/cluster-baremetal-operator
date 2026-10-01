@@ -2,6 +2,7 @@ package provisioning
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -97,6 +98,8 @@ func TestEnsureMirrorConfigWithIDMS(t *testing.T) {
 	assert.True(t, ok, "ConfigMap should contain idms.yaml key")
 	assert.Contains(t, yamlData, "quay.io/openshift-release-dev/ocp-v4.0-art-dev")
 	assert.Contains(t, yamlData, "mirror.local/openshift/release")
+	assert.Contains(t, yamlData, "kind: ImageDigestMirrorSet", "YAML must contain individual IDMS kind, not a List")
+	assert.NotContains(t, yamlData, "kind: ImageDigestMirrorSetList", "YAML must not be a List wrapper")
 	assert.NotEmpty(t, info.MirrorConfigHash, "hash should be set when IDMS resources exist")
 	assert.Len(t, info.MirrorConfigHash, 64, "hash should be a SHA-256 hex string")
 }
@@ -123,6 +126,61 @@ func TestEnsureMirrorConfigIdempotent(t *testing.T) {
 	updated, err := EnsureMirrorConfig(info)
 	require.NoError(t, err)
 	assert.False(t, updated, "second call should be a no-op")
+}
+
+func TestEnsureMirrorConfigMultipleIDMS(t *testing.T) {
+	idms1 := osconfigv1.ImageDigestMirrorSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "mirror-a",
+		},
+		Spec: osconfigv1.ImageDigestMirrorSetSpec{
+			ImageDigestMirrors: []osconfigv1.ImageDigestMirrors{
+				{
+					Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
+					Mirrors: []osconfigv1.ImageMirror{"mirror.local/openshift/release"},
+				},
+			},
+		},
+	}
+	idms2 := osconfigv1.ImageDigestMirrorSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "mirror-b",
+		},
+		Spec: osconfigv1.ImageDigestMirrorSetSpec{
+			ImageDigestMirrors: []osconfigv1.ImageDigestMirrors{
+				{
+					Source:  "registry.redhat.io/rhel9",
+					Mirrors: []osconfigv1.ImageMirror{"mirror.local/rhel9"},
+				},
+			},
+		},
+	}
+	info := newTestProvisioningInfo(idms1, idms2)
+
+	updated, err := EnsureMirrorConfig(info)
+	require.NoError(t, err)
+	assert.True(t, updated)
+
+	cm, err := info.Client.CoreV1().ConfigMaps(info.Namespace).Get(
+		t.Context(), mirrorConfigName, metav1.GetOptions{},
+	)
+	require.NoError(t, err)
+
+	yamlData := cm.Data["idms.yaml"]
+	assert.Contains(t, yamlData, "---", "multiple IDMS should be separated by YAML document separator")
+	assert.Contains(t, yamlData, "mirror-a")
+	assert.Contains(t, yamlData, "mirror-b")
+	assert.NotContains(t, yamlData, "kind: ImageDigestMirrorSetList")
+
+	docs := strings.Split(yamlData, "---")
+	nonEmpty := 0
+	for _, doc := range docs {
+		if strings.TrimSpace(doc) != "" {
+			nonEmpty++
+			assert.Contains(t, doc, "kind: ImageDigestMirrorSet")
+		}
+	}
+	assert.Equal(t, 2, nonEmpty, "should have exactly 2 YAML documents")
 }
 
 func TestStripVolatileMetadata(t *testing.T) {
