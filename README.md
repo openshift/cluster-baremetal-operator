@@ -184,12 +184,143 @@ actually necessary.
 ## What are its outputs?
 
 If not already created by an external entity, the metal3 deployment and its associated Secrets are created by the CBO. The CBO also creates an
-image-cache Daemonset that assists the metal3 deployment by downloading the image provided in the Provisioning CR and making it available locally on
+image-cache DaemonSet that assists the metal3 deployment by downloading the image provided in the Provisioning CR and making it available locally on
 each master node so that the metal3 deployment is able to access a local copy of the image while trying to boot a baremetal server.
+The CBO also creates a BMO (baremetal-operator) deployment and an image-customization deployment.
 
 CBO reports its own state using the “baremetal” CO as mentioned earlier. It is also designed to provide alerts and metrics regarding its own
 deployment. It is also capable of reporting metrics gathered by BMO regarding the baremetal servers being provisioned. These metrics can then be
 scraped by Prometheus and can be viewed on the Prometheus dashboard.
+
+The deployed architecture depends on the `ProvisioningNetwork` setting. The two most
+common configurations are shown below.
+
+### Managed Provisioning Network
+
+When `ProvisioningNetwork` is set to `Managed`, CBO deploys a dedicated provisioning
+network with DHCP/PXE support. The metal3 pod includes dnsmasq for DHCP and a
+static-ip-manager to maintain the provisioning IP on the provisioning NIC. Ironic
+listens directly on port 6385 via the provisioning IP.
+
+```
+                  Control Plane Node (one of the masters)
+┌──────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  metal3 Deployment (1 replica, uses host network)                        │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │  ┌───────────────┐  ┌───────────────┐  ┌──────────────────────┐   │   │
+│  │  │ metal3-ironic │  │ metal3-httpd  │  │ metal3-ramdisk-logs  │   │   │
+│  │  │  (conductor   │  │  (img server  │  │  (logs file watcher) │   │   │
+│  │  │  + API on a   │  │   on 6183 +   │  │                      │   │   │
+│  │  │  unix socket) │  │   API on 6385)│  │                      │   │   │
+│  │  └───────────────┘  └───────────────┘  └──────────────────────┘   │   │
+│  │                                                                   │   │
+│  │  ┌──────────────────┐  ┌──────────────────────────────────────┐   │   │
+│  │  │ metal3-dnsmasq   │  │ metal3-static-ip-manager             │   │   │
+│  │  │  (DHCP + PXE on  │  │  (maintains provisioning IP on NIC)  │   │   │
+│  │  │   prov. network) │  │                                      │   │   │
+│  │  └──────────────────┘  └──────────────────────────────────────┘   │   │
+│  │                                                                   │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  BMO Deployment                          image-customization Deployment  │
+│  ┌─────────────────────────────────┐     ┌───────────────────────────┐   │
+│  │ Watches BareMetalHost CRs,      │     │ Prepares custom boot      │   │
+│  │  drives Ironic for provisioning │     │  images for nodes         │   │
+│  └─────────────────────────────────┘     └───────────────────────────┘   │
+│                                                                          │
+└──────────────┬───────────────────────────────────────────────────────────┘
+               │ Provisioning NIC (e.g. eth1)
+               │ static IP from ProvisioningNetworkCIDR
+               │
+═══════════════╪════════════════════════════════════════  Provisioning Network
+               │                                          (L2, managed DHCP)
+     ┌─────────┴─────────┐
+     │                   │
+┌────┴─────┐       ┌─────┴────┐
+│ Worker 1 │       │ Worker 2 │  ...
+│  (PXE /  │       │  (PXE /  │
+│  vmedia) │       │  vmedia) │
+└──────────┘       └──────────┘
+
+All Control Plane Nodes
+┌──────────────────────────────────────────┐
+│  image-cache DaemonSet (pre-4.10 compat, │
+│   caches OS images locally, port 6181)   │
+└──────────────────────────────────────────┘
+
+Service: metal3-state (ClusterIP)
+  └─ port 6385 → metal3 pod (Ironic API)
+```
+
+### Disabled Provisioning Network
+
+When `ProvisioningNetwork` is set to `Disabled`, there is no dedicated provisioning
+network. The metal3 pod does not include dnsmasq or static-ip-manager. Ironic listens
+on a private port (6388), and an ironic-proxy DaemonSet on every control plane node
+exposes port 6385 and forwards traffic to the Ironic pod. Hosts boot via virtual
+media only; BMCs must be reachable from the machine network.
+
+> **Note:** This diagram shows non-HyperShift clusters. In HyperShift,
+> Ironic uses port 6385 directly, without the ironic-proxy DaemonSet
+> or the private port 6388. Instead, `ExternalIP` is commonly set for
+> the nodes to be able to reach Ironic API and its image server.
+
+```
+                  Control Plane Node (one of the masters)
+┌──────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  metal3 Deployment (1 replica, uses host network)                        │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │  ┌───────────────┐  ┌───────────────┐  ┌──────────────────────┐   │   │
+│  │  │ metal3-ironic │  │ metal3-httpd  │  │ metal3-ramdisk-logs  │   │   │
+│  │  │  (conductor   │  │  (img server  │  │  (logs file watcher) │   │   │
+│  │  │  + API on a   │  │   on 6183 +   │  │                      │   │   │
+│  │  │  unix socket) │  │   API on 6388)│  │                      │   │   │
+│  │  └───────────────┘  └───────────────┘  └──────────────────────┘   │   │
+│  │                                                                   │   │
+│  │  (no dnsmasq, no static-ip-manager)                               │   │
+│  │                                                                   │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  BMO Deployment                          image-customization Deployment  │
+│  ┌─────────────────────────────────┐     ┌───────────────────────────┐   │
+│  │ Watches BareMetalHost CRs,      │     │ Prepares custom boot      │   │
+│  │  drives Ironic for provisioning │     │  images for nodes         │   │
+│  └─────────────────────────────────┘     └───────────────────────────┘   │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+All Control Plane Nodes
+┌──────────────────────────────────────────┐
+│  ironic-proxy DaemonSet                  │
+│   (hostPort 6385 → metal3 pod:6388)      │
+│   Exposes Ironic API on every master     │
+└──────────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│  image-cache DaemonSet (pre-4.10 compat, │
+│   caches OS images locally, port 6181)   │
+└──────────────────────────────────────────┘
+
+═══════════════════════════════════════════  Machine Network
+     │             │           │             (no provisioning network)
+     │             │           │
+┌────┴─────┐  ┌────┴─────┐     │
+│ Worker 1 │  │ Worker 2 │     │  ...
+│ (vmedia  │  │ (vmedia  │     │
+│  only)   │  │  only)   │     │
+└──┬───────┘  └──┬───────┘     │
+   │ BMC         │ BMC         │
+   └─────────────┴─────────────┘
+    BMCs reachable on machine network
+
+Services:
+  metal3-state (ClusterIP)
+    ├─ port 6388 → metal3 pod (Ironic private)
+    └─ port 6385 → targetPort 6388 (compatibility)
+  ironic-proxy (headless)
+    └─ port 6385 (one endpoint per master node)
+```
 
 ## Testing CBO patches
 
