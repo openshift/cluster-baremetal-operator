@@ -44,10 +44,7 @@ func restorePrometheusExporter(oc *exutil.CLI, originalExporterState string) {
 	}
 
 	restoreErr := oc.AsAdmin().Run("patch").Args("provisioning", "provisioning-configuration", "--type=merge", "-p", patch).Execute()
-	if restoreErr != nil {
-		e2e.Logf("Warning: Failed to restore prometheusExporter state: %v", restoreErr)
-		return
-	}
+	o.Expect(restoreErr).NotTo(o.HaveOccurred(), "failed to restore prometheusExporter state")
 	e2e.Logf("Waiting for metal3 deployment to be available after restore")
 	waitForDeployStatus(oc, "metal3", machineAPINamespace, "True")
 }

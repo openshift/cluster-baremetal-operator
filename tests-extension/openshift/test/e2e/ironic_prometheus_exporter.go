@@ -154,17 +154,19 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 		})
 
 		g.AfterAll(func() {
-			g.By("Restore original prometheusExporter state")
-			restorePrometheusExporter(oc, originalExporterState)
+			defer func() {
+				g.By("Restore original prometheusExporter state")
+				restorePrometheusExporter(oc, originalExporterState)
 
-			cboStatus, err := checkOperator(oc, "baremetal")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(cboStatus).To(o.BeTrue())
+				cboStatus, err := checkOperator(oc, "baremetal")
+				o.Expect(err).NotTo(o.HaveOccurred(), "failed to check baremetal ClusterOperator after restore")
+				o.Expect(cboStatus).To(o.BeTrue(), "expected baremetal ClusterOperator available after restore")
+			}()
 
-			if originalExporterState == "" || originalExporterState == "false" {
-				g.By("Verify ServiceMonitor, PrometheusRule and metrics port are removed after IPE is disabled")
-				waitForIPEMonitoringResources(oc, false)
-			}
+			g.By("Disable Ironic Prometheus Exporter")
+			patchPrometheusExporter(oc, false)
+			g.By("Verify ServiceMonitor, PrometheusRule and metrics port are removed after IPE is disabled")
+			waitForIPEMonitoringResources(oc, false)
 		})
 
 		g.It("Author:jhajyahy-Medium-90681-Verify IPE ServiceMonitor PrometheusRule and metrics port are created [Serial]", func() {
@@ -175,7 +177,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			o.Expect(ipePrometheusRuleExists(oc)).To(o.BeTrue(), "expected PrometheusRule %s in %s", ipePrometheusRuleName, machineAPINamespace)
 
 			g.By("Verify metal3-state service exposes metrics port 9608")
-			o.Expect(metal3StateMetricsPort(oc)).To(o.Equal(ipeMetricsPort))
+			o.Expect(metal3StateMetricsPort(oc)).To(o.Equal(ipeMetricsPort), "expected metal3-state metrics port %s in %s", ipeMetricsPort, machineAPINamespace)
 		})
 
 		g.It("Author:jhajyahy-Medium-90682-Verify CMO scrapes IPE metrics [Serial]", func() {
@@ -184,7 +186,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			upValue, ok := up.Data.Result[0].Value[1].(string)
 			o.Expect(ok).To(o.BeTrue(), "up{job=\"metal3-state\"} value is not a string")
 			o.Expect(upValue).To(o.Equal("1"), "expected CMO scrape target job=metal3-state to be up")
-			e2e.Logf("CMO scrape target is up: %+v", up.Data.Result[0].Metric)
+			e2e.Logf("CMO scrape target job=metal3-state is up")
 
 			g.By("Verify CMO has ironic_* or baremetal_last_payload_timestamp_seconds series")
 			series := waitForPrometheusQuery(oc, `{job="metal3-state",__name__=~"ironic_.*|baremetal_last_payload_timestamp_seconds"}`, 2*time.Minute)
@@ -195,19 +197,19 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 		g.It("Author:jhajyahy-Medium-90683-Verify default Baremetal PrometheusRule groups are loaded [Serial]", func() {
 			g.By("Verify PrometheusRule CR has baremetal.health and baremetal.monitoring groups")
 			groupNames, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, "-o=jsonpath={.spec.groups[*].name}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(groupNames).To(o.ContainSubstring("baremetal.health"))
-			o.Expect(groupNames).To(o.ContainSubstring("baremetal.monitoring"))
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get PrometheusRule %s group names", ipePrometheusRuleName)
+			o.Expect(groupNames).To(o.ContainSubstring("baremetal.health"), "expected PrometheusRule %s to include group baremetal.health, got %q", ipePrometheusRuleName, groupNames)
+			o.Expect(groupNames).To(o.ContainSubstring("baremetal.monitoring"), "expected PrometheusRule %s to include group baremetal.monitoring, got %q", ipePrometheusRuleName, groupNames)
 
 			g.By("Verify BaremetalStaleMetrics uses a 5m gap on last payload timestamp")
-			staleExpr, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, `-o=jsonpath={.spec.groups[?(@.name=="baremetal.monitoring")].rules[0].expr}`).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(staleExpr).To(o.ContainSubstring("baremetal_last_payload_timestamp_seconds"))
-			o.Expect(staleExpr).To(o.ContainSubstring("> 300"))
+			staleExpr, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, `-o=jsonpath={.spec.groups[?(@.name=="baremetal.monitoring")].rules[?(@.alert=="BaremetalStaleMetrics")].expr}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get BaremetalStaleMetrics expr from PrometheusRule %s", ipePrometheusRuleName)
+			o.Expect(staleExpr).To(o.ContainSubstring("baremetal_last_payload_timestamp_seconds"), "expected BaremetalStaleMetrics expr to use baremetal_last_payload_timestamp_seconds, got %q", staleExpr)
+			o.Expect(staleExpr).To(o.ContainSubstring("> 300"), "expected BaremetalStaleMetrics expr to use a 300s gap, got %q", staleExpr)
 
-			staleFor, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, `-o=jsonpath={.spec.groups[?(@.name=="baremetal.monitoring")].rules[0].for}`).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(staleFor).To(o.Equal("5m"))
+			staleFor, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, `-o=jsonpath={.spec.groups[?(@.name=="baremetal.monitoring")].rules[?(@.alert=="BaremetalStaleMetrics")].for}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get BaremetalStaleMetrics for from PrometheusRule %s", ipePrometheusRuleName)
+			o.Expect(staleFor).To(o.Equal("5m"), "expected BaremetalStaleMetrics for=5m, got %q", staleFor)
 
 			g.By("Verify CMO Prometheus loaded the metal3-defaults alert groups")
 			waitForMetal3DefaultAlertRules(oc)
