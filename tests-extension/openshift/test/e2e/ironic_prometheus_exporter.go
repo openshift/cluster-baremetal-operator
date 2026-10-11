@@ -167,7 +167,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			}
 		})
 
-		g.It("Author:jhajyahy-Medium-Verify IPE ServiceMonitor PrometheusRule and metrics port are created [Serial]", func() {
+		g.It("Author:jhajyahy-Medium-90681-Verify IPE ServiceMonitor PrometheusRule and metrics port are created [Serial]", func() {
 			g.By("Verify metal3-ironic-prometheus-exporter ServiceMonitor exists")
 			o.Expect(ipeServiceMonitorExists(oc)).To(o.BeTrue(), "expected ServiceMonitor %s in %s", ipeServiceMonitorName, machineAPINamespace)
 
@@ -178,7 +178,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			o.Expect(metal3StateMetricsPort(oc)).To(o.Equal(ipeMetricsPort))
 		})
 
-		g.It("Author:jhajyahy-Medium-Verify CMO scrapes IPE metrics [Serial]", func() {
+		g.It("Author:jhajyahy-Medium-90682-Verify CMO scrapes IPE metrics [Serial]", func() {
 			g.By("Wait for CMO Prometheus to scrape metal3-state metrics")
 			up := waitForPrometheusQuery(oc, `up{job="metal3-state"}`, 3*time.Minute)
 			upValue, ok := up.Data.Result[0].Value[1].(string)
@@ -192,7 +192,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			e2e.Logf("CMO scraped %d IPE series", len(series.Data.Result))
 		})
 
-		g.It("Author:jhajyahy-Medium-Verify default Baremetal PrometheusRule groups are loaded [Serial]", func() {
+		g.It("Author:jhajyahy-Medium-90683-Verify default Baremetal PrometheusRule groups are loaded [Serial]", func() {
 			g.By("Verify PrometheusRule CR has baremetal.health and baremetal.monitoring groups")
 			groupNames, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, "-o=jsonpath={.spec.groups[*].name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
