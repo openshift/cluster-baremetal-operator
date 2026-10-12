@@ -20,6 +20,7 @@ func createInitContainerMachineOSImages(info *ProvisioningInfo, whichImages stri
 			dest,
 			ironicAgentPullSecretMount,
 			caTrustDirVolumeMount,
+			mirrorConfigVolumeMount,
 		},
 		ImagePullPolicy: "IfNotPresent",
 		Env: []corev1.EnvVar{

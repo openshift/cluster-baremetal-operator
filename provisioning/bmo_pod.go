@@ -140,10 +140,6 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 				Name:  ironicCertEnvVar,
 				Value: metal3TlsRootDir + "/ironic/" + corev1.TLSCertKey,
 			},
-			{
-				Name:  ironicInsecureEnvVar,
-				Value: "true",
-			},
 			buildEnvVar(deployKernelUrl, &info.ProvConfig.Spec),
 			{
 				Name:  ironicEndpoint,
@@ -173,7 +169,9 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
-	container.Args = append(container.Args, tlsProfileToBMOArgs(info.TLSProfileSpec)...)
+	if info.TLSProfileSpec != nil {
+		container.Args = append(container.Args, tlsProfileToBMOArgs(*info.TLSProfileSpec)...)
+	}
 
 	if !info.BaremetalWebhookEnabled {
 		// Webhook dependencies are not ready, thus we disable webhook explicitly,
@@ -218,6 +216,9 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 	containers := injectProxyAndCA([]corev1.Container{container}, info.Proxy)
 
 	podAnnotations := podAnnotationsWithRequiredSCC(restrictedV2SCC)
+	if info.TlsCertHash != "" {
+		podAnnotations[ironicTlsCertHashAnnotation] = info.TlsCertHash
+	}
 
 	nodeSelector := map[string]string{}
 	if !info.IsHyperShift {
@@ -276,9 +277,6 @@ func newBMODeployment(info *ProvisioningInfo) (*appsv1.Deployment, error) {
 			Replicas: ptr.To[int32](1),
 			Selector: selector,
 			Template: *template,
-			Strategy: appsv1.DeploymentStrategy{
-				Type: appsv1.RecreateDeploymentStrategyType,
-			},
 		},
 	}, nil
 }

@@ -1,15 +1,14 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: prometheus-k8s-cluster-baremetal-operator
-  namespace: openshift-machine-api
   annotations:
     capability.openshift.io/name: baremetal
     include.release.openshift.io/ibm-cloud-managed: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
+  kind: ClusterRole
   name: prometheus-k8s-cluster-baremetal-operator
 subjects:
   - kind: ServiceAccount
@@ -17,21 +16,18 @@ subjects:
     namespace: openshift-monitoring
 
 ---
-# Roles needed by prometheus to scrape Cluster Baremetal Operator metrics endpoint
+# ClusterRole needed by prometheus to scrape Cluster Baremetal Operator metrics endpoint
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: prometheus-k8s-cluster-baremetal-operator
-  namespace: openshift-machine-api
   annotations:
     capability.openshift.io/name: baremetal
     include.release.openshift.io/ibm-cloud-managed: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
 rules:
-  - apiGroups:
-      - ""
-    resources:
-      - namespace/metrics
+  - nonResourceURLs:
+      - /metrics
     verbs:
       - get
   - apiGroups:

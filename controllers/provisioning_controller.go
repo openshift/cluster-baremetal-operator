@@ -102,7 +102,10 @@ type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=monitoring.coreos.com,resources=servicemonitors;prometheusrules,verbs=create;watch;get;list;patch;delete;update
 // +kubebuilder:rbac:namespace=openshift-machine-api,groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch
 
+// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
+// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 // +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=config.openshift.io,resources=imagedigestmirrorsets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=proxies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=networks,verbs=get;list;watch
@@ -286,7 +289,12 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	specChanged := baremetalConfig.Generation != baremetalConfig.Status.ObservedGeneration
-	if specChanged {
+	imagesMatch, err := provisioning.OperandImagesMatch(r.KubeClient.AppsV1(), ComponentNamespace, info.Images)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to check operand images: %w", err)
+	}
+
+	if specChanged || !imagesMatch {
 		if baremetalConfig.Spec.UnsupportedConfigOverrides != nil {
 			klog.Warningf("using unsupportedConfigOverrides in the configuration: %+v", *baremetalConfig.Spec.UnsupportedConfigOverrides)
 		}
@@ -310,6 +318,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	for _, ensureResource := range []ensureFunc{
 		provisioning.EnsureAllSecrets,
+		provisioning.EnsureMirrorConfig,
 		provisioning.EnsureMetal3Deployment,
 		provisioning.EnsureBaremetalOperatorDeployment,
 		provisioning.EnsureMetal3StateService,
@@ -403,9 +412,21 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		return nil, err
 	}
 
-	tlsProfileSpec, err := utiltls.FetchAPIServerTLSProfile(ctx, r.Client)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get TLS profile from APIServer: %w", err)
+	// Check tlsAdherence to decide whether to enforce the cluster TLS profile
+	apiServer := &osconfigv1.APIServer{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: "cluster"}, apiServer); err != nil {
+		return nil, fmt.Errorf("unable to read APIServer CR for TLS adherence check: %w", err)
+	}
+	honorTLS := provisioning.ShouldHonorClusterTLSProfile(apiServer.Spec.TLSAdherence)
+
+	var tlsProfileSpec *osconfigv1.TLSProfileSpec
+	if honorTLS {
+		spec, err := utiltls.FetchAPIServerTLSProfile(ctx, r.Client)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get TLS profile from APIServer: %w", err)
+		}
+		tlsProfileSpec = &spec
+		provisioning.LogUnsupportedTLSGroups(spec.Groups)
 	}
 
 	infra, _ := r.OSClient.ConfigV1().Infrastructures().Get(ctx, "cluster", metav1.GetOptions{})
@@ -653,7 +674,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if enabled {
 		baremetalConfig, err := r.readProvisioningCR(context.Background())
 		if err != nil || baremetalConfig == nil {
-			err = r.updateCOStatus(ReasonProvisioningCRNotFound, "Waiting for Provisioning CR on BareMetal Platform", "")
+			err = r.updateCOStatus(ReasonProvisioningCRNotFound, "Waiting for Provisioning CR", "")
 			if err != nil {
 				return fmt.Errorf("unable to put %q ClusterOperator in Available state: %w", clusterOperatorName, err)
 			}
@@ -715,6 +736,7 @@ func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&osconfigv1.ClusterOperator{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&osconfigv1.Proxy{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&osconfigv1.APIServer{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
+		Watches(&osconfigv1.ImageDigestMirrorSet{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapToProvisioningSingleton), builder.WithPredicates(pullSecretFilter)).
 		Complete(r)
 }

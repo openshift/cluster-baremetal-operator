@@ -14,9 +14,11 @@ import (
 
 func TestOperandServiceAccounts(t *testing.T) {
 	info := &ProvisioningInfo{
-		Namespace:  "openshift-machine-api",
-		Images:     &Images{},
-		ProvConfig: &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
+		Namespace:        "openshift-machine-api",
+		Images:           &Images{},
+		ProvConfig:       &metal3iov1alpha1.Provisioning{Spec: *managedProvisioning().build()},
+		MirrorConfigHash: "mirror-hash",
+		TlsCertHash:      "tls-hash",
 		Client: fakekube.NewSimpleClientset(&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "openshift-machine-api",
@@ -34,6 +36,8 @@ func TestOperandServiceAccounts(t *testing.T) {
 	t.Run("metal3", func(t *testing.T) {
 		template := newMetal3PodTemplateSpec(info, &map[string]string{})
 		assertTokenlessOperand(t, template, metal3ServiceAccountName, privilegedSCC)
+		assert.Equal(t, "mirror-hash", template.Annotations[mirrorConfigHashAnnotation])
+		assert.Equal(t, "tls-hash", template.Annotations[ironicTlsCertHashAnnotation])
 	})
 
 	t.Run("image cache", func(t *testing.T) {
@@ -48,6 +52,7 @@ func TestOperandServiceAccounts(t *testing.T) {
 		require.NotNil(t, template.Spec.AutomountServiceAccountToken)
 		assert.True(t, *template.Spec.AutomountServiceAccountToken)
 		assert.Equal(t, privilegedSCC, template.Annotations[requiredSCCAnnotation])
+		assert.Equal(t, "mirror-hash", template.Annotations[mirrorConfigHashAnnotation])
 	})
 
 	t.Run("ironic proxy", func(t *testing.T) {

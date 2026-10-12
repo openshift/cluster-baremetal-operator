@@ -48,14 +48,22 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 	ironicIP := "192.168.0.2"
 	ironicIP6 := "2001:db8::2"
 
+	readOnlyImageVolumeMount := imageVolumeMount
+	readOnlyImageVolumeMount.ReadOnly = true
 	expectedVolumeMounts := []corev1.VolumeMount{
 		imageRegistriesVolumeMount,
-		imageVolumeMount,
+		readOnlyImageVolumeMount,
 		ironicAgentPullSecretMount,
 		caTrustDirVolumeMount,
 	}
 
 	ntpServers := []string{"192.168.1.252", "192.168.1.253"}
+	watchNamespaceEnv := corev1.EnvVar{
+		Name: "WATCH_NAMESPACE",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
+		},
+	}
 
 	container1 := corev1.Container{
 		Name: "image-customization-controller",
@@ -64,14 +72,17 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"},
 			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
+			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -86,14 +97,17 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Name: "image-customization-controller",
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
+			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -111,14 +125,17 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 			{Name: "HTTPS_PROXY", Value: "https://172.2.0.1:3128"},
 			{Name: "NO_PROXY", Value: ".example.com,192.168.0.2,2001:db8::2"},
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
+			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385,https://[2001:db8::2]:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -133,14 +150,17 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Name: "image-customization-controller",
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
+			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: "registry.ci.openshift.org/openshift:ironic-agent"},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: "192.168.1.252,192.168.1.253"},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -156,14 +176,17 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 		Name: "image-customization-controller",
 		Env: []corev1.EnvVar{
 			{Name: "DEPLOY_ISO", Value: "/shared/html/images/ironic-python-agent.iso"},
+			watchNamespaceEnv,
 			{Name: "DEPLOY_INITRD", Value: "/shared/html/images/ironic-python-agent.initramfs"},
 			{Name: "DEPLOY_KERNEL", Value: "/shared/html/images/ironic-python-agent.kernel"},
+			{Name: "IMAGE_SHARED_DIR", Value: "/shared/html/images"},
 			{Name: "IRONIC_BASE_URL", Value: "https://192.168.0.2:6385"},
 			{Name: "IRONIC_AGENT_IMAGE", Value: imageOverride},
 			{Name: "REGISTRIES_CONF_PATH", Value: "/etc/containers/registries.conf"},
 			{Name: "IP_OPTIONS", Value: "ip=dhcp"},
 			{Name: "ADDITIONAL_NTP_SERVERS", Value: ""},
 			{Name: "CA_BUNDLE", Value: "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"},
+			{Name: "IRONIC_ROOTFS_URL", Value: "http://192.168.0.2:6180/images/ironic-python-agent.rootfs"},
 			{Name: "IRONIC_RAMDISK_SSH_KEY", Value: "sshkey"},
 		},
 		VolumeMounts: expectedVolumeMounts,
@@ -241,9 +264,7 @@ func TestNewImageCustomizationContainer(t *testing.T) {
 				},
 			}
 			actualContainer := createImageCustomizationContainer(&images, info, tc.ironicIPs)
-			for e := range actualContainer.Env {
-				assert.EqualValues(t, tc.expectedContainer.Env[e], actualContainer.Env[e])
-			}
+			assert.Equal(t, tc.expectedContainer.Env, actualContainer.Env)
 			actualSecret := newImageCustomizationConfig(info, tc.ironicIPs)
 			assert.Equal(t, tc.expectedSecret, actualSecret.StringData)
 			assert.Equal(t, tc.expectedContainer.VolumeMounts, actualContainer.VolumeMounts)

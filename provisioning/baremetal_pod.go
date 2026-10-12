@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsclientv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
@@ -70,6 +71,7 @@ const (
 	bmcCACertMountPath               = "/certs/ca/bmc"
 	bmcCACertConfigMapName           = "bmc-verify-ca"
 	bmcCACertVolume                  = "bmc-verify-ca"
+	ironicTlsCertHashAnnotation      = "baremetal.openshift.io/ironic-tls-cert-hash"
 )
 
 var podTemplateAnnotations = map[string]string{
@@ -166,6 +168,7 @@ var metal3Volumes = []corev1.Volume{
 	imageVolume(),
 	ironicAgentPullSecretVolume(),
 	caTrustDirVolume(),
+	mirrorConfigVolume(),
 	{
 		Name: ironicCredentialsVolume,
 		VolumeSource: corev1.VolumeSource{
@@ -457,6 +460,13 @@ func createContainerMetal3Dnsmasq(images *Images, config *metal3iov1alpha1.Provi
 		buildEnvVar(dhcpRange, config),
 		buildEnvVar(provisioningMacAddresses, config),
 	}
+	// Only add GATEWAY_IP if it has a value
+	if gatewayValue := getGatewayIP(config); gatewayValue != nil {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  gatewayIP,
+			Value: *gatewayValue,
+		})
+	}
 	if config.ProvisioningDNS {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  dnsIP,
@@ -587,7 +597,9 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
-	container.Env = append(container.Env, tlsProfileToApacheEnvVars(info.TLSProfileSpec)...)
+	if info.TLSProfileSpec != nil {
+		container.Env = append(container.Env, tlsProfileToApacheEnvVars(*info.TLSProfileSpec)...)
+	}
 
 	return container
 }
@@ -668,7 +680,9 @@ func createContainerMetal3Ironic(images *Images, info *ProvisioningInfo, config 
 		)
 	}
 
-	container.Env = append(container.Env, tlsProfileToApacheEnvVars(info.TLSProfileSpec)...)
+	if info.TLSProfileSpec != nil {
+		container.Env = append(container.Env, tlsProfileToApacheEnvVars(*info.TLSProfileSpec)...)
+	}
 
 	return container
 }
@@ -799,9 +813,21 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 		nodeSelector = map[string]string{"node-role.kubernetes.io/master": ""}
 	}
 
+	annotations := make(map[string]string, len(podTemplateAnnotations)+1)
+	for k, v := range podTemplateAnnotations {
+		annotations[k] = v
+	}
+	if info.MirrorConfigHash != "" {
+		annotations[mirrorConfigHashAnnotation] = info.MirrorConfigHash
+	}
+	if info.TlsCertHash != "" {
+		annotations[ironicTlsCertHashAnnotation] = info.TlsCertHash
+	}
+	annotations[requiredSCCAnnotation] = privilegedSCC
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: podAnnotationsWithRequiredSCC(privilegedSCC),
+			Annotations: annotations,
 			Labels:      *labels,
 		},
 		Spec: corev1.PodSpec{
@@ -993,4 +1019,58 @@ func GetDeploymentState(client appsclientv1.DeploymentsGetter, targetNamespace s
 
 func DeleteMetal3Deployment(info *ProvisioningInfo) error {
 	return client.IgnoreNotFound(info.Client.AppsV1().Deployments(info.Namespace).Delete(context.Background(), baremetalDeploymentName, metav1.DeleteOptions{}))
+}
+
+// OperandImagesMatch checks whether the container images in the running
+// metal3 and BMO deployments match the desired images. Returns false when
+// images differ or deployments are absent, indicating a sync is needed.
+// metal3-static-ip-manager is optional (only when provisioning network is
+// enabled with a provisioning IP); its absence is not a mismatch.
+func OperandImagesMatch(client appsclientv1.DeploymentsGetter, targetNamespace string, images *Images) (bool, error) {
+	metal3, err := client.Deployments(targetNamespace).Get(context.Background(), baremetalDeploymentName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	foundIronic := false
+	for _, c := range metal3.Spec.Template.Spec.Containers {
+		switch c.Name {
+		case "metal3-ironic":
+			foundIronic = true
+			if c.Image != images.Ironic {
+				return false, nil
+			}
+		case "metal3-static-ip-manager":
+			if c.Image != images.StaticIpManager {
+				return false, nil
+			}
+		}
+	}
+	if !foundIronic {
+		return false, nil
+	}
+
+	bmo, err := client.Deployments(targetNamespace).Get(context.Background(), bmoDeploymentName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	foundBMO := false
+	for _, c := range bmo.Spec.Template.Spec.Containers {
+		if c.Name == "metal3-baremetal-operator" {
+			foundBMO = true
+			if c.Image != images.BaremetalOperator {
+				return false, nil
+			}
+		}
+	}
+	if !foundBMO {
+		return false, nil
+	}
+
+	return true, nil
 }

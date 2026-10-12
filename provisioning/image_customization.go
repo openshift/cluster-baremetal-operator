@@ -52,6 +52,9 @@ const (
 	deployInitrdFile                 = imageSharedDir + "/ironic-python-agent.initramfs"
 	deployKernelEnvVar               = "DEPLOY_KERNEL"
 	deployKernelFile                 = imageSharedDir + "/ironic-python-agent.kernel"
+	imageSharedDirEnvVar             = "IMAGE_SHARED_DIR"
+	ironicRootfsEnvVar               = "IRONIC_ROOTFS_URL"
+	ironicRootfsFile                 = "ironic-python-agent.rootfs"
 	imageCustomizationConfigName     = "metal3-image-customization-config"
 	ironicAgentPullSecret            = "ironic-agent-pull-secret" // #nosec G101
 	ironicAgentPullSecretPath        = "/run/secrets/pull-secret" // #nosec G101
@@ -62,10 +65,12 @@ var (
 	imageRegistriesVolumeMount = corev1.VolumeMount{
 		Name:      imageCustomizationVolume,
 		MountPath: containerRegistriesConfPath,
+		ReadOnly:  true,
 	}
 	caTrustDirVolumeMount = corev1.VolumeMount{
 		Name:      containerCATrustDirVolume,
 		MountPath: containerCATrustDirPath,
+		ReadOnly:  true,
 	}
 	ironicAgentPullSecretMount = corev1.VolumeMount{
 		Name:      ironicAgentPullSecret,
@@ -129,6 +134,16 @@ func getUrlFromIP(ipAddrs []string, port int) string {
 	return strings.Join(result, ",")
 }
 
+func getRootfsURL(ironicIPs []string) string {
+	for _, ip := range ironicIPs {
+		if ip != "" {
+			return fmt.Sprintf("http://%s/images/%s",
+				net.JoinHostPort(ip, baremetalHttpPort), ironicRootfsFile)
+		}
+	}
+	return ""
+}
+
 func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, ironicIPs []string) corev1.Container {
 	noProxy := ironicIPs
 	envVars := envWithProxy(info.Proxy, []corev1.EnvVar{}, noProxy)
@@ -137,6 +152,9 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 	if info.ProvConfig.Spec.UnsupportedConfigOverrides != nil && info.ProvConfig.Spec.UnsupportedConfigOverrides.IronicAgentImage != "" {
 		agentImage = info.ProvConfig.Spec.UnsupportedConfigOverrides.IronicAgentImage
 	}
+
+	readOnlyImageVolumeMount := imageVolumeMount
+	readOnlyImageVolumeMount.ReadOnly = true
 
 	container := corev1.Container{
 		Name:  "machine-image-customization-controller",
@@ -159,7 +177,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			imageRegistriesVolumeMount,
-			imageVolumeMount,
+			readOnlyImageVolumeMount,
 			ironicAgentPullSecretMount,
 			caTrustDirVolumeMount,
 		},
@@ -168,6 +186,7 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			Name:  deployISOEnvVar,
 			Value: deployISOFile,
 		},
+			getWatchNamespace(&info.ProvConfig.Spec),
 			corev1.EnvVar{
 				Name:  deployInitrdEnvVar,
 				Value: deployInitrdFile,
@@ -175,6 +194,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			corev1.EnvVar{
 				Name:  deployKernelEnvVar,
 				Value: deployKernelFile,
+			},
+			corev1.EnvVar{
+				Name:  imageSharedDirEnvVar,
+				Value: imageSharedDir,
 			},
 			corev1.EnvVar{
 				Name:  ironicBaseUrl,
@@ -199,6 +222,10 @@ func createImageCustomizationContainer(images *Images, info *ProvisioningInfo, i
 			corev1.EnvVar{
 				Name:  containerUserCaBundleEnvVar,
 				Value: containerUserCaBundlePath,
+			},
+			corev1.EnvVar{
+				Name:  ironicRootfsEnvVar,
+				Value: getRootfsURL(ironicIPs),
 			},
 			buildSSHKeyEnvVar(info.SSHKey)),
 		Ports: []corev1.ContainerPort{
@@ -258,9 +285,18 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 		nodeSelector = map[string]string{"node-role.kubernetes.io/master": ""}
 	}
 
+	annotations := make(map[string]string, len(podTemplateAnnotations)+1)
+	for k, v := range podTemplateAnnotations {
+		annotations[k] = v
+	}
+	if info.MirrorConfigHash != "" {
+		annotations[mirrorConfigHashAnnotation] = info.MirrorConfigHash
+	}
+	annotations[requiredSCCAnnotation] = privilegedSCC
+
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: podAnnotationsWithRequiredSCC(privilegedSCC),
+			Annotations: annotations,
 			Labels:      *labels,
 		},
 		Spec: corev1.PodSpec{
@@ -278,6 +314,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 				imageVolume(),
 				ironicAgentPullSecretVolume(),
 				caTrustDirVolume(),
+				mirrorConfigVolume(),
 			},
 		},
 	}

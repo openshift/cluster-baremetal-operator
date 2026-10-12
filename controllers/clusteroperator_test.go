@@ -84,34 +84,6 @@ func TestUpdateCOStatus(t *testing.T) {
 }
 
 func TestEnsureClusterOperator(t *testing.T) {
-	var defaultConditions = []osconfigv1.ClusterOperatorStatusCondition{
-		setStatusCondition(
-			osconfigv1.OperatorProgressing,
-			osconfigv1.ConditionFalse,
-			"", "",
-		),
-		setStatusCondition(
-			osconfigv1.OperatorDegraded,
-			osconfigv1.ConditionFalse,
-			"", "",
-		),
-		setStatusCondition(
-			osconfigv1.OperatorAvailable,
-			osconfigv1.ConditionFalse,
-			"", "",
-		),
-		setStatusCondition(
-			osconfigv1.OperatorUpgradeable,
-			osconfigv1.ConditionTrue,
-			"", "",
-		),
-		setStatusCondition(
-			OperatorDisabled,
-			osconfigv1.ConditionFalse,
-			"", "",
-		),
-	}
-
 	var conditions = []osconfigv1.ClusterOperatorStatusCondition{
 		setStatusCondition(
 			osconfigv1.OperatorProgressing,
@@ -154,14 +126,20 @@ func TestEnsureClusterOperator(t *testing.T) {
 					},
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
-					Conditions:     defaultConditions,
+					Conditions: []osconfigv1.ClusterOperatorStatusCondition{
+						setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(ReasonSyncing), "Operator upgraded"),
+						setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+						setStatusCondition(osconfigv1.OperatorAvailable, osconfigv1.ConditionFalse, "", ""),
+						setStatusCondition(osconfigv1.OperatorUpgradeable, osconfigv1.ConditionTrue, "", ""),
+						setStatusCondition(OperatorDisabled, osconfigv1.ConditionFalse, "", ""),
+					},
 					RelatedObjects: relatedObjects(),
 					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
 				},
 			},
 		},
 		{
-			name: "Get existing clusteroperator",
+			name: "Existing clusteroperator with no version does not set Progressing",
 			existingCO: &osconfigv1.ClusterOperator{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterOperatorName,
@@ -184,6 +162,72 @@ func TestEnsureClusterOperator(t *testing.T) {
 				},
 				Status: osconfigv1.ClusterOperatorStatus{
 					Conditions:     conditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+		},
+		{
+			name: "Existing clusteroperator with same version does not set Progressing",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+					Annotations: map[string]string{
+						"include.release.openshift.io/self-managed-high-availability": "true",
+						"include.release.openshift.io/single-node-developer":          "true",
+					},
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     conditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+					Annotations: map[string]string{
+						"include.release.openshift.io/self-managed-high-availability": "true",
+						"include.release.openshift.io/single-node-developer":          "true",
+					},
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     conditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
+				},
+			},
+		},
+		{
+			name: "Existing clusteroperator with old version sets Progressing on upgrade",
+			existingCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+					Annotations: map[string]string{
+						"include.release.openshift.io/self-managed-high-availability": "true",
+						"include.release.openshift.io/single-node-developer":          "true",
+					},
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions:     conditions,
+					RelatedObjects: relatedObjects(),
+					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "old-version"}},
+				},
+			},
+			expectedCO: &osconfigv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+					Annotations: map[string]string{
+						"include.release.openshift.io/self-managed-high-availability": "true",
+						"include.release.openshift.io/single-node-developer":          "true",
+					},
+				},
+				Status: osconfigv1.ClusterOperatorStatus{
+					Conditions: []osconfigv1.ClusterOperatorStatusCondition{
+						setStatusCondition(osconfigv1.OperatorProgressing, osconfigv1.ConditionTrue, string(ReasonSyncing), "Operator upgraded"),
+						setStatusCondition(osconfigv1.OperatorDegraded, osconfigv1.ConditionFalse, "", ""),
+						{Type: "Available", Status: "true", Reason: "", Message: ""},
+					},
 					RelatedObjects: relatedObjects(),
 					Versions:       []osconfigv1.OperandVersion{{Name: "operator", Version: "test-version"}},
 				},
