@@ -291,8 +291,9 @@ func main() {
 	// Watch the FeatureGate CR for changes to the active feature set. When it
 	// changes, restart so the operator picks up the new feature gate configuration.
 	fgWatcher := &controllers.FeatureGateWatcher{
-		Client:            mgr.GetClient(),
-		InitialFeatureSet: featureGates.FeatureSet,
+		Client:         mgr.GetClient(),
+		ReleaseVersion: releaseVersion,
+		Current:        featureGates,
 		OnChange: func(ctx context.Context) {
 			klog.Infof("Feature gate set has changed, initiating a shutdown to reload it")
 			cancel()

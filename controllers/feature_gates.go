@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -25,8 +26,9 @@ const featureGateCRName = "cluster"
 
 // FeatureGates provides access to enabled/disabled OpenShift feature gates for the current release.
 type FeatureGates struct {
-	Enabled    map[osconfigv1.FeatureGateName]bool
-	FeatureSet osconfigv1.FeatureSet
+	Enabled         map[osconfigv1.FeatureGateName]bool
+	FeatureSet      osconfigv1.FeatureSet
+	customNoUpgrade *osconfigv1.CustomFeatureGates
 }
 
 // ReadFeatureGates reads the cluster FeatureGate CR and returns the feature gates
@@ -44,8 +46,9 @@ func ReadFeatureGates(ctx context.Context, osClient osclientset.Interface, relea
 // release from the FeatureGate CR.
 func processFeatureGates(featureGateCR *osconfigv1.FeatureGate, releaseVersion string) (FeatureGates, error) {
 	fg := FeatureGates{
-		Enabled:    make(map[osconfigv1.FeatureGateName]bool),
-		FeatureSet: featureGateCR.Spec.FeatureSet,
+		Enabled:         make(map[osconfigv1.FeatureGateName]bool),
+		FeatureSet:      featureGateCR.Spec.FeatureSet,
+		customNoUpgrade: featureGateCR.Spec.CustomNoUpgrade.DeepCopy(),
 	}
 
 	if releaseVersion == "" {
@@ -75,8 +78,11 @@ func processFeatureGates(featureGateCR *osconfigv1.FeatureGate, releaseVersion s
 type FeatureGateWatcher struct {
 	client.Client
 
-	// InitialFeatureSet is the feature set that was active when the operator started.
-	InitialFeatureSet osconfigv1.FeatureSet
+	// ReleaseVersion is OpenShift release version that CBO is tracking
+	ReleaseVersion string
+
+	// Current is the current feature gate status
+	Current FeatureGates
 
 	// OnChange is called when the active feature set changes. The typical use is
 	// to cancel the operator's root context, triggering a graceful shutdown.
@@ -129,11 +135,16 @@ func (r *FeatureGateWatcher) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, fmt.Errorf("failed to get FeatureGate %s: %w", req.String(), err)
 	}
 
-	if fg.Spec.FeatureSet != r.InitialFeatureSet {
+	newFeatureGates, err := processFeatureGates(fg, r.ReleaseVersion)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if !equality.Semantic.DeepEqual(&newFeatureGates, &r.Current) {
 		if r.OnChange != nil {
 			r.OnChange(ctx)
 		}
-		r.InitialFeatureSet = fg.Spec.FeatureSet
+		r.Current = newFeatureGates
 	}
 
 	return ctrl.Result{}, nil
