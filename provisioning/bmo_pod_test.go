@@ -138,6 +138,7 @@ func TestNewBMOContainers(t *testing.T) {
 				Namespace:      "openshift-machine-api",
 				Images:         &images,
 				ProvConfig:     &metal3iov1alpha1.Provisioning{Spec: *tc.config},
+				TlsCertHash:    "tls-hash",
 				SSHKey:         tc.sshkey,
 				TLSProfileSpec: &osconfigv1.TLSProfileSpec{},
 				NetworkStack:   NetworkStackV6,
@@ -179,6 +180,10 @@ func TestNewBMOContainers(t *testing.T) {
 			}
 			templateSpec, err := newBMOPodTemplateSpec(info, &map[string]string{})
 			assert.NoError(t, err)
+			assert.Equal(t, bmoServiceAccountName, templateSpec.Spec.ServiceAccountName)
+			assert.Equal(t, restrictedV2SCC, templateSpec.Annotations[requiredSCCAnnotation])
+			assert.Equal(t, "tls-hash", templateSpec.Annotations[ironicTlsCertHashAnnotation])
+			assert.False(t, templateSpec.Spec.HostNetwork)
 			actualContainers := templateSpec.Spec.Containers
 
 			assert.Equal(t, len(tc.expectedContainers), len(actualContainers), fmt.Sprintf("%s : Expected number of Containers : %d Actual number of Containers : %d", tc.name, len(tc.expectedContainers), len(actualContainers)))
