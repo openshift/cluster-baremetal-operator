@@ -246,6 +246,15 @@ type ProvisioningSpec struct {
 	// Most users will not need this set. It is recommended to leave this unset unless
 	// actually necessary.
 	ExternalIPs []string `json:"externalIPs,omitempty"`
+
+	// BMOConcurrency sets the number of BareMetalHost resources that the
+	// Bare Metal Operator (BMO) may reconcile concurrently. When unset, BMO
+	// uses its built-in default. This is the supported way to tune
+	// provisioning throughput for virtual-media environments, where
+	// PROVISIONING_LIMIT does not apply.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	BMOConcurrency *int `json:"bmoConcurrency,omitempty"`
 }
 
 // ProvisioningStatus defines the observed state of Provisioning
