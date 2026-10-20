@@ -84,13 +84,8 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 		})
 		compat_otp.AssertWaitPollNoErr(err, "Failed to access metrics endpoint or metrics not available")
 
-		g.By("Verify Ironic-specific metrics are exposed")
-		metricsCmd := "curl -s http://metal3-state.openshift-machine-api.svc:9608/metrics | grep -E 'baremetal_|ironic_' | head -20"
-		cmd := []string{"-n", machineAPINamespace, metal3Pod, "-c", "metal3-ironic", "--", "/bin/sh", "-c", metricsCmd}
-		ironicMetrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ironicMetrics).ShouldNot(o.BeEmpty(), "Expected to find Ironic-specific metrics (baremetal_* or ironic_*)")
-		e2e.Logf("Sample Ironic metrics found:\n%s", ironicMetrics)
+		g.By("Verify Ironic collects BMC sensor data and IPE exposes hardware payload metrics")
+		verifyIPESensorCollection(oc, metal3Pod)
 
 		g.By("Verify cluster baremetal operator is still available after enabling exporter")
 		cboStatus, err := checkOperator(oc, "baremetal")
@@ -180,20 +175,6 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			o.Expect(metal3StateMetricsPort(oc)).To(o.Equal(ipeMetricsPort), "expected metal3-state metrics port %s in %s", ipeMetricsPort, machineAPINamespace)
 		})
 
-		g.It("Author:jhajyahy-Medium-90682-Verify CMO scrapes IPE metrics [Serial]", func() {
-			g.By("Wait for CMO Prometheus to scrape metal3-state metrics")
-			up := waitForPrometheusQuery(oc, `up{job="metal3-state"}`, 3*time.Minute)
-			upValue, ok := up.Data.Result[0].Value[1].(string)
-			o.Expect(ok).To(o.BeTrue(), "up{job=\"metal3-state\"} value is not a string")
-			o.Expect(upValue).To(o.Equal("1"), "expected CMO scrape target job=metal3-state to be up")
-			e2e.Logf("CMO scrape target job=metal3-state is up")
-
-			g.By("Verify CMO has ironic_* or baremetal_last_payload_timestamp_seconds series")
-			series := waitForPrometheusQuery(oc, `{job="metal3-state",__name__=~"ironic_.*|baremetal_last_payload_timestamp_seconds"}`, 2*time.Minute)
-			o.Expect(series.Data.Result).ShouldNot(o.BeEmpty(), "expected CMO to scrape ironic_* or baremetal_last_payload_timestamp_seconds")
-			e2e.Logf("CMO scraped %d IPE series", len(series.Data.Result))
-		})
-
 		g.It("Author:jhajyahy-Medium-90683-Verify default Baremetal PrometheusRule groups are loaded [Serial]", func() {
 			g.By("Verify PrometheusRule CR has baremetal.health and baremetal.monitoring groups")
 			groupNames, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, "-o=jsonpath={.spec.groups[*].name}").Output()
@@ -213,6 +194,30 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 
 			g.By("Verify CMO Prometheus loaded the metal3-defaults alert groups")
 			waitForMetal3DefaultAlertRules(oc)
+		})
+
+		g.It("Author:jhajyahy-Medium-90726-Verify Ironic collects BMC sensor data and IPE exports hardware metrics [Serial]", func() {
+			if countProvisionedBareMetalHosts(oc) == 0 {
+				g.Skip("No provisioned BareMetalHosts; Ironic skips undeployed nodes for sensor collection")
+			}
+
+			metal3Pod := getMetal3StatePod(oc)
+			e2e.Logf("Checking IPE sensor collection on metal3 pod %s", metal3Pod)
+			verifyIPESensorCollection(oc, metal3Pod)
+		})
+
+		g.It("Author:jhajyahy-Medium-90682-Verify CMO scrapes IPE metrics [Serial]", func() {
+			g.By("Wait for CMO Prometheus to scrape metal3-state metrics")
+			up := waitForPrometheusQuery(oc, `up{job="metal3-state"}`, 3*time.Minute)
+			upValue, ok := up.Data.Result[0].Value[1].(string)
+			o.Expect(ok).To(o.BeTrue(), "up{job=\"metal3-state\"} value is not a string")
+			o.Expect(upValue).To(o.Equal("1"), "expected CMO scrape target job=metal3-state to be up")
+			e2e.Logf("CMO scrape target job=metal3-state is up")
+
+			g.By("Verify CMO scraped IPE hardware payload series")
+			series := waitForPrometheusQuery(oc, `baremetal_last_payload_timestamp_seconds{job="metal3-state"}`, 3*time.Minute)
+			o.Expect(series.Data.Result).ShouldNot(o.BeEmpty(), "expected CMO to scrape %s; ironic_* process timings are not hardware sensor data", ipeHardwarePayloadMetric)
+			e2e.Logf("CMO scraped %d %s series", len(series.Data.Result), ipeHardwarePayloadMetric)
 		})
 	})
 })
