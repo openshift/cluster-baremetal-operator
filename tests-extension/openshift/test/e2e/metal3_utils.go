@@ -488,3 +488,36 @@ func redfishGet(targetURL, username, password string) (string, error) {
 	}
 	return *result.Image, nil
 }
+
+func getMetal3StatePod(oc *exutil.CLI) string {
+	name, err := oc.AsAdmin().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return name
+}
+
+func waitForMetal3PodRecreated(oc *exutil.CLI, oldPod, reason string) string {
+	var metal3Pod string
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (bool, error) {
+		newPod, err := oc.AsAdmin().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
+		if err != nil {
+			e2e.Logf("Failed to get metal3 pod: %v", err)
+			return false, nil
+		}
+
+		if newPod != oldPod && newPod != "" {
+			podStatus := getPodStatus(oc, machineAPINamespace, newPod)
+			if podStatus == "Running" {
+				metal3Pod = newPod
+				e2e.Logf("New metal3 pod %s is Running after %s", metal3Pod, reason)
+				return true, nil
+			}
+			e2e.Logf("New metal3 pod %s status: %s, waiting for Running state", newPod, podStatus)
+			return false, nil
+		}
+
+		e2e.Logf("Metal3 pod not recreated yet (current: %s, old: %s), waiting...", newPod, oldPod)
+		return false, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("Metal3 pod was not recreated after %s", reason))
+	return metal3Pod
+}
