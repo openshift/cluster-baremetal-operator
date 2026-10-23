@@ -208,9 +208,18 @@ func main() {
 	kubeClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 	dynamicClient := dynamic.NewForConfigOrDie(rest.AddUserAgent(config, controllers.ComponentName))
 
-	enabledFeatures, err := controllers.EnabledFeatures(context.Background(), osClient)
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer startupCancel()
+
+	enabledFeatures, err := controllers.EnabledFeatures(startupCtx, osClient)
 	if err != nil {
 		klog.ErrorS(err, "unable to get enabled features")
+		os.Exit(1)
+	}
+
+	featureGates, err := controllers.ReadFeatureGates(startupCtx, osClient, releaseVersion)
+	if err != nil {
+		klog.ErrorS(err, "unable to get feature gates")
 		os.Exit(1)
 	}
 
@@ -227,6 +236,7 @@ func main() {
 		ImagesFilename:  imagesJSONFilename,
 		WebHookEnabled:  enableWebhook,
 		EnabledFeatures: enabledFeatures,
+		FeatureGates:    featureGates,
 		ResourceCache:   resourceCache,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Provisioning")
@@ -275,6 +285,22 @@ func main() {
 
 	if err := tlsWatcher.SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create TLS config watcher controller")
+		os.Exit(1)
+	}
+
+	// Watch the FeatureGate CR for changes to the active feature set. When it
+	// changes, restart so the operator picks up the new feature gate configuration.
+	fgWatcher := &controllers.FeatureGateWatcher{
+		Client:         mgr.GetClient(),
+		ReleaseVersion: releaseVersion,
+		Current:        featureGates,
+		OnChange: func(ctx context.Context) {
+			klog.Infof("Feature gate set has changed, initiating a shutdown to reload it")
+			cancel()
+		},
+	}
+	if err := fgWatcher.SetupWithManager(mgr); err != nil {
+		klog.ErrorS(err, "unable to create feature gate watcher controller")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
