@@ -295,6 +295,11 @@ func (pb *provisioningBuilder) ExternalIPs(value []string) *provisioningBuilder 
 	return pb
 }
 
+func (pb *provisioningBuilder) BMOConcurrency(value int) *provisioningBuilder {
+	pb.ProvisioningSpec.BMOConcurrency = &value
+	return pb
+}
+
 func TestWatchAllNamespaces(t *testing.T) {
 	tCases := []struct {
 		name          string
