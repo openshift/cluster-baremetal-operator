@@ -78,7 +78,7 @@ RBAC_LIST = openshift-machine-api_rbac.authorization.k8s.io_v1_role_cluster-bare
 
 SERVICE_ACCOUNT_LIST = openshift-machine-api_v1_serviceaccount_cluster-baremetal-operator.yaml \
 	openshift-machine-api_v1_serviceaccount_baremetal-operator.yaml \
-	openshift-machine-api_v1_serviceaccount_metal3.yaml \
+	openshift-machine-api_v1_serviceaccount_metal3-ironic.yaml \
 	openshift-machine-api_v1_serviceaccount_metal3-image-customization.yaml
 
 PROMETHEUS_RBAC_LIST = rbac.authorization.k8s.io_v1_clusterrolebinding_prometheus-k8s-cluster-baremetal-operator.yaml \

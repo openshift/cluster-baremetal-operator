@@ -35,7 +35,7 @@ func TestOperandServiceAccounts(t *testing.T) {
 
 	t.Run("metal3", func(t *testing.T) {
 		template := newMetal3PodTemplateSpec(info, &map[string]string{})
-		assertTokenlessOperand(t, template, metal3ServiceAccountName, privilegedSCC)
+		assertTokenlessOperand(t, template, "metal3-ironic", privilegedSCC)
 		assert.Equal(t, "mirror-hash", template.Annotations[mirrorConfigHashAnnotation])
 		assert.Equal(t, "tls-hash", template.Annotations[ironicTlsCertHashAnnotation])
 	})
@@ -43,7 +43,7 @@ func TestOperandServiceAccounts(t *testing.T) {
 	t.Run("image cache", func(t *testing.T) {
 		template, err := newImageCachePodTemplateSpec(info)
 		require.NoError(t, err)
-		assertTokenlessOperand(t, template, metal3ServiceAccountName, privilegedSCC)
+		assertTokenlessOperand(t, template, "metal3-ironic", privilegedSCC)
 	})
 
 	t.Run("image customization", func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestOperandServiceAccounts(t *testing.T) {
 	t.Run("ironic proxy", func(t *testing.T) {
 		template, err := newIronicProxyPodTemplateSpec(info)
 		require.NoError(t, err)
-		assertTokenlessOperand(t, template, metal3ServiceAccountName, hostNetworkV2SCC)
+		assertTokenlessOperand(t, template, "metal3-ironic", hostNetworkV2SCC)
 	})
 }
 

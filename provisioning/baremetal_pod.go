@@ -841,7 +841,7 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: ptr.To(false),
 			},
-			ServiceAccountName:           metal3ServiceAccountName,
+			ServiceAccountName:           metal3IronicServiceAccountName,
 			AutomountServiceAccountToken: ptr.To(false),
 			Tolerations:                  tolerations,
 		},

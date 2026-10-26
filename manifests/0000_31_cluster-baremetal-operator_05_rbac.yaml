@@ -633,7 +633,7 @@ roleRef:
   name: metal3-privileged-scc
 subjects:
 - kind: ServiceAccount
-  name: metal3
+  name: metal3-ironic
   namespace: openshift-machine-api
 - kind: ServiceAccount
   name: metal3-image-customization
@@ -654,6 +654,6 @@ roleRef:
   name: metal3-hostnetwork-v2-scc
 subjects:
 - kind: ServiceAccount
-  name: metal3
+  name: metal3-ironic
   namespace: openshift-machine-api
 ---

@@ -183,7 +183,7 @@ func newIronicProxyPodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateS
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: ptr.To(false),
 			},
-			ServiceAccountName:           metal3ServiceAccountName,
+			ServiceAccountName:           metal3IronicServiceAccountName,
 			AutomountServiceAccountToken: ptr.To(false),
 			Tolerations:                  tolerations,
 		},

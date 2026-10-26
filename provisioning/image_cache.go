@@ -266,7 +266,7 @@ func newImageCachePodTemplateSpec(info *ProvisioningInfo) (*corev1.PodTemplateSp
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: ptr.To(false),
 			},
-			ServiceAccountName:           metal3ServiceAccountName,
+			ServiceAccountName:           metal3IronicServiceAccountName,
 			AutomountServiceAccountToken: ptr.To(false),
 			Tolerations:                  tolerations,
 		},
