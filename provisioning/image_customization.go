@@ -292,6 +292,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 	if info.MirrorConfigHash != "" {
 		annotations[mirrorConfigHashAnnotation] = info.MirrorConfigHash
 	}
+	annotations[requiredSCCAnnotation] = privilegedSCC
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -299,14 +300,15 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			Labels:      *labels,
 		},
 		Spec: corev1.PodSpec{
-			Containers:         containers,
-			InitContainers:     initContainers,
-			HostNetwork:        false,
-			DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
-			PriorityClassName:  "system-node-critical",
-			NodeSelector:       nodeSelector,
-			ServiceAccountName: "cluster-baremetal-operator",
-			Tolerations:        tolerations,
+			Containers:                   containers,
+			InitContainers:               initContainers,
+			HostNetwork:                  false,
+			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
+			PriorityClassName:            "system-node-critical",
+			NodeSelector:                 nodeSelector,
+			ServiceAccountName:           imageCustomizationServiceAccountName,
+			AutomountServiceAccountToken: ptr.To(true),
+			Tolerations:                  tolerations,
 			Volumes: []corev1.Volume{
 				imageRegistriesVolume(),
 				imageVolume(),

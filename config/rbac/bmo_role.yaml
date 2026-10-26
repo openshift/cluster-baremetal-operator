@@ -1,0 +1,111 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: baremetal-operator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  - bmceventsubscriptions
+  - dataimages
+  - firmwareschemas
+  - hardwaredata
+  - hostfirmwarecomponents
+  - hostfirmwaresettings
+  - preprovisioningimages
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts/finalizers
+  - dataimages/finalizers
+  - hardware/finalizers
+  - hostfirmwarecomponents/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts/status
+  - bmceventsubscriptions/status
+  - dataimages/status
+  - firmwareschemas/status
+  - hostfirmwarecomponents/status
+  - hostfirmwaresettings/status
+  - preprovisioningimages/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostupdatepolicies
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: baremetal-operator-leader-election
+  namespace: openshift-machine-api
+rules:
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: baremetal-operator-scc
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - restricted-v2
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
