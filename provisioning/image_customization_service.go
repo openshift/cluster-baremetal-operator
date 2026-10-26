@@ -20,8 +20,8 @@ const (
 func newImageCustomizationService(targetNamespace string) *corev1.Service {
 	ports := []corev1.ServicePort{
 		{
-			Name:       "http",
-			Port:       80,
+			Name:       "https",
+			Port:       443,
 			TargetPort: intstr.FromInt(imageCustomizationPort),
 		},
 	}
