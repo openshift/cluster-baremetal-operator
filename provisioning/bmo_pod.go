@@ -169,6 +169,8 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 	}
 
+	container.Args = append(container.Args, featureGateArgs(&info.ProvConfig.Spec)...)
+
 	if info.TLSProfileSpec != nil {
 		container.Args = append(container.Args, tlsProfileToBMOArgs(*info.TLSProfileSpec)...)
 	}
@@ -179,6 +181,24 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		container.Args = append(container.Args, "--webhook-port", "0")
 	} else {
 		container.Args = append(container.Args, "--webhook-port", baremetalWebhookPort)
+	}
+
+	// Enable BMO switch management and provide its secret names.
+	if info.ProvConfig.Spec.IsSwitchManagementEnabled() {
+		container.Env = append(container.Env,
+			corev1.EnvVar{
+				Name:  switchConfigsSecretEnvVar,
+				Value: switchConfigsSecretName,
+			},
+			corev1.EnvVar{
+				Name:  switchCredentialsSecretEnvVar,
+				Value: switchCredentialsSecretName,
+			},
+			corev1.EnvVar{
+				Name:  switchCredentialsMountPathEnvVar,
+				Value: switchCredentialsMountPath,
+			},
+		)
 	}
 
 	return container, nil
