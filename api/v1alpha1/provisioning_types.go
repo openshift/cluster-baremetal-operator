@@ -157,6 +157,26 @@ type PrometheusExporter struct {
 	DisableDefaultPrometheusRules bool `json:"disableDefaultPrometheusRules,omitempty"`
 }
 
+// VirtualMediaServerTLS configures TLS accepted by the HTTPS server that
+// serves virtual-media images to BMCs. This does not configure Ironic's
+// Redfish client connections to BMCs.
+type VirtualMediaServerTLS struct {
+	// MinTLSVersion is the minimum TLS version accepted by the virtual-media
+	// HTTPS server. The server allows this version through TLS 1.3. TLS 1.0
+	// and TLS 1.1 are deprecated and should only be used for legacy BMCs.
+	// +kubebuilder:validation:Enum=VersionTLS10;VersionTLS11;VersionTLS12;VersionTLS13
+	MinTLSVersion string `json:"minTLSVersion"`
+	// Ciphers optionally overrides the cipher suites for the virtual-media
+	// HTTPS server only. Use OpenSSL cipher names; TLS 1.3 suites use the
+	// TLS_ prefix. When omitted, applicable cluster-profile or image defaults
+	// are used.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:items:Pattern=`^[A-Za-z0-9_+!@.-]+$`
+	Ciphers []string `json:"ciphers,omitempty"`
+}
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface
@@ -286,6 +306,14 @@ type ProvisioningSpec struct {
 	// DisableVirtualMediaTLS turns off TLS on the virtual media server,
 	// which may be required for hardware that cannot accept HTTPS links.
 	DisableVirtualMediaTLS bool `json:"disableVirtualMediaTLS,omitempty"`
+
+	// VirtualMediaServerTLS configures the minimum TLS version and optional
+	// cipher suites for the HTTPS listener that serves images to BMCs. When
+	// omitted, CBO applies the cluster profile under StrictAllComponents;
+	// otherwise the image default is used. This does not configure Ironic's
+	// Redfish client connections to BMCs.
+	// +optional
+	VirtualMediaServerTLS *VirtualMediaServerTLS `json:"virtualMediaServerTLS,omitempty"`
 
 	// UnsupportedConfigOverrides are site-specific overrides that are not
 	// officially supported in the Metal platform and may cause the

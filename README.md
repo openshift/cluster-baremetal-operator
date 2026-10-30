@@ -163,6 +163,13 @@ either using virtual media or PXE.
 - DisableVirtualMediaTLS turns off TLS on the virtual media server,
 which may be required for hardware that cannot accept HTTPS links.
 
+- VirtualMediaServerTLS configures the minimum TLS version and optional
+cipher suites for the HTTPS listener that serves images to BMCs. When
+omitted, CBO applies the cluster profile under StrictAllComponents;
+otherwise the image default is used. This does not configure Ironic's
+Redfish client connections to BMCs.
++optional
+
 - UnsupportedConfigOverrides are site-specific overrides that are not
 officially supported in the Metal platform and may cause the
 deployment to fail. Carefully check the description of each field
@@ -387,5 +394,8 @@ This will cause the pod to be restarted with the new configuration. CBO will,
 in turn, update any modified components.
 
 Once finished with the testing, remove the override, wait for CVO to
+reconfigure the ConfigMap, and restart the pod again.
+
+ to
 reconfigure the ConfigMap, and restart the pod again.
 

@@ -40,6 +40,7 @@ var (
 	// Linux interface names are at most IFNAMSIZ-1 (15) characters and should
 	// look like a device name: letters, digits, dots, underscores, and hyphens.
 	provisioningInterfaceRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,14}$`)
+	openSSLCipherNameRegexp     = regexp.MustCompile(`^[A-Za-z0-9_+!@.-]+$`)
 )
 
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
@@ -92,6 +93,11 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig(enabledFeatures En
 	if err := validateExternalIPs(prov.Spec.ExternalIPs); err != nil {
 		errs = append(errs, err...)
 	}
+	if prov.Spec.VirtualMediaServerTLS != nil {
+		if err := prov.Spec.VirtualMediaServerTLS.Validate(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if err := validatePreProvisioningOSDownloadURLs(prov.Spec.PreProvisioningOSDownloadURLs); err != nil {
 		errs = append(errs, err...)
 	}
@@ -138,6 +144,24 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig(enabledFeatures En
 	}
 
 	return errors.NewAggregate(errs)
+}
+
+// Validate checks the virtual-media server TLS minimum version.
+func (r VirtualMediaServerTLS) Validate() error {
+	switch r.MinTLSVersion {
+	case "VersionTLS10", "VersionTLS11", "VersionTLS12", "VersionTLS13":
+	default:
+		return fmt.Errorf("virtualMediaServerTLS.minTLSVersion %q must be one of VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13", r.MinTLSVersion)
+	}
+	if r.Ciphers != nil && len(r.Ciphers) == 0 {
+		return fmt.Errorf("virtualMediaServerTLS.ciphers must contain at least one OpenSSL cipher name when set")
+	}
+	for i, cipher := range r.Ciphers {
+		if strings.TrimSpace(cipher) != cipher || !openSSLCipherNameRegexp.MatchString(cipher) {
+			return fmt.Errorf("virtualMediaServerTLS.ciphers[%d] %q must be an OpenSSL cipher name without whitespace or separators", i, cipher)
+		}
+	}
+	return nil
 }
 
 // isNetworkOrBroadcastAddress checks if the IP is a network or broadcast address
