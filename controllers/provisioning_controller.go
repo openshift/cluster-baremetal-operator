@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	utilnet "k8s.io/utils/net"
@@ -93,6 +94,7 @@ type ProvisioningReconciler struct {
 	EnabledFeatures metal3iov1alpha1.EnabledFeatures
 	FeatureGates    FeatureGates
 	ResourceCache   resourceapply.ResourceCache
+	EventRecorder   record.EventRecorder
 }
 
 type ensureFunc func(*provisioning.ProvisioningInfo) (bool, error)
@@ -341,6 +343,7 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// Temporarily not requeuing request, as the user will have to fix the CR.
 		return ctrl.Result{}, nil
 	}
+	r.warnDeprecatedVirtualMediaServerTLS(baremetalConfig)
 
 	for _, ensureResource := range []ensureFunc{
 		func(info *provisioning.ProvisioningInfo) (bool, error) {
@@ -508,6 +511,20 @@ func (r *ProvisioningReconciler) provisioningInfo(ctx context.Context, provConfi
 		ResourceCache:           r.ResourceCache,
 		IsHyperShift:            isHyperShift,
 	}, nil
+}
+
+func (r *ProvisioningReconciler) warnDeprecatedVirtualMediaServerTLS(provConfig *metal3iov1alpha1.Provisioning) {
+	if r.EventRecorder == nil || provConfig.Spec.VirtualMediaServerTLS == nil || provConfig.Spec.DisableVirtualMediaTLS {
+		return
+	}
+
+	version := provConfig.Spec.VirtualMediaServerTLS.MinTLSVersion
+	if version != "VersionTLS10" && version != "VersionTLS11" {
+		return
+	}
+
+	r.EventRecorder.Event(provConfig, corev1.EventTypeWarning, "DeprecatedVirtualMediaServerTLSVersion",
+		fmt.Sprintf("virtualMediaServerTLS.minTLSVersion is %s, a deprecated TLS version with known security vulnerabilities; use only for legacy BMC compatibility", version))
 }
 
 // Ensure Finalizer is present on the Provisioning CR when not deleted and
@@ -711,6 +728,7 @@ func (r *ProvisioningReconciler) updateProvisioningMacAddresses(ctx context.Cont
 
 // SetupWithManager configures the manager to run the controller
 func (r *ProvisioningReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.EventRecorder = mgr.GetEventRecorderFor(ComponentName)
 	ctx := context.Background()
 	err := r.ensureClusterOperator()
 	if err != nil {

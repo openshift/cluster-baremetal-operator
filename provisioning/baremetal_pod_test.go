@@ -17,6 +17,7 @@ package provisioning
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -591,6 +592,123 @@ func TestNewMetal3Containers(t *testing.T) {
 				assert.Equal(t, len(tc.expectedContainers[i].Env), len(actualContainers[i].Env), "container name: ", tc.expectedContainers[i].Name)
 				for e := range container.Env {
 					assert.EqualValues(t, tc.expectedContainers[i].Env[e], actualContainers[i].Env[e], "container name: ", tc.expectedContainers[i].Name)
+				}
+			}
+		})
+	}
+}
+
+func TestCreateContainerMetal3HttpdVirtualMediaTLS(t *testing.T) {
+	profile := &osconfigv1.TLSProfileSpec{
+		MinTLSVersion: osconfigv1.VersionTLS12,
+		Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256", "TLS_AES_256_GCM_SHA384"},
+	}
+	for _, tc := range []struct {
+		name        string
+		useProfile  bool
+		setting     *metal3iov1alpha1.VirtualMediaServerTLS
+		expectedEnv map[string]string
+	}{
+		{
+			name:        "image defaults",
+			expectedEnv: map[string]string{},
+		},
+		{
+			name:       "cluster profile",
+			useProfile: true,
+			expectedEnv: map[string]string{
+				"IRONIC_VMEDIA_SSL_PROTOCOL":   "-ALL +TLSv1.2 +TLSv1.3",
+				"IRONIC_VMEDIA_TLS_12_CIPHERS": "ECDHE-RSA-AES128-GCM-SHA256",
+				"IRONIC_VMEDIA_TLS_13_CIPHERS": "TLS_AES_256_GCM_SHA384",
+			},
+		},
+		{
+			name:       "lower minimum retains profile ciphers",
+			useProfile: true,
+			setting:    &metal3iov1alpha1.VirtualMediaServerTLS{MinTLSVersion: "VersionTLS11"},
+			expectedEnv: map[string]string{
+				"IRONIC_VMEDIA_SSL_PROTOCOL":   "-ALL +TLSv1.1 +TLSv1.2 +TLSv1.3",
+				"IRONIC_VMEDIA_TLS_12_CIPHERS": "ECDHE-RSA-AES128-GCM-SHA256",
+				"IRONIC_VMEDIA_TLS_13_CIPHERS": "TLS_AES_256_GCM_SHA384",
+			},
+		},
+		{
+			name:    "minimum without profile",
+			setting: &metal3iov1alpha1.VirtualMediaServerTLS{MinTLSVersion: "VersionTLS11"},
+			expectedEnv: map[string]string{
+				"IRONIC_VMEDIA_SSL_PROTOCOL": "-ALL +TLSv1.1 +TLSv1.2 +TLSv1.3",
+			},
+		},
+		{
+			name:       "explicit ciphers replace both profile families",
+			useProfile: true,
+			setting: &metal3iov1alpha1.VirtualMediaServerTLS{
+				MinTLSVersion: "VersionTLS11",
+				Ciphers:       []string{"AES128-SHA", "TLS_AES_128_GCM_SHA256"},
+			},
+			expectedEnv: map[string]string{
+				"IRONIC_VMEDIA_SSL_PROTOCOL":   "-ALL +TLSv1.1 +TLSv1.2 +TLSv1.3",
+				"IRONIC_VMEDIA_TLS_12_CIPHERS": "AES128-SHA",
+				"IRONIC_VMEDIA_TLS_13_CIPHERS": "TLS_AES_128_GCM_SHA256",
+			},
+		},
+		{
+			name:       "TLS 1.2 ciphers clear inherited TLS 1.3 ciphers",
+			useProfile: true,
+			setting: &metal3iov1alpha1.VirtualMediaServerTLS{
+				MinTLSVersion: "VersionTLS11",
+				Ciphers:       []string{"AES128-SHA"},
+			},
+			expectedEnv: map[string]string{
+				"IRONIC_VMEDIA_SSL_PROTOCOL":   "-ALL +TLSv1.1 +TLSv1.2 +TLSv1.3",
+				"IRONIC_VMEDIA_TLS_12_CIPHERS": "AES128-SHA",
+				"IRONIC_VMEDIA_TLS_13_CIPHERS": "",
+			},
+		},
+		{
+			name:       "TLS 1.3 ciphers clear inherited TLS 1.2 ciphers",
+			useProfile: true,
+			setting: &metal3iov1alpha1.VirtualMediaServerTLS{
+				MinTLSVersion: "VersionTLS13",
+				Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+			},
+			expectedEnv: map[string]string{
+				"IRONIC_VMEDIA_SSL_PROTOCOL":   "-ALL +TLSv1.3",
+				"IRONIC_VMEDIA_TLS_12_CIPHERS": "",
+				"IRONIC_VMEDIA_TLS_13_CIPHERS": "TLS_AES_128_GCM_SHA256",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			info := &ProvisioningInfo{
+				ProvConfig: &metal3iov1alpha1.Provisioning{Spec: metal3iov1alpha1.ProvisioningSpec{
+					VirtualMediaServerTLS: tc.setting,
+				}},
+			}
+			if tc.useProfile {
+				info.TLSProfileSpec = profile
+			}
+			container := createContainerMetal3Httpd(&Images{Ironic: expectedIronic}, info)
+			env := map[string]string{}
+			vmediaEnv := map[string]string{}
+			for _, variable := range container.Env {
+				assert.NotContains(t, env, variable.Name, "duplicate environment variable")
+				env[variable.Name] = variable.Value
+				if strings.HasPrefix(variable.Name, "IRONIC_VMEDIA_") {
+					vmediaEnv[variable.Name] = variable.Value
+				}
+			}
+			assert.Equal(t, tc.expectedEnv, vmediaEnv)
+			// Vmedia overrides must leave the Ironic API's TLS policy intact.
+			for name, value := range map[string]string{
+				"IRONIC_SSL_PROTOCOL":   "-ALL +TLSv1.2 +TLSv1.3",
+				"IRONIC_TLS_12_CIPHERS": "ECDHE-RSA-AES128-GCM-SHA256",
+				"IRONIC_TLS_13_CIPHERS": "TLS_AES_256_GCM_SHA384",
+			} {
+				if tc.useProfile {
+					assert.Equal(t, value, env[name], name)
+				} else {
+					assert.NotContains(t, env, name)
 				}
 			}
 		})

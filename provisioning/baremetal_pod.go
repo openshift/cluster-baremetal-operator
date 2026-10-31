@@ -600,6 +600,25 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 	if info.TLSProfileSpec != nil {
 		container.Env = append(container.Env, tlsProfileToApacheEnvVars(*info.TLSProfileSpec)...)
 	}
+	setVmediaEnv := func(name, value string) {
+		for i := range container.Env {
+			if container.Env[i].Name == name {
+				container.Env[i].Value = value
+				return
+			}
+		}
+		container.Env = append(container.Env, corev1.EnvVar{Name: name, Value: value})
+	}
+	if setting := config.VirtualMediaServerTLS; setting != nil {
+		setVmediaEnv("IRONIC_VMEDIA_SSL_PROTOCOL", tlsVersionToApacheSSLProtocol(configv1.TLSProtocolVersion(setting.MinTLSVersion)))
+		if len(setting.Ciphers) > 0 {
+			tls12Ciphers, tls13Ciphers := splitCiphers(setting.Ciphers)
+			// Replace both variables, including an empty one, so a partial explicit
+			// list cannot inherit the cluster profile's other protocol's ciphers.
+			setVmediaEnv("IRONIC_VMEDIA_TLS_12_CIPHERS", strings.Join(tls12Ciphers, ":"))
+			setVmediaEnv("IRONIC_VMEDIA_TLS_13_CIPHERS", strings.Join(tls13Ciphers, ":"))
+		}
+	}
 
 	return container
 }
