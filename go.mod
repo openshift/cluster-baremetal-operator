@@ -1,6 +1,8 @@
 module github.com/openshift/cluster-baremetal-operator
 
-go 1.23.0
+go 1.24.0
+
+toolchain go1.24.13
 
 require (
 	github.com/ghodss/yaml v1.0.0
@@ -14,7 +16,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/stew v0.0.0-20130812190256-80ef0842b48b
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.37.0
+	golang.org/x/crypto v0.48.0
 	k8s.io/api v0.31.7
 	k8s.io/apimachinery v0.31.7
 	k8s.io/client-go v0.31.7
@@ -241,15 +243,17 @@ require (
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20250210185358-939b2ce775ac // indirect
-	golang.org/x/mod v0.24.0 // indirect
-	golang.org/x/net v0.39.0 // indirect
+	golang.org/x/mod v0.32.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/term v0.31.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
-	golang.org/x/tools v0.32.0 // indirect
+	golang.org/x/tools v0.41.0 // indirect
+	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
+	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
@@ -278,3 +282,5 @@ replace github.com/metal3-io/baremetal-operator => github.com/openshift/baremeta
 replace github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20250318213501-20a31adf14bc
 
 replace github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20250318213501-20a31adf14bc
+
+replace golang.org/x/net => github.com/openshift-sustaining/net v0.50.0-sec.4
