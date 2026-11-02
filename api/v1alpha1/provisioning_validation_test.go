@@ -592,3 +592,333 @@ func (pb *provisioningBuilder) ProvisioningNetworkGateway(value string) *provisi
 	pb.ProvisioningSpec.ProvisioningNetworkGateway = value
 	return pb
 }
+
+func (pb *provisioningBuilder) AdditionalNTPServers(value []string) *provisioningBuilder {
+	pb.ProvisioningSpec.AdditionalNTPServers = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ProvisioningMacAddresses(value []string) *provisioningBuilder {
+	pb.ProvisioningSpec.ProvisioningMacAddresses = value
+	return pb
+}
+
+func (pb *provisioningBuilder) ExternalIPs(value []string) *provisioningBuilder {
+	pb.ProvisioningSpec.ExternalIPs = value
+	return pb
+}
+
+func (pb *provisioningBuilder) PreProvisioningOSDownloadURLs(value PreProvisioningOSDownloadURLs) *provisioningBuilder {
+	pb.ProvisioningSpec.PreProvisioningOSDownloadURLs = value
+	return pb
+}
+
+func (pb *provisioningBuilder) IronicAgentImage(value string) *provisioningBuilder {
+	pb.UnsupportedConfigOverrides = &UnsupportedConfigOverrides{IronicAgentImage: value}
+	return pb
+}
+
+func allProvisioningNetworkFeatures() EnabledFeatures {
+	return EnabledFeatures{
+		ProvisioningNetwork: map[ProvisioningNetwork]bool{
+			ProvisioningNetworkManaged:   true,
+			ProvisioningNetworkUnmanaged: true,
+			ProvisioningNetworkDisabled:  true,
+		},
+	}
+}
+
+func TestValidateProvisioningFieldFormats(t *testing.T) {
+	baremetalCR := &Provisioning{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Provisioning",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testBaremetalProvisioningCR,
+		},
+	}
+
+	tCases := []struct {
+		name          string
+		spec          *ProvisioningSpec
+		expectedError bool
+		expectedMsg   string
+	}{
+		{
+			name:          "ValidInterfaceVariants",
+			spec:          managedProvisioning().ProvisioningInterface("br-ex").build(),
+			expectedError: false,
+		},
+		{
+			name:          "ValidVlanInterface",
+			spec:          managedProvisioning().ProvisioningInterface("eno1.100").build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidInterfaceWithSpace",
+			spec:          managedProvisioning().ProvisioningInterface("eth 0").build(),
+			expectedError: true,
+			expectedMsg:   "provisioningInterface",
+		},
+		{
+			name:          "InvalidInterfaceWithNewline",
+			spec:          managedProvisioning().ProvisioningInterface("eth0\neth1").build(),
+			expectedError: true,
+			expectedMsg:   "provisioningInterface",
+		},
+		{
+			name:          "InvalidInterfaceWithShellMetacharacters",
+			spec:          managedProvisioning().ProvisioningInterface("eth0;id").build(),
+			expectedError: true,
+			expectedMsg:   "not a valid interface name",
+		},
+		{
+			name:          "InvalidInterfaceTooLong",
+			spec:          managedProvisioning().ProvisioningInterface("enx0011223344556").build(),
+			expectedError: true,
+			expectedMsg:   "not a valid interface name",
+		},
+		{
+			name:          "ValidNTPServers",
+			spec:          managedProvisioning().AdditionalNTPServers([]string{"192.168.1.1", "pool.ntp.org", "2001:db8::1"}).build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidNTPServerNotHostOrIP",
+			spec:          managedProvisioning().AdditionalNTPServers([]string{"not_a_host"}).build(),
+			expectedError: true,
+			expectedMsg:   "additionalNTPServers[0]",
+		},
+		{
+			name:          "InvalidNTPServerWithNewline",
+			spec:          managedProvisioning().AdditionalNTPServers([]string{"pool.ntp.org\nmalicious"}).build(),
+			expectedError: true,
+			expectedMsg:   "additionalNTPServers[0]",
+		},
+		{
+			name:          "InvalidEmptyNTPServer",
+			spec:          managedProvisioning().AdditionalNTPServers([]string{""}).build(),
+			expectedError: true,
+			expectedMsg:   "additionalNTPServers[0] must not be empty",
+		},
+		{
+			name:          "ValidMacAddresses",
+			spec:          managedProvisioning().ProvisioningMacAddresses([]string{"00:11:22:33:44:55", "aa:bb:cc:dd:ee:ff"}).build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidMacAddress",
+			spec:          managedProvisioning().ProvisioningMacAddresses([]string{"not-a-mac"}).build(),
+			expectedError: true,
+			expectedMsg:   "not a valid MAC address",
+		},
+		{
+			name:          "ValidExternalIPs",
+			spec:          managedProvisioning().ExternalIPs([]string{"192.0.2.10", "2001:db8::10"}).build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidExternalIP",
+			spec:          managedProvisioning().ExternalIPs([]string{"not-an-ip"}).build(),
+			expectedError: true,
+			expectedMsg:   "externalIPs[0]",
+		},
+		{
+			name:          "ValidPreProvisioningURLs",
+			spec:          managedProvisioning().PreProvisioningOSDownloadURLs(PreProvisioningOSDownloadURLs{IsoURL: "https://example.com/rhcos.iso"}).build(),
+			expectedError: false,
+		},
+		{
+			name:          "InvalidPreProvisioningURLScheme",
+			spec:          managedProvisioning().PreProvisioningOSDownloadURLs(PreProvisioningOSDownloadURLs{IsoURL: "gopher://example.com/rhcos.iso"}).build(),
+			expectedError: true,
+			expectedMsg:   "preProvisioningOSDownloadURLs.isoURL",
+		},
+		{
+			name:          "InvalidPreProvisioningURLMissingHost",
+			spec:          managedProvisioning().PreProvisioningOSDownloadURLs(PreProvisioningOSDownloadURLs{IsoURL: "http:/rhcos.iso"}).build(),
+			expectedError: true,
+			expectedMsg:   "must include a host",
+		},
+		{
+			name:          "InvalidIronicAgentImageWithNewline",
+			spec:          managedProvisioning().IronicAgentImage("quay.io/example/ironic-agent:latest\nmalicious").build(),
+			expectedError: true,
+			expectedMsg:   "unsupportedConfigOverrides.ironicAgentImage",
+		},
+		{
+			name:          "DisabledEmptyNetworkStillValidatesInterface",
+			spec:          disabledProvisioning().ProvisioningIP("").ProvisioningNetworkCIDR("").ProvisioningInterface("eth0;id").build(),
+			expectedError: true,
+			expectedMsg:   "not a valid interface name",
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			baremetalCR.Spec = *tc.spec
+			err := baremetalCR.ValidateBaremetalProvisioningConfig(allProvisioningNetworkFeatures())
+			if !tc.expectedError && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+				return
+			}
+			if tc.expectedError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedMsg)
+			}
+		})
+	}
+}
+
+func TestValidateVLANID(t *testing.T) {
+	tCases := []struct {
+		name        string
+		input       string
+		expectError bool
+		expectedMsg string
+		expectedVal int
+	}{
+		{name: "valid", input: "100", expectedVal: 100},
+		{name: "min", input: "1", expectedVal: 1},
+		{name: "max", input: "4094", expectedVal: 4094},
+		{name: "below min", input: "0", expectError: true, expectedMsg: "out of range"},
+		{name: "above max", input: "4095", expectError: true, expectedMsg: "out of range"},
+		{name: "not a number", input: "abc", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "leading plus", input: "+100", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "leading zero", input: "0100", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "leading whitespace", input: " 100", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "trailing whitespace", input: "100 ", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "negative", input: "-1", expectError: true, expectedMsg: "out of range"},
+		{name: "empty", input: "", expectError: true, expectedMsg: "not a valid VLAN ID"},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := validateVLANID(tc.input)
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedVal, v)
+			}
+		})
+	}
+}
+
+func TestValidateAllowedVLANEntry(t *testing.T) {
+	tCases := []struct {
+		name        string
+		input       string
+		expectError bool
+		expectedMsg string
+	}{
+		{name: "single valid", input: "100"},
+		{name: "valid range", input: "100-200"},
+		{name: "single with plus", input: "+100", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "single with leading zero", input: "0100", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "single with whitespace", input: " 100 ", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "range with whitespace", input: "100 - 200", expectError: true, expectedMsg: "not a valid VLAN ID"},
+		{name: "range start equals end", input: "100-100", expectError: true, expectedMsg: "start (100) must be less than end (100)"},
+		{name: "range reversed", input: "200-100", expectError: true, expectedMsg: "start (200) must be less than end (100)"},
+		{name: "range with plus in start", input: "+100-200", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+		{name: "range with plus in end", input: "100-+200", expectError: true, expectedMsg: "not a canonical VLAN ID"},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAllowedVLANEntry(tc.input)
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateProviderNetwork(t *testing.T) {
+	tCases := []struct {
+		name        string
+		sm          *SwitchManagement
+		expectError bool
+		expectedMsg string
+	}{
+		{
+			name: "nil switch management",
+			sm:   nil,
+		},
+		{
+			name: "disabled with no network",
+			sm:   &SwitchManagement{Enabled: false},
+		},
+		{
+			name:        "disabled with network",
+			sm:          &SwitchManagement{Enabled: false, ProviderNetwork: &ProviderNetworkConfig{Mode: SwitchPortModeAccess, NativeVLAN: 100}},
+			expectError: true,
+			expectedMsg: "providerNetwork cannot be set when switchManagement is not enabled",
+		},
+		{
+			name:        "enabled without network",
+			sm:          &SwitchManagement{Enabled: true},
+			expectError: true,
+			expectedMsg: "providerNetwork is required when switchManagement is enabled",
+		},
+		{
+			name: "valid access mode",
+			sm:   &SwitchManagement{Enabled: true, ProviderNetwork: &ProviderNetworkConfig{Mode: SwitchPortModeAccess, NativeVLAN: 100}},
+		},
+		{
+			name: "valid trunk mode",
+			sm:   &SwitchManagement{Enabled: true, ProviderNetwork: &ProviderNetworkConfig{Mode: SwitchPortModeTrunk, NativeVLAN: 100, AllowedVLANs: []string{"200", "300"}}},
+		},
+		{
+			name:        "access mode with allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetwork: &ProviderNetworkConfig{Mode: SwitchPortModeAccess, NativeVLAN: 100, AllowedVLANs: []string{"200"}}},
+			expectError: true,
+			expectedMsg: "allowedVLANs cannot be set in access mode",
+		},
+		{
+			name:        "trunk mode without allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetwork: &ProviderNetworkConfig{Mode: SwitchPortModeTrunk, NativeVLAN: 100}},
+			expectError: true,
+			expectedMsg: "allowedVLANs required for trunk mode",
+		},
+		{
+			name:        "hybrid mode without allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetwork: &ProviderNetworkConfig{Mode: SwitchPortModeHybrid, NativeVLAN: 100}},
+			expectError: true,
+			expectedMsg: "allowedVLANs required for hybrid mode",
+		},
+		{
+			name:        "non-canonical VLAN in allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetwork: &ProviderNetworkConfig{Mode: SwitchPortModeTrunk, NativeVLAN: 100, AllowedVLANs: []string{"+200"}}},
+			expectError: true,
+			expectedMsg: "not a canonical VLAN ID",
+		},
+		{
+			name:        "whitespace in allowedVLANs",
+			sm:          &SwitchManagement{Enabled: true, ProviderNetwork: &ProviderNetworkConfig{Mode: SwitchPortModeTrunk, NativeVLAN: 100, AllowedVLANs: []string{" 200 "}}},
+			expectError: true,
+			expectedMsg: "not a valid VLAN ID",
+		},
+	}
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := validateProviderNetwork(tc.sm)
+			if tc.expectError {
+				assert.NotEmpty(t, errs)
+				found := false
+				for _, err := range errs {
+					if strings.Contains(err.Error(), tc.expectedMsg) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "expected error containing %q, got %v", tc.expectedMsg, errs)
+			} else {
+				assert.Empty(t, errs)
+			}
+		})
+	}
+}

@@ -10,3 +10,17 @@ subjects:
 - kind: ServiceAccount
   name: metal3-image-customization
   namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: metal3-image-customization-secrets
+  namespace: openshift-machine-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: metal3-image-customization-secrets
+subjects:
+- kind: ServiceAccount
+  name: metal3-image-customization
+  namespace: openshift-machine-api

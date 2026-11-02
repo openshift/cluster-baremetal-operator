@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -187,4 +188,15 @@ func IpOptionForProvisioning(config *metal3iov1alpha1.ProvisioningSpec, networkS
 		optionValue = "ip=dhcp6"
 	}
 	return optionValue
+}
+
+func featureGateArgs(config *metal3iov1alpha1.ProvisioningSpec) []string {
+	var featureGates []string
+	if config.IsSwitchManagementEnabled() {
+		featureGates = append(featureGates, "IronicNetworking=true")
+	}
+	if len(featureGates) == 0 {
+		return nil
+	}
+	return []string{"--feature-gates=" + strings.Join(featureGates, ",")}
 }

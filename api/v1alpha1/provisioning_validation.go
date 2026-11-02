@@ -20,9 +20,13 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"k8s.io/apimachinery/pkg/util/errors"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -32,6 +36,10 @@ type EnabledFeatures struct {
 
 var (
 	log = ctrl.Log.WithName("provisioning_validation")
+
+	// Linux interface names are at most IFNAMSIZ-1 (15) characters and should
+	// look like a device name: letters, digits, dots, underscores, and hyphens.
+	provisioningInterfaceRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,14}$`)
 )
 
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
@@ -61,8 +69,36 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig(enabledFeatures En
 
 	var errs []error
 
+	if err := validateProviderNetwork(prov.Spec.SwitchManagement); err != nil {
+		errs = append(errs, err...)
+	}
+
 	if !enabledFeatures.ProvisioningNetwork[provisioningNetworkMode] {
 		return errors.NewAggregate(append(errs, fmt.Errorf("ProvisioningNetwork %s is not supported", provisioningNetworkMode)))
+	}
+
+	// Sanity-check fields that are passed through to containers as environment
+	// variables (OCPBUGS-115068). These checks always apply, including when
+	// network settings are omitted in Disabled mode.
+	if err := validateProvisioningInterface(prov.Spec.ProvisioningInterface); err != nil {
+		errs = append(errs, err)
+	}
+	if err := validateAdditionalNTPServers(prov.Spec.AdditionalNTPServers); err != nil {
+		errs = append(errs, err...)
+	}
+	if err := validateProvisioningMacAddresses(prov.Spec.ProvisioningMacAddresses); err != nil {
+		errs = append(errs, err...)
+	}
+	if err := validateExternalIPs(prov.Spec.ExternalIPs); err != nil {
+		errs = append(errs, err...)
+	}
+	if err := validatePreProvisioningOSDownloadURLs(prov.Spec.PreProvisioningOSDownloadURLs); err != nil {
+		errs = append(errs, err...)
+	}
+	if prov.Spec.UnsupportedConfigOverrides != nil {
+		if err := validateNoUnsafeCharacters("unsupportedConfigOverrides.ironicAgentImage", prov.Spec.UnsupportedConfigOverrides.IronicAgentImage); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	// They all use provisioningOSDownloadURL
@@ -145,10 +181,143 @@ func (prov *Provisioning) getProvisioningNetworkMode() ProvisioningNetwork {
 	return provisioningNetworkMode
 }
 
+// validateNoUnsafeCharacters rejects spaces, newlines, and other control
+// characters that should not appear in values copied into container env vars.
+func validateNoUnsafeCharacters(field, value string) error {
+	if value == "" {
+		return nil
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f || unicode.IsSpace(r) {
+			return fmt.Errorf("%s %q contains invalid whitespace or control characters", field, value)
+		}
+	}
+	return nil
+}
+
+func validateProvisioningInterface(name string) error {
+	if name == "" {
+		return nil
+	}
+	if err := validateNoUnsafeCharacters("provisioningInterface", name); err != nil {
+		return err
+	}
+	if !provisioningInterfaceRegexp.MatchString(name) {
+		return fmt.Errorf("provisioningInterface %q is not a valid interface name (letters, numbers, dots, underscores, and hyphens; max 15 characters)", name)
+	}
+	return nil
+}
+
+func validateAdditionalNTPServers(servers []string) []error {
+	var errs []error
+	for i, server := range servers {
+		field := fmt.Sprintf("additionalNTPServers[%d]", i)
+		if server == "" {
+			errs = append(errs, fmt.Errorf("%s must not be empty", field))
+			continue
+		}
+		if err := validateNoUnsafeCharacters(field, server); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if net.ParseIP(server) != nil {
+			continue
+		}
+		if msgs := k8svalidation.IsDNS1123Subdomain(strings.ToLower(server)); len(msgs) > 0 {
+			errs = append(errs, fmt.Errorf("%s %q is not a valid hostname or IP address", field, server))
+		}
+	}
+	return errs
+}
+
+func validateProvisioningMacAddresses(macs []string) []error {
+	var errs []error
+	for i, mac := range macs {
+		field := fmt.Sprintf("provisioningMacAddresses[%d]", i)
+		if mac == "" {
+			errs = append(errs, fmt.Errorf("%s must not be empty", field))
+			continue
+		}
+		if err := validateNoUnsafeCharacters(field, mac); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if _, err := net.ParseMAC(mac); err != nil {
+			errs = append(errs, fmt.Errorf("%s %q is not a valid MAC address", field, mac))
+		}
+	}
+	return errs
+}
+
+func validateExternalIPs(ips []string) []error {
+	var errs []error
+	for i, ip := range ips {
+		field := fmt.Sprintf("externalIPs[%d]", i)
+		if ip == "" {
+			errs = append(errs, fmt.Errorf("%s must not be empty", field))
+			continue
+		}
+		if err := validateNoUnsafeCharacters(field, ip); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if net.ParseIP(ip) == nil {
+			errs = append(errs, fmt.Errorf("%s %q is not a valid IP address", field, ip))
+		}
+	}
+	return errs
+}
+
+func validateHTTPURLHost(field string, parsedURL *url.URL) error {
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("unsupported scheme %q in %s", parsedURL.Scheme, field)
+	}
+	if parsedURL.Host == "" {
+		return fmt.Errorf("%s must include a host", field)
+	}
+	return nil
+}
+
+func validatePreProvisioningOSDownloadURLs(urls PreProvisioningOSDownloadURLs) []error {
+	var errs []error
+	fields := []struct {
+		name string
+		uri  string
+	}{
+		{"preProvisioningOSDownloadURLs.isoURL", urls.IsoURL},
+		{"preProvisioningOSDownloadURLs.kernelURL", urls.KernelURL},
+		{"preProvisioningOSDownloadURLs.initramfsURL", urls.InitramfsURL},
+		{"preProvisioningOSDownloadURLs.rootfsURL", urls.RootfsURL},
+	}
+	for _, f := range fields {
+		if f.uri == "" {
+			continue
+		}
+		if err := validateNoUnsafeCharacters(f.name, f.uri); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		parsedURL, err := url.ParseRequestURI(f.uri)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s %q is not a valid URL", f.name, f.uri))
+			continue
+		}
+		if err := validateHTTPURLHost(f.name, parsedURL); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
+
 func validateProvisioningOSDownloadURL(uri string) []error {
 	var errs []error
 
 	if uri == "" {
+		return errs
+	}
+
+	if err := validateNoUnsafeCharacters("provisioningOSDownloadURL", uri); err != nil {
+		errs = append(errs, err)
 		return errs
 	}
 
@@ -158,9 +327,8 @@ func validateProvisioningOSDownloadURL(uri string) []error {
 		// If it's not a valid URI lets just return.
 		return errs
 	}
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		errs = append(errs, fmt.Errorf("unsupported scheme %q in provisioningOSDownloadURL %s", parsedURL.Scheme, uri))
-		// Again it's not worth it if it's not http(s)
+	if err := validateHTTPURLHost("provisioningOSDownloadURL", parsedURL); err != nil {
+		errs = append(errs, err)
 		return errs
 	}
 	var sha256Checksum string
@@ -280,6 +448,94 @@ func validateProvisioningNetworkSettings(ip string, cidr string, dhcpRange strin
 			if gateway != nil && bytes.Compare(gateway, start) >= 0 && bytes.Compare(gateway, end) <= 0 {
 				errs = append(errs, fmt.Errorf("invalid provisioningNetworkGateway %q, value must be outside of the provisioningDHCPRange %q", gatewayIP, dhcpRange))
 			}
+		}
+	}
+
+	return errs
+}
+
+const (
+	minVLAN = 1
+	maxVLAN = 4094
+)
+
+func validateVLANID(s string) (int, error) {
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("%q is not a valid VLAN ID", s)
+	}
+	if strconv.Itoa(v) != s {
+		return 0, fmt.Errorf("%q is not a canonical VLAN ID (use %d)", s, v)
+	}
+	if v < minVLAN || v > maxVLAN {
+		return 0, fmt.Errorf("VLAN ID %d is out of range (%d-%d)", v, minVLAN, maxVLAN)
+	}
+	return v, nil
+}
+
+func validateAllowedVLANEntry(entry string) error {
+	parts := strings.SplitN(entry, "-", 2)
+	if len(parts) == 1 {
+		_, err := validateVLANID(parts[0])
+		return err
+	}
+	start, err := validateVLANID(parts[0])
+	if err != nil {
+		return fmt.Errorf("invalid range %q: %w", entry, err)
+	}
+	end, err := validateVLANID(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid range %q: %w", entry, err)
+	}
+	if start >= end {
+		return fmt.Errorf("invalid range %q: start (%d) must be less than end (%d)", entry, start, end)
+	}
+	return nil
+}
+
+func validateProviderNetwork(sm *SwitchManagement) []error {
+	if sm == nil {
+		return nil
+	}
+
+	var errs []error
+
+	if !sm.Enabled && sm.ProviderNetwork != nil {
+		errs = append(errs, fmt.Errorf("providerNetwork cannot be set when switchManagement is not enabled"))
+		return errs
+	}
+
+	if sm.Enabled && sm.ProviderNetwork == nil {
+		errs = append(errs, fmt.Errorf("providerNetwork is required when switchManagement is enabled"))
+		return errs
+	}
+
+	if sm.ProviderNetwork == nil {
+		return nil
+	}
+
+	pn := sm.ProviderNetwork
+
+	if pn.NativeVLAN < minVLAN || pn.NativeVLAN > maxVLAN {
+		errs = append(errs, fmt.Errorf("providerNetwork.nativeVLAN: value %d is out of range (%d-%d)", pn.NativeVLAN, minVLAN, maxVLAN))
+	}
+
+	switch pn.Mode {
+	case SwitchPortModeAccess:
+		if len(pn.AllowedVLANs) > 0 {
+			errs = append(errs, fmt.Errorf("providerNetwork: allowedVLANs cannot be set in access mode"))
+		}
+	case SwitchPortModeTrunk, SwitchPortModeHybrid:
+		if len(pn.AllowedVLANs) == 0 {
+			errs = append(errs, fmt.Errorf("providerNetwork: allowedVLANs required for %s mode", pn.Mode))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("providerNetwork.mode: unsupported value %q", pn.Mode))
+	}
+
+	for j, entry := range pn.AllowedVLANs {
+		if err := validateAllowedVLANEntry(entry); err != nil {
+			errs = append(errs, fmt.Errorf("providerNetwork.allowedVLANs[%d]: %w", j, err))
 		}
 	}
 

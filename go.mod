@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
+	github.com/go-logr/logr v1.4.3
 	github.com/golangci/golangci-lint/v2 v2.1.6
 	github.com/google/go-cmp v0.7.0
 	github.com/metal3-io/baremetal-operator/apis v0.0.0
@@ -93,7 +94,6 @@ require (
 	github.com/ghostiam/protogetter v0.3.15 // indirect
 	github.com/go-critic/go-critic v0.13.0 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
