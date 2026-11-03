@@ -665,6 +665,83 @@ func TestNewMetal3ContainersNoTLSProfile(t *testing.T) {
 	}
 }
 
+func TestCreateContainerMetal3HttpdVirtualMediaTLSVersion(t *testing.T) {
+	info := &ProvisioningInfo{
+		ProvConfig: &metal3iov1alpha1.Provisioning{
+			Spec: metal3iov1alpha1.ProvisioningSpec{
+				VirtualMediaServerTLS: &metal3iov1alpha1.VirtualMediaServerTLS{
+					MinTLSVersion: "VersionTLS11",
+				},
+			},
+		},
+		TLSProfileSpec: &osconfigv1.TLSProfileSpec{MinTLSVersion: osconfigv1.VersionTLS13},
+	}
+
+	container := createContainerMetal3Httpd(&Images{}, info)
+	env := map[string]string{}
+	for _, variable := range container.Env {
+		env[variable.Name] = variable.Value
+	}
+
+	assert.Equal(t, "-ALL +TLSv1.3", env["IRONIC_SSL_PROTOCOL"])
+	assert.Equal(t, "-ALL +TLSv1.1 +TLSv1.2 +TLSv1.3", env["IRONIC_VMEDIA_SSL_PROTOCOL"])
+}
+
+func TestCreateContainerMetal3HttpdVirtualMediaTLSCiphers(t *testing.T) {
+	info := &ProvisioningInfo{
+		ProvConfig: &metal3iov1alpha1.Provisioning{
+			Spec: metal3iov1alpha1.ProvisioningSpec{
+				VirtualMediaServerTLS: &metal3iov1alpha1.VirtualMediaServerTLS{
+					MinTLSVersion: "VersionTLS12",
+					Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+				},
+			},
+		},
+		TLSProfileSpec: osconfigv1.TLSProfiles[osconfigv1.TLSProfileIntermediateType],
+	}
+
+	container := createContainerMetal3Httpd(&Images{}, info)
+	env := map[string]string{}
+	for _, variable := range container.Env {
+		env[variable.Name] = variable.Value
+	}
+
+	assert.Equal(t, "-ALL +TLSv1.2 +TLSv1.3", env["IRONIC_VMEDIA_SSL_PROTOCOL"])
+	assert.Equal(t, "ECDHE-RSA-AES128-GCM-SHA256", env["IRONIC_VMEDIA_TLS_12_CIPHERS"])
+	assert.Empty(t, env["IRONIC_VMEDIA_TLS_13_CIPHERS"])
+	assert.NotEmpty(t, env["IRONIC_TLS_13_CIPHERS"])
+	assert.Equal(t, "-ALL +TLSv1.2 +TLSv1.3", env["IRONIC_SSL_PROTOCOL"])
+}
+
+func TestCreateContainerMetal3HttpdVirtualMediaTLSGroups(t *testing.T) {
+	info := &ProvisioningInfo{
+		ProvConfig: &metal3iov1alpha1.Provisioning{
+			Spec: metal3iov1alpha1.ProvisioningSpec{
+				VirtualMediaServerTLS: &metal3iov1alpha1.VirtualMediaServerTLS{
+					MinTLSVersion: "VersionTLS12",
+					Groups:        []osconfigv1.TLSGroup{osconfigv1.TLSGroupSecP384r1},
+				},
+			},
+		},
+		TLSProfileSpec: &osconfigv1.TLSProfileSpec{
+			MinTLSVersion: osconfigv1.VersionTLS12,
+			Groups: []osconfigv1.TLSGroup{
+				osconfigv1.TLSGroupX25519,
+				osconfigv1.TLSGroupSecP256r1,
+			},
+		},
+	}
+
+	container := createContainerMetal3Httpd(&Images{}, info)
+	env := map[string]string{}
+	for _, variable := range container.Env {
+		env[variable.Name] = variable.Value
+	}
+
+	assert.Equal(t, "X25519:secp256r1", env["IRONIC_TLS_CURVES"])
+	assert.Equal(t, "secp384r1", env["IRONIC_VMEDIA_CURVES"])
+}
+
 func TestProxyAndCAInjection(t *testing.T) {
 	info := &ProvisioningInfo{
 		Images: &Images{

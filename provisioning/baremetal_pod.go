@@ -600,8 +600,31 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 	if info.TLSProfileSpec != nil {
 		container.Env = append(container.Env, tlsProfileToApacheEnvVars(*info.TLSProfileSpec)...)
 	}
+	if setting := config.VirtualMediaServerTLS; setting != nil {
+		protocol := tlsVersionToApacheSSLProtocol(configv1.TLSProtocolVersion(setting.MinTLSVersion))
+		setVmediaEnv(&container.Env, "IRONIC_VMEDIA_SSL_PROTOCOL", protocol)
+		if len(setting.Ciphers) > 0 {
+			tls12Ciphers, tls13Ciphers := splitCiphers(setting.Ciphers)
+			setVmediaEnv(&container.Env, "IRONIC_VMEDIA_TLS_12_CIPHERS", strings.Join(tls12Ciphers, ":"))
+			setVmediaEnv(&container.Env, "IRONIC_VMEDIA_TLS_13_CIPHERS", strings.Join(tls13Ciphers, ":"))
+		}
+		if len(setting.Groups) > 0 {
+			curves, _ := tlsGroupsToOpenSSLCurves(setting.Groups)
+			setVmediaEnv(&container.Env, "IRONIC_VMEDIA_CURVES", curves)
+		}
+	}
 
 	return container
+}
+
+func setVmediaEnv(env *[]corev1.EnvVar, name, value string) {
+	for i := range *env {
+		if (*env)[i].Name == name {
+			(*env)[i].Value = value
+			return
+		}
+	}
+	*env = append(*env, corev1.EnvVar{Name: name, Value: value})
 }
 
 func buildProviderNetworkEnvVarValue(cfg *metal3iov1alpha1.ProviderNetworkConfig) string {
