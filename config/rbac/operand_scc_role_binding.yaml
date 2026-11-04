@@ -13,6 +13,9 @@ subjects:
 - kind: ServiceAccount
   name: metal3-image-customization
   namespace: openshift-machine-api
+- kind: ServiceAccount
+  name: metal3-image-customization-all-namespaces
+  namespace: openshift-machine-api
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

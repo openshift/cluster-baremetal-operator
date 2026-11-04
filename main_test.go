@@ -41,3 +41,13 @@ func TestSecretCacheNamespaces(t *testing.T) {
 		t.Fatalf("unexpected pull-secret field selector: %s", selector)
 	}
 }
+
+func TestDefaultCacheNamespaces(t *testing.T) {
+	namespaces := defaultCacheNamespaces()
+	if len(namespaces) != 1 {
+		t.Fatalf("expected one default cache namespace, got %d", len(namespaces))
+	}
+	if _, ok := namespaces[controllers.ComponentNamespace]; !ok {
+		t.Fatal("operator namespace must be in the default cache")
+	}
+}

@@ -71,6 +71,8 @@ RBAC_LIST = openshift-machine-api_rbac.authorization.k8s.io_v1_role_cluster-bare
 	rbac.authorization.k8s.io_v1_clusterrolebinding_baremetal-operator-scc.yaml \
 	rbac.authorization.k8s.io_v1_clusterrole_metal3-image-customization.yaml \
 	rbac.authorization.k8s.io_v1_clusterrolebinding_metal3-image-customization.yaml \
+	rbac.authorization.k8s.io_v1_clusterrole_metal3-image-customization-all-namespaces-secrets.yaml \
+	rbac.authorization.k8s.io_v1_clusterrolebinding_metal3-image-customization-all-namespaces-secrets.yaml \
 	openshift-machine-api_rbac.authorization.k8s.io_v1_role_metal3-image-customization-secrets.yaml \
 	openshift-machine-api_rbac.authorization.k8s.io_v1_rolebinding_metal3-image-customization-secrets.yaml \
 	rbac.authorization.k8s.io_v1_clusterrole_metal3-privileged-scc.yaml \
@@ -81,7 +83,8 @@ RBAC_LIST = openshift-machine-api_rbac.authorization.k8s.io_v1_role_cluster-bare
 SERVICE_ACCOUNT_LIST = openshift-machine-api_v1_serviceaccount_cluster-baremetal-operator.yaml \
 	openshift-machine-api_v1_serviceaccount_baremetal-operator.yaml \
 	openshift-machine-api_v1_serviceaccount_metal3-ironic.yaml \
-	openshift-machine-api_v1_serviceaccount_metal3-image-customization.yaml
+	openshift-machine-api_v1_serviceaccount_metal3-image-customization.yaml \
+	openshift-machine-api_v1_serviceaccount_metal3-image-customization-all-namespaces.yaml
 
 PROMETHEUS_RBAC_LIST = rbac.authorization.k8s.io_v1_clusterrolebinding_prometheus-k8s-cluster-baremetal-operator.yaml \
 	rbac.authorization.k8s.io_v1_clusterrole_prometheus-k8s-cluster-baremetal-operator.yaml

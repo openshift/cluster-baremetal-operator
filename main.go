@@ -79,6 +79,10 @@ func secretCacheNamespaces() map[string]cache.Config {
 	}
 }
 
+func defaultCacheNamespaces() map[string]cache.Config {
+	return map[string]cache.Config{controllers.ComponentNamespace: {}}
+}
+
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
@@ -156,10 +160,7 @@ func main() {
 			CertDir: "/etc/cluster-baremetal-operator/tls",
 		}),
 		Cache: cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				controllers.ComponentNamespace:        {},
-				provisioning.OpenshiftConfigNamespace: {},
-			},
+			DefaultNamespaces: defaultCacheNamespaces(),
 			ByObject: map[client.Object]cache.ByObject{
 				&corev1.Secret{}: {
 					Namespaces: secretCacheNamespaces(),

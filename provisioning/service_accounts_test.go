@@ -55,6 +55,17 @@ func TestOperandServiceAccounts(t *testing.T) {
 		assert.Equal(t, "mirror-hash", template.Annotations[mirrorConfigHashAnnotation])
 	})
 
+	t.Run("image customization all namespaces", func(t *testing.T) {
+		watchAllInfo := *info
+		watchAllInfo.ProvConfig = info.ProvConfig.DeepCopy()
+		watchAllInfo.ProvConfig.Spec.WatchAllNamespaces = true
+		template := newImageCustomizationPodTemplateSpec(&watchAllInfo, &map[string]string{}, []string{"192.0.2.1"})
+		assert.Equal(t, imageCustomizationAllNamespacesServiceAccountName, template.Spec.ServiceAccountName)
+		require.NotNil(t, template.Spec.AutomountServiceAccountToken)
+		assert.True(t, *template.Spec.AutomountServiceAccountToken)
+		assert.Equal(t, privilegedSCC, template.Annotations[requiredSCCAnnotation])
+	})
+
 	t.Run("ironic proxy", func(t *testing.T) {
 		template, err := newIronicProxyPodTemplateSpec(info)
 		require.NoError(t, err)

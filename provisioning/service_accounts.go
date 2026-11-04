@@ -1,9 +1,10 @@
 package provisioning
 
 const (
-	bmoServiceAccountName                = "baremetal-operator"
-	metal3IronicServiceAccountName       = "metal3-ironic"
-	imageCustomizationServiceAccountName = "metal3-image-customization"
+	bmoServiceAccountName                             = "baremetal-operator"
+	metal3IronicServiceAccountName                    = "metal3-ironic"
+	imageCustomizationServiceAccountName              = "metal3-image-customization"
+	imageCustomizationAllNamespacesServiceAccountName = "metal3-image-customization-all-namespaces"
 
 	requiredSCCAnnotation = "openshift.io/required-scc"
 	privilegedSCC         = "privileged"

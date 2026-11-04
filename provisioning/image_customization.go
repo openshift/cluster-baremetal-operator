@@ -293,6 +293,10 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 		annotations[mirrorConfigHashAnnotation] = info.MirrorConfigHash
 	}
 	annotations[requiredSCCAnnotation] = privilegedSCC
+	serviceAccountName := imageCustomizationServiceAccountName
+	if info.ProvConfig.Spec.WatchAllNamespaces {
+		serviceAccountName = imageCustomizationAllNamespacesServiceAccountName
+	}
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -306,7 +310,7 @@ func newImageCustomizationPodTemplateSpec(info *ProvisioningInfo, labels *map[st
 			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName:            "system-node-critical",
 			NodeSelector:                 nodeSelector,
-			ServiceAccountName:           imageCustomizationServiceAccountName,
+			ServiceAccountName:           serviceAccountName,
 			AutomountServiceAccountToken: ptr.To(true),
 			Tolerations:                  tolerations,
 			Volumes: []corev1.Volume{
