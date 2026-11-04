@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metal3-privileged-scc
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - privileged
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metal3-hostnetwork-v2-scc
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - hostnetwork-v2
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
