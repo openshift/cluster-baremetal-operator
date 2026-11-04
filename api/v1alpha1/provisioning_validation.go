@@ -45,6 +45,16 @@ var (
 	openSSLCipherNameRegexp     = regexp.MustCompile(`^[A-Za-z0-9_+!@.-]+$`)
 )
 
+// Linux limits each execve argument or environment string to 32 pages.
+// 128 KiB is the limit on systems with 4 KiB pages.
+const (
+	maxLinuxEnvStringSize  = 128 * 1024
+	tls12CiphersEnvVarName = "IRONIC_VMEDIA_TLS_12_CIPHERS"
+	tls13CiphersEnvVarName = "IRONIC_VMEDIA_TLS_13_CIPHERS"
+	// Reserve space for "NAME=" and the terminating NUL byte.
+	maxVirtualMediaCipherLength = maxLinuxEnvStringSize - len(tls12CiphersEnvVarName) - 2
+)
+
 // ValidateBaremetalProvisioningConfig validates the contents of the provisioning resource
 func (prov *Provisioning) ValidateBaremetalProvisioningConfig(enabledFeatures EnabledFeatures) error {
 	provisioningNetworkMode := prov.getProvisioningNetworkMode()
@@ -94,6 +104,9 @@ func (prov *Provisioning) ValidateBaremetalProvisioningConfig(enabledFeatures En
 	}
 	if err := validateExternalIPs(prov.Spec.ExternalIPs); err != nil {
 		errs = append(errs, err...)
+	}
+	if prov.Spec.DisableVirtualMediaTLS && prov.Spec.VirtualMediaServerTLS != nil {
+		errs = append(errs, fmt.Errorf("virtualMediaServerTLS cannot be set when disableVirtualMediaTLS is true"))
 	}
 	if prov.Spec.VirtualMediaServerTLS != nil {
 		if err := prov.Spec.VirtualMediaServerTLS.Validate(); err != nil {
@@ -158,10 +171,29 @@ func (r VirtualMediaServerTLS) Validate() error {
 	if r.Ciphers != nil && len(r.Ciphers) == 0 {
 		return fmt.Errorf("virtualMediaServerTLS.ciphers must contain at least one OpenSSL cipher name when set")
 	}
+	tls12CipherStringSize := 0
+	tls13CipherStringSize := 0
 	for i, cipher := range r.Ciphers {
 		if strings.TrimSpace(cipher) != cipher || !openSSLCipherNameRegexp.MatchString(cipher) {
 			return fmt.Errorf("virtualMediaServerTLS.ciphers[%d] %q must be an OpenSSL cipher name without whitespace or separators", i, cipher)
 		}
+		if strings.HasPrefix(cipher, "TLS_") {
+			if tls13CipherStringSize > 0 {
+				tls13CipherStringSize++ // colon separator added by strings.Join
+			}
+			tls13CipherStringSize += len(cipher)
+		} else {
+			if tls12CipherStringSize > 0 {
+				tls12CipherStringSize++ // colon separator added by strings.Join
+			}
+			tls12CipherStringSize += len(cipher)
+		}
+	}
+	if tls12CipherStringSize+len(tls12CiphersEnvVarName)+2 > maxLinuxEnvStringSize {
+		return fmt.Errorf("virtualMediaServerTLS.ciphers TLS 1.0 through 1.2 environment entry exceeds the %d-byte Linux limit", maxLinuxEnvStringSize)
+	}
+	if tls13CipherStringSize+len(tls13CiphersEnvVarName)+2 > maxLinuxEnvStringSize {
+		return fmt.Errorf("virtualMediaServerTLS.ciphers TLS 1.3 environment entry exceeds the %d-byte Linux limit", maxLinuxEnvStringSize)
 	}
 	if r.Groups != nil && len(r.Groups) == 0 {
 		return fmt.Errorf("virtualMediaServerTLS.groups must contain at least one TLS group when set")

@@ -461,6 +461,8 @@ func (r *ProvisioningReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return result, nil
 }
 
+// warnDeprecatedVirtualMediaServerTLS emits a warning for TLS 1.0 or 1.1 when
+// the virtual-media HTTPS listener is enabled.
 func (r *ProvisioningReconciler) warnDeprecatedVirtualMediaServerTLS(provConfig *metal3iov1alpha1.Provisioning) {
 	if r.EventRecorder == nil || provConfig == nil || provConfig.Spec.VirtualMediaServerTLS == nil || provConfig.Spec.DisableVirtualMediaTLS {
 		return

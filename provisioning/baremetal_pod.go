@@ -602,22 +602,23 @@ func createContainerMetal3Httpd(images *Images, info *ProvisioningInfo) corev1.C
 	}
 	if setting := config.VirtualMediaServerTLS; setting != nil {
 		protocol := tlsVersionToApacheSSLProtocol(configv1.TLSProtocolVersion(setting.MinTLSVersion))
-		setVmediaEnv(&container.Env, "IRONIC_VMEDIA_SSL_PROTOCOL", protocol)
+		setEnvVar(&container.Env, "IRONIC_VMEDIA_SSL_PROTOCOL", protocol)
 		if len(setting.Ciphers) > 0 {
 			tls12Ciphers, tls13Ciphers := splitCiphers(setting.Ciphers)
-			setVmediaEnv(&container.Env, "IRONIC_VMEDIA_TLS_12_CIPHERS", strings.Join(tls12Ciphers, ":"))
-			setVmediaEnv(&container.Env, "IRONIC_VMEDIA_TLS_13_CIPHERS", strings.Join(tls13Ciphers, ":"))
+			setEnvVar(&container.Env, "IRONIC_VMEDIA_TLS_12_CIPHERS", strings.Join(tls12Ciphers, ":"))
+			setEnvVar(&container.Env, "IRONIC_VMEDIA_TLS_13_CIPHERS", strings.Join(tls13Ciphers, ":"))
 		}
 		if len(setting.Groups) > 0 {
 			curves, _ := tlsGroupsToOpenSSLCurves(setting.Groups)
-			setVmediaEnv(&container.Env, "IRONIC_VMEDIA_CURVES", curves)
+			setEnvVar(&container.Env, "IRONIC_VMEDIA_CURVES", curves)
 		}
 	}
 
 	return container
 }
 
-func setVmediaEnv(env *[]corev1.EnvVar, name, value string) {
+// setEnvVar updates a container environment variable or appends it if absent.
+func setEnvVar(env *[]corev1.EnvVar, name, value string) {
 	for i := range *env {
 		if (*env)[i].Name == name {
 			(*env)[i].Value = value
