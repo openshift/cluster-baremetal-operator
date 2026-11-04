@@ -27,84 +27,30 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 		_, err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration", "-o=yaml").OutputToFile("prov-backup.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		// Save original prometheusExporter state
-		originalExporterState, err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration", "-o=jsonpath={.spec.prometheusExporter.enabled}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		originalExporterState := getPrometheusExporterEnabled(oc)
 		e2e.Logf("Original prometheusExporter enabled state: %s", originalExporterState)
 
 		defer func() {
 			g.By("Restore original provisioning configuration")
-			// Restore to original state - either enabled or disabled
-			if originalExporterState == "" || originalExporterState == "false" {
-				e2e.Logf("Restoring prometheusExporter to disabled state")
-				patchConfig := `{"spec":{"prometheusExporter":{"enabled":false}}}`
-				restoreErr := oc.AsAdmin().Run("patch").Args("provisioning", "provisioning-configuration", "--type=merge", "-p", patchConfig).Execute()
-				if restoreErr != nil {
-					e2e.Logf("Warning: Failed to restore prometheusExporter state: %v", restoreErr)
-				} else {
-					// Wait for metal3 deployment to be available after restore
-					e2e.Logf("Waiting for metal3 deployment to be available after restore")
-					waitForDeployStatus(oc, "metal3", machineAPINamespace, "True")
-				}
-			} else if originalExporterState == "true" {
-				e2e.Logf("Restoring prometheusExporter to enabled state")
-				patchConfig := `{"spec":{"prometheusExporter":{"enabled":true}}}`
-				restoreErr := oc.AsAdmin().Run("patch").Args("provisioning", "provisioning-configuration", "--type=merge", "-p", patchConfig).Execute()
-				if restoreErr != nil {
-					e2e.Logf("Warning: Failed to restore prometheusExporter state: %v", restoreErr)
-				} else {
-					// Wait for metal3 deployment to be available after restore
-					e2e.Logf("Waiting for metal3 deployment to be available after restore")
-					waitForDeployStatus(oc, "metal3", machineAPINamespace, "True")
-				}
-			}
+			restorePrometheusExporter(oc, originalExporterState)
 
-			// Verify cluster baremetal operator is still available
 			cboStatus, err := checkOperator(oc, "baremetal")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(cboStatus).To(o.BeTrue())
 		}()
 
 		g.By("Get current metal3 pod name before enabling IPE")
-		oldMetal3Pod, err := oc.AsAdmin().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		oldMetal3Pod := getMetal3StatePod(oc)
 		e2e.Logf("Current metal3 pod before enabling IPE: %s", oldMetal3Pod)
 
 		g.By("Enable Ironic Prometheus Exporter via provisioning configuration patch")
-		patchConfig := `{"spec":{"prometheusExporter":{"enabled":true}}}`
-		patchErr := oc.AsAdmin().Run("patch").Args("provisioning", "provisioning-configuration", "--type=merge", "-p", patchConfig).Execute()
-		o.Expect(patchErr).NotTo(o.HaveOccurred())
+		patchPrometheusExporter(oc, true)
 
 		g.By("Verify prometheusExporter is enabled in provisioning configuration")
-		exporterEnabled, err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration", "-o=jsonpath={.spec.prometheusExporter.enabled}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(exporterEnabled).Should(o.Equal("true"))
+		o.Expect(getPrometheusExporterEnabled(oc)).Should(o.Equal("true"))
 
 		g.By("Wait for metal3 pod to be recreated after enabling IPE")
-		var metal3Pod string
-		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (bool, error) {
-			newPod, err := oc.AsAdmin().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
-			if err != nil {
-				e2e.Logf("Failed to get metal3 pod: %v", err)
-				return false, nil
-			}
-
-			// Check if pod name changed (recreated) and is Running
-			if newPod != oldMetal3Pod && newPod != "" {
-				podStatus := getPodStatus(oc, machineAPINamespace, newPod)
-				if podStatus == "Running" {
-					metal3Pod = newPod
-					e2e.Logf("New metal3 pod %s is Running after IPE enabled", metal3Pod)
-					return true, nil
-				}
-				e2e.Logf("New metal3 pod %s status: %s, waiting for Running state", newPod, podStatus)
-				return false, nil
-			}
-
-			e2e.Logf("Metal3 pod not recreated yet (current: %s, old: %s), waiting...", newPod, oldMetal3Pod)
-			return false, nil
-		})
-		compat_otp.AssertWaitPollNoErr(err, "Metal3 pod was not recreated after enabling IPE")
+		metal3Pod := waitForMetal3PodRecreated(oc, oldMetal3Pod, "enabling IPE")
 		e2e.Logf("Metal3 pod recreated: %s", metal3Pod)
 
 		g.By("Verify metal3-state service exists")
@@ -123,13 +69,11 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 				return false, nil
 			}
 
-			// Check if we got any metrics
 			if metrics == "" {
 				e2e.Logf("Metrics endpoint returned empty response, retrying...")
 				return false, nil
 			}
 
-			// Verify we get Prometheus format metrics (should contain "# HELP" or metric names)
 			if !strings.Contains(metrics, "# HELP") && !strings.Contains(metrics, "# TYPE") {
 				e2e.Logf("Metrics endpoint did not return Prometheus format, retrying...")
 				return false, nil
@@ -140,13 +84,8 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 		})
 		compat_otp.AssertWaitPollNoErr(err, "Failed to access metrics endpoint or metrics not available")
 
-		g.By("Verify Ironic-specific metrics are exposed")
-		metricsCmd := "curl -s http://metal3-state.openshift-machine-api.svc:9608/metrics | grep -E 'baremetal_|ironic_' | head -20"
-		cmd := []string{"-n", machineAPINamespace, metal3Pod, "-c", "metal3-ironic", "--", "/bin/sh", "-c", metricsCmd}
-		ironicMetrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ironicMetrics).ShouldNot(o.BeEmpty(), "Expected to find Ironic-specific metrics (baremetal_* or ironic_*)")
-		e2e.Logf("Sample Ironic metrics found:\n%s", ironicMetrics)
+		g.By("Verify Ironic collects BMC sensor data and IPE exposes hardware payload metrics")
+		verifyIPESensorCollection(oc, metal3Pod)
 
 		g.By("Verify cluster baremetal operator is still available after enabling exporter")
 		cboStatus, err := checkOperator(oc, "baremetal")
@@ -157,49 +96,20 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 		oldMetal3PodBeforeDisable := metal3Pod
 		e2e.Logf("Current metal3 pod before disabling IPE: %s", oldMetal3PodBeforeDisable)
 
-		disablePatch := `{"spec":{"prometheusExporter":{"enabled":false}}}`
-		disableErr := oc.AsAdmin().Run("patch").Args("provisioning", "provisioning-configuration", "--type=merge", "-p", disablePatch).Execute()
-		o.Expect(disableErr).NotTo(o.HaveOccurred())
+		patchPrometheusExporter(oc, false)
 
 		g.By("Verify prometheusExporter is disabled in provisioning configuration")
-		exporterDisabled, err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration", "-o=jsonpath={.spec.prometheusExporter.enabled}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(exporterDisabled).Should(o.Equal("false"))
+		o.Expect(getPrometheusExporterEnabled(oc)).Should(o.Equal("false"))
 
 		g.By("Wait for metal3 pod to be recreated after disabling IPE")
-		var newMetal3PodAfterDisable string
-		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (bool, error) {
-			newPod, err := oc.AsAdmin().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "baremetal.openshift.io/cluster-baremetal-operator=metal3-state", "-o=jsonpath={.items[0].metadata.name}").Output()
-			if err != nil {
-				e2e.Logf("Failed to get metal3 pod: %v", err)
-				return false, nil
-			}
-
-			// Check if pod name changed (recreated) and is Running
-			if newPod != oldMetal3PodBeforeDisable && newPod != "" {
-				podStatus := getPodStatus(oc, machineAPINamespace, newPod)
-				if podStatus == "Running" {
-					newMetal3PodAfterDisable = newPod
-					e2e.Logf("New metal3 pod %s is Running after IPE disabled", newMetal3PodAfterDisable)
-					return true, nil
-				}
-				e2e.Logf("New metal3 pod %s status: %s, waiting for Running state", newPod, podStatus)
-				return false, nil
-			}
-
-			e2e.Logf("Metal3 pod not recreated yet (current: %s, old: %s), waiting...", newPod, oldMetal3PodBeforeDisable)
-			return false, nil
-		})
-		compat_otp.AssertWaitPollNoErr(err, "Metal3 pod was not recreated after disabling IPE")
+		newMetal3PodAfterDisable := waitForMetal3PodRecreated(oc, oldMetal3PodBeforeDisable, "disabling IPE")
 
 		g.By("Verify metrics endpoint is no longer accessible after disabling")
-		// Poll for the endpoint to become inaccessible (accounts for brief window during config rollout)
 		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
 			metricsCmd := "curl -s -o /dev/null -w '%{http_code}' http://metal3-state.openshift-machine-api.svc:9608/metrics"
 			cmd := []string{"-n", machineAPINamespace, newMetal3PodAfterDisable, "-c", "metal3-ironic", "--", "/bin/sh", "-c", metricsCmd}
 			httpCode, execErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
 
-			// Success condition: endpoint returns non-200 or command fails
 			if execErr != nil || httpCode != "200" {
 				e2e.Logf("Metrics endpoint is no longer accessible (HTTP code: %s, error: %v) - expected", httpCode, execErr)
 				return true, nil
@@ -215,5 +125,99 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 		cboStatus, err = checkOperator(oc, "baremetal")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cboStatus).To(o.BeTrue())
+	})
+
+	// author: jhajyahy@redhat.com
+	g.Context("IPE CMO integration [Serial]", g.Serial, g.Ordered, func() {
+		var originalExporterState string
+
+		g.BeforeAll(func() {
+			SkipIfNotBaremetalCluster(oc)
+
+			originalExporterState = getPrometheusExporterEnabled(oc)
+			e2e.Logf("Original prometheusExporter enabled state: %s", originalExporterState)
+
+			if originalExporterState != "true" {
+				oldMetal3Pod := getMetal3StatePod(oc)
+				g.By("Enable Ironic Prometheus Exporter")
+				patchPrometheusExporter(oc, true)
+				o.Expect(getPrometheusExporterEnabled(oc)).Should(o.Equal("true"))
+				waitForMetal3PodRecreated(oc, oldMetal3Pod, "enabling IPE")
+			}
+
+			waitForIPEMonitoringResources(oc, true)
+		})
+
+		g.AfterAll(func() {
+			defer func() {
+				g.By("Restore original prometheusExporter state")
+				restorePrometheusExporter(oc, originalExporterState)
+
+				cboStatus, err := checkOperator(oc, "baremetal")
+				o.Expect(err).NotTo(o.HaveOccurred(), "failed to check baremetal ClusterOperator after restore")
+				o.Expect(cboStatus).To(o.BeTrue(), "expected baremetal ClusterOperator available after restore")
+			}()
+
+			g.By("Disable Ironic Prometheus Exporter")
+			patchPrometheusExporter(oc, false)
+			g.By("Verify ServiceMonitor, PrometheusRule and metrics port are removed after IPE is disabled")
+			waitForIPEMonitoringResources(oc, false)
+		})
+
+		g.It("Author:jhajyahy-Medium-90681-Verify IPE ServiceMonitor PrometheusRule and metrics port are created [Serial]", func() {
+			g.By("Verify metal3-ironic-prometheus-exporter ServiceMonitor exists")
+			o.Expect(ipeServiceMonitorExists(oc)).To(o.BeTrue(), "expected ServiceMonitor %s in %s", ipeServiceMonitorName, machineAPINamespace)
+
+			g.By("Verify metal3-defaults PrometheusRule exists")
+			o.Expect(ipePrometheusRuleExists(oc)).To(o.BeTrue(), "expected PrometheusRule %s in %s", ipePrometheusRuleName, machineAPINamespace)
+
+			g.By("Verify metal3-state service exposes metrics port 9608")
+			o.Expect(metal3StateMetricsPort(oc)).To(o.Equal(ipeMetricsPort), "expected metal3-state metrics port %s in %s", ipeMetricsPort, machineAPINamespace)
+		})
+
+		g.It("Author:jhajyahy-Medium-90683-Verify default Baremetal PrometheusRule groups are loaded [Serial]", func() {
+			g.By("Verify PrometheusRule CR has baremetal.health and baremetal.monitoring groups")
+			groupNames, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, "-o=jsonpath={.spec.groups[*].name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get PrometheusRule %s group names", ipePrometheusRuleName)
+			o.Expect(groupNames).To(o.ContainSubstring("baremetal.health"), "expected PrometheusRule %s to include group baremetal.health, got %q", ipePrometheusRuleName, groupNames)
+			o.Expect(groupNames).To(o.ContainSubstring("baremetal.monitoring"), "expected PrometheusRule %s to include group baremetal.monitoring, got %q", ipePrometheusRuleName, groupNames)
+
+			g.By("Verify BaremetalStaleMetrics uses a 5m gap on last payload timestamp")
+			staleExpr, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, `-o=jsonpath={.spec.groups[?(@.name=="baremetal.monitoring")].rules[?(@.alert=="BaremetalStaleMetrics")].expr}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get BaremetalStaleMetrics expr from PrometheusRule %s", ipePrometheusRuleName)
+			o.Expect(staleExpr).To(o.ContainSubstring("baremetal_last_payload_timestamp_seconds"), "expected BaremetalStaleMetrics expr to use baremetal_last_payload_timestamp_seconds, got %q", staleExpr)
+			o.Expect(staleExpr).To(o.ContainSubstring("> 300"), "expected BaremetalStaleMetrics expr to use a 300s gap, got %q", staleExpr)
+
+			staleFor, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, `-o=jsonpath={.spec.groups[?(@.name=="baremetal.monitoring")].rules[?(@.alert=="BaremetalStaleMetrics")].for}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get BaremetalStaleMetrics for from PrometheusRule %s", ipePrometheusRuleName)
+			o.Expect(staleFor).To(o.Equal("5m"), "expected BaremetalStaleMetrics for=5m, got %q", staleFor)
+
+			g.By("Verify CMO Prometheus loaded the metal3-defaults alert groups")
+			waitForMetal3DefaultAlertRules(oc)
+		})
+
+		g.It("Author:jhajyahy-Medium-90726-Verify Ironic collects BMC sensor data and IPE exports hardware metrics [Serial]", func() {
+			if countProvisionedBareMetalHosts(oc) == 0 {
+				g.Skip("No provisioned BareMetalHosts; Ironic skips undeployed nodes for sensor collection")
+			}
+
+			metal3Pod := getMetal3StatePod(oc)
+			e2e.Logf("Checking IPE sensor collection on metal3 pod %s", metal3Pod)
+			verifyIPESensorCollection(oc, metal3Pod)
+		})
+
+		g.It("Author:jhajyahy-Medium-90682-Verify CMO scrapes IPE metrics [Serial]", func() {
+			g.By("Wait for CMO Prometheus to scrape metal3-state metrics")
+			up := waitForPrometheusQuery(oc, `up{job="metal3-state"}`, 3*time.Minute)
+			upValue, ok := up.Data.Result[0].Value[1].(string)
+			o.Expect(ok).To(o.BeTrue(), "up{job=\"metal3-state\"} value is not a string")
+			o.Expect(upValue).To(o.Equal("1"), "expected CMO scrape target job=metal3-state to be up")
+			e2e.Logf("CMO scrape target job=metal3-state is up")
+
+			g.By("Verify CMO scraped IPE hardware payload series")
+			series := waitForPrometheusQuery(oc, `baremetal_last_payload_timestamp_seconds{job="metal3-state"}`, 3*time.Minute)
+			o.Expect(series.Data.Result).ShouldNot(o.BeEmpty(), "expected CMO to scrape %s; ironic_* process timings are not hardware sensor data", ipeHardwarePayloadMetric)
+			e2e.Logf("CMO scraped %d %s series", len(series.Data.Result), ipeHardwarePayloadMetric)
+		})
 	})
 })

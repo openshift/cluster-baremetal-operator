@@ -11,6 +11,8 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/origin/test/extended/util"
+	compat_otp "github.com/openshift/origin/test/extended/util/compat_otp"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -109,4 +111,73 @@ func getNodeavailMem(oc *exutil.CLI, node string) int {
 	availableMemFloat, err := strconv.ParseFloat(memUsage, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return int(availableMemFloat)
+}
+
+func queryPrometheus(oc *exutil.CLI, promQL string) (PrometheusAPIResponse, error) {
+	queryUrl := "http://localhost:9090/api/v1/query?" + url.Values{"query": {promQL}}.Encode()
+	jsonString, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-s", queryUrl).Output()
+	if err != nil {
+		return PrometheusAPIResponse{}, fmt.Errorf("prometheus query %q failed: %w", promQL, err)
+	}
+
+	var response PrometheusAPIResponse
+	if unmarshalErr := json.Unmarshal([]byte(jsonString), &response); unmarshalErr != nil {
+		return PrometheusAPIResponse{}, fmt.Errorf("failed to parse prometheus response for %q: %w: %s", promQL, unmarshalErr, jsonString)
+	}
+	if response.Status != "success" {
+		return response, fmt.Errorf("prometheus query %q returned status %q", promQL, response.Status)
+	}
+	return response, nil
+}
+
+type prometheusRulesAPIResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		Groups []prometheusRuleGroup `json:"groups"`
+	} `json:"data"`
+}
+
+type prometheusRuleGroup struct {
+	Name  string `json:"name"`
+	File  string `json:"file"`
+	Rules []struct {
+		Name  string `json:"name"`
+		Query string `json:"query"`
+		Type  string `json:"type"`
+	} `json:"rules"`
+}
+
+func getPrometheusAlertRules(oc *exutil.CLI) (prometheusRulesAPIResponse, error) {
+	jsonString, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-s", "http://localhost:9090/api/v1/rules?type=alert").Output()
+	if err != nil {
+		return prometheusRulesAPIResponse{}, fmt.Errorf("failed to get prometheus alert rules: %w", err)
+	}
+
+	var response prometheusRulesAPIResponse
+	if unmarshalErr := json.Unmarshal([]byte(jsonString), &response); unmarshalErr != nil {
+		return prometheusRulesAPIResponse{}, fmt.Errorf("failed to parse prometheus rules response: %w", unmarshalErr)
+	}
+	if response.Status != "success" {
+		return response, fmt.Errorf("prometheus rules API returned status %q", response.Status)
+	}
+	return response, nil
+}
+
+func waitForPrometheusQuery(oc *exutil.CLI, promQL string, timeout time.Duration) PrometheusAPIResponse {
+	var last PrometheusAPIResponse
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, timeout, true, func(context.Context) (bool, error) {
+		resp, qerr := queryPrometheus(oc, promQL)
+		if qerr != nil {
+			e2e.Logf("Prometheus query %q failed: %v", promQL, qerr)
+			return false, nil
+		}
+		last = resp
+		if len(resp.Data.Result) == 0 {
+			e2e.Logf("Prometheus query %q returned no results, retrying...", promQL)
+			return false, nil
+		}
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("Prometheus query %q returned no results", promQL))
+	return last
 }
