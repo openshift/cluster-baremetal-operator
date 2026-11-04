@@ -163,21 +163,9 @@ either using virtual media or PXE.
 - DisableVirtualMediaTLS turns off TLS on the virtual media server,
 which may be required for hardware that cannot accept HTTPS links.
 
-- VirtualMediaServerTLS configures the minimum TLS version and optional cipher
-suite and group overrides for the virtual-media HTTPS listener. The listener
-accepts the configured minimum through TLS 1.3. TLS 1.0 and 1.1 are deprecated
-and emit a warning when virtual-media TLS is enabled. When this setting is
-omitted, CBO applies the cluster TLS profile under StrictAllComponents;
-otherwise ironic-image defaults apply. Unset `Ciphers` and `Groups` retain
-applicable profile or image settings. `Ciphers` accepts OpenSSL specifications:
-non-`TLS_` entries set the shared cipher list for TLS 1.0 through 1.2, and
-`TLS_` entries configure TLS 1.3. If a supplied list omits one family, that
-family remains enabled and uses OpenSSL defaults. CBO checks allowed characters,
-not whether OpenSSL supports each entry. `Groups` accepts `X25519`,
-`secp256r1`, `secp384r1`, `secp521r1`, `X25519MLKEM768`, `SecP256r1MLKEM768`,
-and `SecP384r1MLKEM1024` in preference order; ironic-image's OpenSSL must
-support each group. These settings affect only the image server, not Ironic's
-Redfish connections to BMCs.
+- VirtualMediaServerTLS configures TLS settings for the virtual-media HTTPS
+listener that serves images to BMCs. Use this override for legacy BMC
+firmware that doesn’t support TLS 1.3 settings on the virtual-media endpoint.
 
 - UnsupportedConfigOverrides are site-specific overrides that are not
 officially supported in the Metal platform and may cause the
@@ -199,7 +187,6 @@ actually necessary.
 - SwitchManagement configures the network switch port management service.
 When enabled, CBO deploys a dedicated service that manages switch port
 configurations for baremetal hosts during provisioning lifecycle stages.
-
 
 ## What are its outputs?
 

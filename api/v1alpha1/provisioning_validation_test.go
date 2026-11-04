@@ -60,6 +60,42 @@ func TestVirtualMediaServerTLSValidate(t *testing.T) {
 	}
 }
 
+func TestVirtualMediaServerTLSValidateCipherStringSize(t *testing.T) {
+	maxSize := maxVirtualMediaCipherLength
+	tls12Cipher := strings.Repeat("A", maxSize/2)
+	tls13Cipher := "TLS_" + strings.Repeat("A", maxSize/2-4)
+	tests := []struct {
+		name    string
+		ciphers []string
+		valid   bool
+	}{
+		{
+			name:    "TLS 1.2 cipher string over limit",
+			ciphers: []string{tls12Cipher, tls12Cipher},
+		},
+		{
+			name:    "TLS 1.3 cipher string over limit",
+			ciphers: []string{tls13Cipher, tls13Cipher},
+		},
+		{
+			name:    "separate cipher strings within limit",
+			ciphers: []string{strings.Repeat("A", maxSize), "TLS_A"},
+			valid:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (VirtualMediaServerTLS{MinTLSVersion: "VersionTLS12", Ciphers: tc.ciphers}).Validate()
+			if tc.valid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateManagedProvisioningConfig(t *testing.T) {
 	baremetalCR := &Provisioning{
 		TypeMeta: metav1.TypeMeta{
