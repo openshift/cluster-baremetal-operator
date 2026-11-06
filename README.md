@@ -163,6 +163,10 @@ either using virtual media or PXE.
 - DisableVirtualMediaTLS turns off TLS on the virtual media server,
 which may be required for hardware that cannot accept HTTPS links.
 
+- VirtualMediaServerTLS configures TLS settings for the virtual-media HTTPS
+listener that serves images to BMCs. Use this override for legacy BMC
+firmware that doesn’t support TLS 1.3 settings on the virtual-media endpoint.
+
 - UnsupportedConfigOverrides are site-specific overrides that are not
 officially supported in the Metal platform and may cause the
 deployment to fail. Carefully check the description of each field
@@ -183,7 +187,6 @@ actually necessary.
 - SwitchManagement configures the network switch port management service.
 When enabled, CBO deploys a dedicated service that manages switch port
 configurations for baremetal hosts during provisioning lifecycle stages.
-
 
 ## What are its outputs?
 

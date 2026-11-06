@@ -21,9 +21,80 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	configv1 "github.com/openshift/api/config/v1"
 )
 
 const testBaremetalProvisioningCR = "test-provisioning-configuration"
+
+func TestVirtualMediaServerTLSValidate(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		version string
+		ciphers []string
+		groups  []configv1.TLSGroup
+		valid   bool
+	}{
+		{name: "TLS 1.0", version: "VersionTLS10", valid: true},
+		{name: "TLS 1.1", version: "VersionTLS11", valid: true},
+		{name: "TLS 1.2", version: "VersionTLS12", valid: true},
+		{name: "TLS 1.3", version: "VersionTLS13", valid: true},
+		{name: "TLS 1.2 and cipher names", version: "VersionTLS12", ciphers: []string{"ECDHE-RSA-AES128-GCM-SHA256", "TLS_AES_128_GCM_SHA256"}, valid: true},
+		{name: "TLS groups", version: "VersionTLS12", groups: []configv1.TLSGroup{configv1.TLSGroupX25519, configv1.TLSGroupSecP256r1}, valid: true},
+		{name: "unset", valid: false},
+		{name: "invalid", version: "TLSv1.2", valid: false},
+		{name: "empty cipher list", version: "VersionTLS12", ciphers: []string{}, valid: false},
+		{name: "cipher with whitespace", version: "VersionTLS12", ciphers: []string{"ECDHE-RSA AES128"}, valid: false},
+		{name: "cipher with separator", version: "VersionTLS12", ciphers: []string{"ECDHE-RSA:AES128"}, valid: false},
+		{name: "empty groups", version: "VersionTLS12", groups: []configv1.TLSGroup{}, valid: false},
+		{name: "unsupported group", version: "VersionTLS12", groups: []configv1.TLSGroup{"not-a-tls-group"}, valid: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (VirtualMediaServerTLS{MinTLSVersion: tc.version, Ciphers: tc.ciphers, Groups: tc.groups}).Validate()
+			if tc.valid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestVirtualMediaServerTLSValidateCipherStringSize(t *testing.T) {
+	maxSize := maxVirtualMediaCipherLength
+	tls12Cipher := strings.Repeat("A", maxSize/2)
+	tls13Cipher := "TLS_" + strings.Repeat("A", maxSize/2-4)
+	tests := []struct {
+		name    string
+		ciphers []string
+		valid   bool
+	}{
+		{
+			name:    "TLS 1.2 cipher string over limit",
+			ciphers: []string{tls12Cipher, tls12Cipher},
+		},
+		{
+			name:    "TLS 1.3 cipher string over limit",
+			ciphers: []string{tls13Cipher, tls13Cipher},
+		},
+		{
+			name:    "separate cipher strings within limit",
+			ciphers: []string{strings.Repeat("A", maxSize), "TLS_A"},
+			valid:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (VirtualMediaServerTLS{MinTLSVersion: "VersionTLS12", Ciphers: tc.ciphers}).Validate()
+			if tc.valid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
 
 func TestValidateManagedProvisioningConfig(t *testing.T) {
 	baremetalCR := &Provisioning{

@@ -40,9 +40,8 @@ func tlsVersionToApacheSSLProtocol(minVersion configv1.TLSProtocolVersion) strin
 	}
 }
 
-// splitCiphers separates a cipher list into TLS 1.2 and TLS 1.3 ciphers.
-// TLS 1.3 cipher names use the "TLS_" prefix (e.g., TLS_AES_128_GCM_SHA256).
-// Everything else is a TLS 1.2 cipher in OpenSSL naming.
+// splitCiphers separates TLS 1.3 cipher suites from the OpenSSL cipher list
+// shared by TLS 1.0, 1.1, and 1.2. TLS 1.3 suite names use the "TLS_" prefix.
 func splitCiphers(ciphers []string) (tls12, tls13 []string) {
 	for _, c := range ciphers {
 		if strings.HasPrefix(c, "TLS_") {
