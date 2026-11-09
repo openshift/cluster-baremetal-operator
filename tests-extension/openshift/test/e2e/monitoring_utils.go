@@ -181,3 +181,36 @@ func waitForPrometheusQuery(oc *exutil.CLI, promQL string, timeout time.Duration
 	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("Prometheus query %q returned no results", promQL))
 	return last
 }
+
+// prometheusLabelsResponse is an instant-query response that keeps every
+// label of each series (PrometheusAPIResponse only keeps "instance").
+type prometheusLabelsResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		Result []struct {
+			Metric map[string]string `json:"metric"`
+		} `json:"result"`
+	} `json:"data"`
+}
+
+// queryPrometheusSeriesLabels runs an instant query against platform
+// Prometheus and returns the label set of each result series.
+func queryPrometheusSeriesLabels(oc *exutil.CLI, promQL string) ([]map[string]string, error) {
+	queryUrl := "http://localhost:9090/api/v1/query?" + url.Values{"query": {promQL}}.Encode()
+	jsonString, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-s", queryUrl).Output()
+	if err != nil {
+		return nil, fmt.Errorf("prometheus query %q failed: %w", promQL, err)
+	}
+	var response prometheusLabelsResponse
+	if unmarshalErr := json.Unmarshal([]byte(jsonString), &response); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse prometheus response for %q: %w: %s", promQL, unmarshalErr, jsonString)
+	}
+	if response.Status != "success" {
+		return nil, fmt.Errorf("prometheus query %q returned status %q", promQL, response.Status)
+	}
+	labels := make([]map[string]string, 0, len(response.Data.Result))
+	for _, r := range response.Data.Result {
+		labels = append(labels, r.Metric)
+	}
+	return labels, nil
+}

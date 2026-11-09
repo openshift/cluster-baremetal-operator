@@ -17,6 +17,10 @@ const (
 	ipeServiceMonitorName = "metal3-ironic-prometheus-exporter"
 	ipePrometheusRuleName = "metal3-defaults"
 	ipeMetricsPort        = "9608"
+	ipeContainerName      = "metal3-ironic-prometheus-exporter"
+	// Value of OS_SENSOR_DATA__INTERVAL when spec.prometheusExporter.sensorCollectionInterval
+	// is unset (CRD default).
+	ipeDefaultSensorInterval = "60"
 	// Hardware payload series produced by IPE from Ironic BMC notifications.
 	// ironic_* process timings on :9608 are not sufficient — those exist even
 	// when get_sensors_data fails.
@@ -31,20 +35,120 @@ func metal3IronicLogs(oc *exutil.CLI, pod string) (string, error) {
 	return oc.AsAdmin().Run("logs").Args(pod, "-n", machineAPINamespace, "-c", "metal3-ironic", "--tail=8000").Output()
 }
 
-func countProvisionedBareMetalHosts(oc *exutil.CLI) int {
-	out, err := oc.AsAdmin().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={range .items[*]}{.metadata.name}{\" \"}{.status.provisioning.state}{\"\\n\"}{end}").Output()
+// bmhInfo is the subset of BareMetalHost fields the IPE tests compare.
+type bmhInfo struct {
+	Name              string
+	ProvisioningState string
+	OperationalStatus string
+	BMCAddress        string
+	InspectStart      string
+}
+
+// listBareMetalHosts returns all BMHs in openshift-machine-api. Fields are
+// '|' separated because provisioning states such as "externally provisioned"
+// contain spaces.
+func listBareMetalHosts(oc *exutil.CLI) ([]bmhInfo, error) {
+	out, err := oc.AsAdmin().Run("get").Args("bmh", "-n", machineAPINamespace,
+		`-o=jsonpath={range .items[*]}{.metadata.name}{"|"}{.status.provisioning.state}{"|"}{.status.operationalStatus}{"|"}{.spec.bmc.address}{"|"}{.status.operationHistory.inspect.start}{"\n"}{end}`).Output()
 	if err != nil {
-		e2e.Logf("Failed to list BareMetalHosts: %v", err)
-		return 0
+		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
 	}
-	count := 0
+	var hosts []bmhInfo
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[1] == "provisioned" {
-			count++
+		fields := strings.Split(line, "|")
+		if len(fields) != 5 || fields[0] == "" {
+			continue
+		}
+		hosts = append(hosts, bmhInfo{
+			Name:              fields[0],
+			ProvisioningState: fields[1],
+			OperationalStatus: fields[2],
+			BMCAddress:        fields[3],
+			InspectStart:      fields[4],
+		})
+	}
+	return hosts, nil
+}
+
+// isDeployedBMH reports whether Ironic holds the node in the active state.
+// Ironic only collects sensor data for active (deployed) nodes; BMO adopts
+// externally provisioned hosts (control plane) into active as well.
+func isDeployedBMH(h bmhInfo) bool {
+	return h.ProvisioningState == "provisioned" || h.ProvisioningState == "externally provisioned"
+}
+
+// isRedfishBMH reports whether the BMH uses a Redfish-based driver whose
+// sensor payload IPE parses (redfish, redfish-virtualmedia, idrac-*).
+func isRedfishBMH(h bmhInfo) bool {
+	return strings.HasPrefix(h.BMCAddress, "redfish") || strings.HasPrefix(h.BMCAddress, "idrac")
+}
+
+func deployedBareMetalHosts(oc *exutil.CLI) []bmhInfo {
+	hosts, err := listBareMetalHosts(oc)
+	if err != nil {
+		e2e.Logf("%v", err)
+		return nil
+	}
+	var deployed []bmhInfo
+	for _, h := range hosts {
+		if isDeployedBMH(h) {
+			deployed = append(deployed, h)
 		}
 	}
-	return count
+	return deployed
+}
+
+func countDeployedBareMetalHosts(oc *exutil.CLI) int {
+	return len(deployedBareMetalHosts(oc))
+}
+
+// bmhSnapshot maps BMH name to the state that must not change when IPE is
+// toggled (TC-IPE-046).
+func bmhSnapshot(oc *exutil.CLI) map[string]bmhInfo {
+	hosts, err := listBareMetalHosts(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	snap := make(map[string]bmhInfo, len(hosts))
+	for _, h := range hosts {
+		snap[h.Name] = h
+	}
+	return snap
+}
+
+// waitForBMHsUnchanged waits until every BMH is back to its snapshot
+// provisioning state and operational status, and fails immediately if any
+// host was re-inspected. The metal3 pod restart makes BMO re-adopt hosts, so
+// a short transition is tolerated, but the hosts must settle to their
+// original state.
+func waitForBMHsUnchanged(oc *exutil.CLI, before map[string]bmhInfo, timeout time.Duration) {
+	err := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, timeout, true, func(context.Context) (bool, error) {
+		hosts, lerr := listBareMetalHosts(oc)
+		if lerr != nil {
+			e2e.Logf("%v", lerr)
+			return false, nil
+		}
+		settled := true
+		for _, h := range hosts {
+			prev, ok := before[h.Name]
+			if !ok {
+				continue
+			}
+			if h.InspectStart != prev.InspectStart {
+				return false, fmt.Errorf("BMH %s was re-inspected (inspect start %q -> %q)", h.Name, prev.InspectStart, h.InspectStart)
+			}
+			if h.ProvisioningState != prev.ProvisioningState || h.OperationalStatus != prev.OperationalStatus {
+				e2e.Logf("BMH %s not settled: state %q/%q, want %q/%q", h.Name, h.ProvisioningState, h.OperationalStatus, prev.ProvisioningState, prev.OperationalStatus)
+				settled = false
+			}
+		}
+		return settled, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, "BareMetalHosts did not return to their pre-IPE state")
+}
+
+func metal3PodContainerNames(oc *exutil.CLI, pod string) []string {
+	out, err := oc.AsAdmin().Run("get").Args("pod", pod, "-n", machineAPINamespace, "-o=jsonpath={.spec.containers[*].name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to get containers of pod %s", pod)
+	return strings.Fields(out)
 }
 
 func assertSensorDataEnabled(oc *exutil.CLI, pod string) {
@@ -252,4 +356,140 @@ func waitForMetal3DefaultAlertRules(oc *exutil.CLI) {
 		return true, nil
 	})
 	compat_otp.AssertWaitPollNoErr(err, "CMO Prometheus did not load metal3-defaults baremetal.health/baremetal.monitoring alert groups")
+}
+
+// ipeNodeNameMatchesBMH reports whether an IPE node_name label refers to the
+// given BMH. BMO names Ironic nodes "<namespace>~<bmh name>".
+func ipeNodeNameMatchesBMH(nodeName, bmh string) bool {
+	return nodeName == bmh || strings.HasSuffix(nodeName, "~"+bmh)
+}
+
+// waitForIPESeriesForHosts waits until CMO Prometheus has a
+// baremetal_last_payload_timestamp_seconds series for every given BMH.
+func waitForIPESeriesForHosts(oc *exutil.CLI, hosts []bmhInfo, timeout time.Duration) {
+	query := fmt.Sprintf(`%s{job="metal3-state"}`, ipeHardwarePayloadMetric)
+	err := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, timeout, true, func(context.Context) (bool, error) {
+		series, qerr := queryPrometheusSeriesLabels(oc, query)
+		if qerr != nil {
+			e2e.Logf("%v", qerr)
+			return false, nil
+		}
+		var missing []string
+		for _, h := range hosts {
+			found := false
+			for _, s := range series {
+				if ipeNodeNameMatchesBMH(s["node_name"], h.Name) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missing = append(missing, h.Name)
+			}
+		}
+		if len(missing) > 0 {
+			e2e.Logf("No %s series yet for BMHs %v", ipeHardwarePayloadMetric, missing)
+			return false, nil
+		}
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("CMO did not scrape %s for every Redfish BMH", ipeHardwarePayloadMetric))
+}
+
+func getPrometheusExporterField(oc *exutil.CLI, field string) string {
+	val, err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration", fmt.Sprintf("-o=jsonpath={.spec.prometheusExporter.%s}", field)).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to read spec.prometheusExporter.%s", field)
+	return strings.TrimSpace(val)
+}
+
+// patchPrometheusExporterField merge-patches spec.prometheusExporter.<field>
+// with a raw JSON value and returns the CLI output and error so callers can
+// assert on API validation rejections.
+func patchPrometheusExporterField(oc *exutil.CLI, field, rawJSONValue string) (string, error) {
+	patch := fmt.Sprintf(`{"spec":{"prometheusExporter":{%q:%s}}}`, field, rawJSONValue)
+	return oc.AsAdmin().Run("patch").Args("provisioning", "provisioning-configuration", "--type=merge", "-p", patch).Output()
+}
+
+// restorePrometheusExporterField puts a field back to its original value, or
+// removes it (letting the CRD default apply) if it was unset.
+// The original value must be a JSON literal (number or bool) as returned by
+// getPrometheusExporterField.
+func restorePrometheusExporterField(oc *exutil.CLI, field, original string) {
+	value := "null"
+	if original != "" {
+		value = original
+	}
+	_, err := patchPrometheusExporterField(oc, field, value)
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to restore spec.prometheusExporter.%s", field)
+}
+
+func metal3IronicEnv(oc *exutil.CLI, pod, name string) string {
+	out, err := execInMetal3Ironic(oc, pod, "printenv "+name)
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to read %s from metal3-ironic", name)
+	return strings.TrimSpace(out)
+}
+
+// waitForIPEPrometheusRuleState waits for the metal3-defaults PrometheusRule
+// to be present or absent while the ServiceMonitor and metrics port stay.
+func waitForIPEPrometheusRuleState(oc *exutil.CLI, wantRule bool) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (bool, error) {
+		sm := ipeServiceMonitorExists(oc)
+		pr := ipePrometheusRuleExists(oc)
+		port := metal3StateMetricsPort(oc)
+		e2e.Logf("servicemonitor=%v prometheusrule=%v metricsPort=%q (wantRule=%v)", sm, pr, port, wantRule)
+		if !sm || port != ipeMetricsPort {
+			return false, fmt.Errorf("ServiceMonitor or metrics port removed while only default rules were toggled (servicemonitor=%v port=%q)", sm, port)
+		}
+		return pr == wantRule, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("PrometheusRule %s presence did not become %v", ipePrometheusRuleName, wantRule))
+}
+
+// waitForMetal3DefaultRulesUnloaded waits until CMO Prometheus no longer
+// serves any rule group from the metal3-defaults PrometheusRule.
+func waitForMetal3DefaultRulesUnloaded(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 5*time.Minute, true, func(context.Context) (bool, error) {
+		resp, rerr := getPrometheusAlertRules(oc)
+		if rerr != nil {
+			e2e.Logf("Failed to get prometheus alert rules: %v", rerr)
+			return false, nil
+		}
+		for _, group := range resp.Data.Groups {
+			if strings.Contains(group.File, ipePrometheusRuleName) {
+				e2e.Logf("Prometheus still serves group %s from %s", group.Name, group.File)
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, "CMO Prometheus still serves metal3-defaults rule groups after disableDefaultPrometheusRules=true")
+}
+
+// setBMHDetached adds or removes the detached annotation. Removal is
+// idempotent so it can run both in the test body and in deferred cleanup.
+func setBMHDetached(oc *exutil.CLI, bmh string, detached bool) {
+	arg := "baremetalhost.metal3.io/detached="
+	if !detached {
+		arg = "baremetalhost.metal3.io/detached-"
+	}
+	out, err := oc.AsAdmin().Run("annotate").Args("bmh", bmh, "-n", machineAPINamespace, arg, "--overwrite").Output()
+	if err != nil && !detached && strings.Contains(out, "not found") && !strings.Contains(out, "baremetalhosts") {
+		e2e.Logf("detached annotation already absent on BMH %s", bmh)
+		return
+	}
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to set detached=%v on BMH %s: %s", detached, bmh, out)
+}
+
+// staleAlertFiringNodes returns the node_name labels of firing
+// BaremetalStaleMetrics alerts.
+func staleAlertFiringNodes(oc *exutil.CLI) ([]string, error) {
+	series, err := queryPrometheusSeriesLabels(oc, `ALERTS{alertname="BaremetalStaleMetrics",alertstate="firing"}`)
+	if err != nil {
+		return nil, err
+	}
+	nodes := make([]string, 0, len(series))
+	for _, s := range series {
+		nodes = append(nodes, s["node_name"])
+	}
+	return nodes, nil
 }
