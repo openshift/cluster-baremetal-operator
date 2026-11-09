@@ -3,6 +3,7 @@ package baremetal
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,7 +26,11 @@ const (
 	// ironic_* process timings on :9608 are not sufficient — those exist even
 	// when get_sensors_data fails.
 	ipeHardwarePayloadMetric = "baremetal_last_payload_timestamp_seconds"
+	// Matches a "> 300" comparison exactly, so "> 3000" does not pass.
+	staleThresholdPattern = `>\s*300(\D|$)`
 )
+
+var staleThresholdRe = regexp.MustCompile(staleThresholdPattern)
 
 func execInMetal3Ironic(oc *exutil.CLI, pod, command string) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", machineAPINamespace, pod, "-c", "metal3-ironic", "--", "/bin/sh", "-c", command).Output()
@@ -85,10 +90,9 @@ func isRedfishBMH(h bmhInfo) bool {
 
 func deployedBareMetalHosts(oc *exutil.CLI) []bmhInfo {
 	hosts, err := listBareMetalHosts(oc)
-	if err != nil {
-		e2e.Logf("%v", err)
-		return nil
-	}
+	// A listing failure must fail the test, not look like "no deployed hosts"
+	// and turn sensor checks into skips.
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to list BareMetalHosts")
 	var deployed []bmhInfo
 	for _, h := range hosts {
 		if isDeployedBMH(h) {
@@ -106,7 +110,7 @@ func countDeployedBareMetalHosts(oc *exutil.CLI) int {
 // toggled (TC-IPE-046).
 func bmhSnapshot(oc *exutil.CLI) map[string]bmhInfo {
 	hosts, err := listBareMetalHosts(oc)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to list BareMetalHosts for snapshot")
 	snap := make(map[string]bmhInfo, len(hosts))
 	for _, h := range hosts {
 		snap[h.Name] = h
@@ -238,14 +242,14 @@ func verifyIPESensorCollection(oc *exutil.CLI, pod string) {
 
 func getPrometheusExporterEnabled(oc *exutil.CLI) string {
 	state, err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration", "-o=jsonpath={.spec.prometheusExporter.enabled}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to read spec.prometheusExporter.enabled")
 	return state
 }
 
 func patchPrometheusExporter(oc *exutil.CLI, enabled bool) {
 	patch := fmt.Sprintf(`{"spec":{"prometheusExporter":{"enabled":%t}}}`, enabled)
 	err := oc.AsAdmin().Run("patch").Args("provisioning", "provisioning-configuration", "--type=merge", "-p", patch).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to patch spec.prometheusExporter.enabled=%t", enabled)
 }
 
 func restorePrometheusExporter(oc *exutil.CLI, originalExporterState string) {
@@ -347,7 +351,7 @@ func waitForMetal3DefaultAlertRules(oc *exutil.CLI) {
 				return false, nil
 			}
 		}
-		if !strings.Contains(foundAlerts["BaremetalStaleMetrics"], "baremetal_last_payload_timestamp_seconds") || !strings.Contains(foundAlerts["BaremetalStaleMetrics"], "> 300") {
+		if !strings.Contains(foundAlerts["BaremetalStaleMetrics"], "baremetal_last_payload_timestamp_seconds") || !staleThresholdRe.MatchString(foundAlerts["BaremetalStaleMetrics"]) {
 			e2e.Logf("BaremetalStaleMetrics expr not as expected: %s", foundAlerts["BaremetalStaleMetrics"])
 			return false, nil
 		}

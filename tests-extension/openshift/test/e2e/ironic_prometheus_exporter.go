@@ -46,7 +46,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 
 		g.By("Record BareMetalHost state before Day-2 enablement")
 		bmhsBefore := bmhSnapshot(oc)
-		e2e.Logf("BareMetalHosts before enabling IPE: %v", bmhsBefore)
+		e2e.Logf("Recorded state of %d BareMetalHosts before enabling IPE", len(bmhsBefore))
 
 		g.By("Enable Ironic Prometheus Exporter via provisioning configuration patch")
 		patchPrometheusExporter(oc, true)
@@ -170,6 +170,10 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			defer func() {
 				g.By("Restore original prometheusExporter state")
 				restorePrometheusExporter(oc, originalExporterState)
+				if originalExporterState == "true" {
+					g.By("Verify ServiceMonitor, PrometheusRule and metrics port are back after restoring IPE")
+					waitForIPEMonitoringResources(oc, true)
+				}
 
 				cboStatus, err := checkOperator(oc, "baremetal")
 				o.Expect(err).NotTo(o.HaveOccurred(), "failed to check baremetal ClusterOperator after restore")
@@ -204,7 +208,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			staleExpr, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, `-o=jsonpath={.spec.groups[?(@.name=="baremetal.monitoring")].rules[?(@.alert=="BaremetalStaleMetrics")].expr}`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get BaremetalStaleMetrics expr from PrometheusRule %s", ipePrometheusRuleName)
 			o.Expect(staleExpr).To(o.ContainSubstring("baremetal_last_payload_timestamp_seconds"), "expected BaremetalStaleMetrics expr to use baremetal_last_payload_timestamp_seconds, got %q", staleExpr)
-			o.Expect(staleExpr).To(o.ContainSubstring("> 300"), "expected BaremetalStaleMetrics expr to use a 300s gap, got %q", staleExpr)
+			o.Expect(staleExpr).To(o.MatchRegexp(staleThresholdPattern), "expected BaremetalStaleMetrics expr to use a 300s gap, got %q", staleExpr)
 
 			staleFor, err := oc.AsAdmin().Run("get").Args("prometheusrule", ipePrometheusRuleName, "-n", machineAPINamespace, `-o=jsonpath={.spec.groups[?(@.name=="baremetal.monitoring")].rules[?(@.alert=="BaremetalStaleMetrics")].for}`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred(), "failed to get BaremetalStaleMetrics for from PrometheusRule %s", ipePrometheusRuleName)
@@ -244,7 +248,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			}
 
 			g.By("Verify CMO scraped an IPE hardware payload series for every deployed Redfish BMH")
-			e2e.Logf("Deployed Redfish BMHs: %v", redfishHosts)
+			e2e.Logf("Checking hardware payload series for %d deployed Redfish BMHs", len(redfishHosts))
 			waitForIPESeriesForHosts(oc, redfishHosts, 5*time.Minute)
 		})
 
@@ -284,20 +288,20 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 
 			g.By("Set sensorCollectionInterval to " + newInterval)
 			_, err = patchPrometheusExporterField(oc, "sensorCollectionInterval", newInterval)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to patch sensorCollectionInterval to %s", newInterval)
 			metal3Pod = waitForMetal3PodRecreated(oc, metal3Pod, "changing sensorCollectionInterval")
 			o.Expect(metal3IronicEnv(oc, metal3Pod, "OS_SENSOR_DATA__INTERVAL")).To(o.Equal(newInterval), "expected OS_SENSOR_DATA__INTERVAL to follow the new interval")
 
 			g.By("Verify the interval survives a metal3 pod restart")
 			err = oc.AsAdmin().Run("delete").Args("pod", metal3Pod, "-n", machineAPINamespace).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to delete metal3 pod")
 			metal3Pod = waitForMetal3PodRecreated(oc, metal3Pod, "deleting metal3 pod")
 			o.Expect(metal3IronicEnv(oc, metal3Pod, "OS_SENSOR_DATA__INTERVAL")).To(o.Equal(newInterval), "expected OS_SENSOR_DATA__INTERVAL to persist across metal3 pod restart")
 
 			g.By("Verify cluster baremetal operator is available")
 			cboStatus, err := checkOperator(oc, "baremetal")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(cboStatus).To(o.BeTrue())
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to check baremetal ClusterOperator")
+			o.Expect(cboStatus).To(o.BeTrue(), "expected baremetal ClusterOperator Available")
 		})
 
 		g.It("Author:jhajyahy-Medium-91037-Verify disableDefaultPrometheusRules removes only the default PrometheusRule [Serial]", func() {
@@ -316,7 +320,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 
 			g.By("Disable default PrometheusRules")
 			_, err := patchPrometheusExporterField(oc, "disableDefaultPrometheusRules", "true")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to patch disableDefaultPrometheusRules=true")
 
 			g.By("Verify PrometheusRule is removed while ServiceMonitor and metrics port stay")
 			waitForIPEPrometheusRuleState(oc, false)
@@ -333,7 +337,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 
 			g.By("Re-enable default PrometheusRules")
 			_, err = patchPrometheusExporterField(oc, "disableDefaultPrometheusRules", "false")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to patch disableDefaultPrometheusRules=false")
 			waitForIPEPrometheusRuleState(oc, true)
 			waitForMetal3DefaultAlertRules(oc)
 		})
@@ -361,7 +365,7 @@ var _ = g.Describe("[OTP][sig-baremetal][Level0] IPI BareMetal", func() {
 			g.By("Verify the target host currently reports hardware metrics")
 			waitForIPESeriesForHosts(oc, redfishHosts, 5*time.Minute)
 			preFiring, err := staleAlertFiringNodes(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to query firing BaremetalStaleMetrics alerts")
 			for _, n := range preFiring {
 				o.Expect(ipeNodeNameMatchesBMH(n, target)).To(o.BeFalse(), "BaremetalStaleMetrics already firing for %s before the test", target)
 			}

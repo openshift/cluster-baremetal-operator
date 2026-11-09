@@ -122,7 +122,7 @@ func queryPrometheus(oc *exutil.CLI, promQL string) (PrometheusAPIResponse, erro
 
 	var response PrometheusAPIResponse
 	if unmarshalErr := json.Unmarshal([]byte(jsonString), &response); unmarshalErr != nil {
-		return PrometheusAPIResponse{}, fmt.Errorf("failed to parse prometheus response for %q: %w: %s", promQL, unmarshalErr, jsonString)
+		return PrometheusAPIResponse{}, fmt.Errorf("failed to parse prometheus response for %q: %w", promQL, unmarshalErr)
 	}
 	if response.Status != "success" {
 		return response, fmt.Errorf("prometheus query %q returned status %q", promQL, response.Status)
@@ -203,7 +203,7 @@ func queryPrometheusSeriesLabels(oc *exutil.CLI, promQL string) ([]map[string]st
 	}
 	var response prometheusLabelsResponse
 	if unmarshalErr := json.Unmarshal([]byte(jsonString), &response); unmarshalErr != nil {
-		return nil, fmt.Errorf("failed to parse prometheus response for %q: %w: %s", promQL, unmarshalErr, jsonString)
+		return nil, fmt.Errorf("failed to parse prometheus response for %q: %w", promQL, unmarshalErr)
 	}
 	if response.Status != "success" {
 		return nil, fmt.Errorf("prometheus query %q returned status %q", promQL, response.Status)
