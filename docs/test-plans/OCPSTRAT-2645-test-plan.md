@@ -8,7 +8,7 @@
 
 | Field | Value |
 |---|---|
-| Identifier | `TP-OCPSTRAT-2645-v1.2` |
+| Identifier | `TP-OCPSTRAT-2645-v1.3` |
 | Feature | [OCPSTRAT-2645](https://redhat.atlassian.net/browse/OCPSTRAT-2645) — [GA] Enable IPE on OCP: asynchronous metric collection and performance |
 | Engineering epic | [METAL-1669](https://redhat.atlassian.net/browse/METAL-1669) |
 | Test plan task | [METAL-2013](https://redhat.atlassian.net/browse/METAL-2013) |
@@ -25,6 +25,7 @@
 | v1.0 | 2026-11-08 | Initial draft |
 | v1.1 | 2026-11-09 | Aligned with CBO behavior (effective interval default 60 s, `sensorCollectionInterval` and `disableDefaultPrometheusRules` CR fields, ServiceMonitor without TLS/auth). Added TC-IPE-052/053, e2e automation status (§6.4.1), RK-10/RK-11, and resolved Open Question 3. |
 | v1.2 | 2026-11-09 | Review fixes: full label-set comparison for stable labels (§6.2, TC-IPE-033); initial payload before blackholing and alert check moved to TC-IPE-044 (TC-IPE-012); fresh-payload requirement (TC-IPE-052); cycle completion defined independently of notifications (TC-IPE-060); P1 exit criterion split by environment; planned restarts excluded from the failure criterion (§7). |
+| v1.3 | 2026-11-10 | Review fixes: label-set comparison uses active series only (§6.2); TC-IPE-052 requires a fresh timestamp and a sensor metric from the same Redfish host; L2 latency profile split into delayed and timed-out nodes (§6.3.5, TC-IPE-060). |
 
 ---
 
@@ -187,7 +188,7 @@ On OCP, CBO sets the Ironic environment, so the effective defaults differ from t
 - **Baseline comparison:** run the same performance scenarios against a 5.0 (synchronous) image and a 5.1 (async) image. Async must not be worse on any measured axis and must improve cycle duration under BMC latency.
 - **Fault injection:** a fake Redfish proxy (sushy-tools emulator or mitmproxy) adds delay, timeouts, HTTP 5xx/401/404, malformed JSON, and connection resets for a subset of nodes.
 - **Equivalence partitioning** for the interval (`<60` rejected by the API, `=60` OCP default, `120`, `160` standalone default, large) and for concurrency/timeout settings.
-- **Label-set comparison:** before and after restarts and BMC firmware resets, record the full label set of every `{job="metal3-state"}` series (Prometheus `/api/v1/series` or the IPE `/metrics` output) and diff the two sets. Any added, removed, or changed label value is churn. `count by (__name__)` is only a summary, because a label can change while the count stays the same.
+- **Label-set comparison:** before and after restarts and BMC firmware resets, record the full label set of every active `{job="metal3-state"}` series and diff the two sets. Take each snapshot from an instant query of `{job="metal3-state"}` or from the raw IPE `/metrics` output. Do not use `/api/v1/series`: it also returns inactive series inside its time range, so old and new label sets can both appear and hide a change. Any added, removed, or changed label value is churn. `count by (__name__)` is only a summary, because a label can change while the count stays the same.
 - **Black-box** checks against Prometheus/Thanos APIs; **white-box** checks of rendered `ironic.conf` and conductor logs.
 
 ### 6.3 Test cases
@@ -253,16 +254,16 @@ Priority: **P1** = release-blocking, **P2** = high, **P3** = nice to have.
 | TC-IPE-049 (OCP-91036) | Customization of the interval | 1) Read `spec.prometheusExporter.sensorCollectionInterval`. 2) Patch it to `59`. 3) Patch it to `120` (or `180` if already 120). 4) Delete the metal3 pod. | 1) `OS_SENSOR_DATA__INTERVAL` in `metal3-ironic` equals the spec value (60 if unset). 2) API rejects the patch (minimum 60); spec unchanged. 3) metal3 pod rolls out; env equals the new value. 4) Value persists after the pod restart; `baremetal` ClusterOperator Available | P2 | F-22, F-4 |
 | TC-IPE-050 | TLS / FIPS / IP families | Run TC-IPE-040..043 on FIPS-enabled, IPv6-only, and dual-stack clusters | All pass | P2 | F-24 |
 | TC-IPE-051 | Exporter security | Inspect the ServiceMonitor endpoint and reach 9608 from a non-monitoring pod and from the node network | Scrape uses CMO-managed TLS/auth; the endpoint does not serve unauthenticated clients; no BMC credentials in metrics or logs. **Known gap:** the ServiceMonitor currently has no TLS/auth and the metal3 pod uses `hostNetwork`, so 9608 serves plain HTTP on the node IP. This case is expected to fail until RK-11 is resolved. | P1 | F-19 |
-| TC-IPE-052 (OCP-90726) | In-cluster BMC sensor collection | With IPE enabled and at least one deployed BMH: check `SEND_SENSOR_DATA` and `send_sensor_data` in `metal3-ironic`; record each deployed host's `baremetal_last_payload_timestamp_seconds` from `/metrics` (if present); read the conductor logs; wait up to 2 intervals and read `/metrics` again | `SEND_SENSOR_DATA=true`; logs show a collection attempt (`queued for async sensor data collection` or a non-empty `Completed sending sensor data`) with no `Failed to get sensor data`; at least one deployed host's timestamp is newer than the recorded value, or appears for the first time. A queued attempt or a retained, unchanged series does not pass, because IPE keeps serving files from earlier notifications (`ironic_*` process timings alone do not pass either) | P1 | F-1, F-17 |
+| TC-IPE-052 (OCP-90726) | In-cluster BMC sensor collection | With IPE enabled and at least one deployed BMH: check `SEND_SENSOR_DATA` and `send_sensor_data` in `metal3-ironic`; record each deployed Redfish/iDRAC host's `baremetal_last_payload_timestamp_seconds` from `/metrics` (if present); read the conductor logs; wait up to 2 intervals and read `/metrics` again | `SEND_SENSOR_DATA=true`; logs show a collection attempt (`queued for async sensor data collection` or a non-empty `Completed sending sensor data`) with no `Failed to get sensor data`. For at least one deployed Redfish/iDRAC host, matched by `node_name`, both of these hold: its timestamp is newer than the recorded value or appears for the first time, and `/metrics` has at least one Redfish sensor metric for it (`baremetal_temperature_status`, `baremetal_power_status`, `baremetal_fan_status`, `baremetal_drive_status`, or `baremetal_temp_<context>_celsius`). None of the following pass on their own: a fresh timestamp without sensor metrics (IPE writes the timestamp even when the parser finds no sensors), a timestamp from an IPMI or other non-Redfish host, a queued attempt, or a retained, unchanged series (IPE keeps serving files from earlier notifications). `ironic_*` process timings alone do not pass either | P1 | F-1, F-17 |
 | TC-IPE-053 (OCP-91037) | Disable default rules only | Patch `disableDefaultPrometheusRules=true`, then `false` | `true`: `PrometheusRule/metal3-defaults` deleted and its groups unloaded from CMO Prometheus; ServiceMonitor and port 9608 remain; `up{job="metal3-state"}` stays `1`; metal3 pod not restarted. `false`: rule recreated and groups reloaded | P2 | F-25 |
 
 #### 6.3.5 Performance and scale
 
-Run each scenario with the 5.0 (sync) image and the 5.1 (async) image. BMC latency profiles: **L0** = 0.2 s; **L1** = 2 s; **L2** = 10% of nodes at 30 s or timing out.
+Run each scenario with the 5.0 (sync) image and the 5.1 (async) image. BMC latency profiles: **L0** = 0.2 s; **L1** = 2 s; **L2** = 5% of nodes **delayed** by 30 s, below the configured per-request timeout (if the timeout is 30 s or less, use half the timeout as the delay), plus 5% of nodes that never respond and **time out**. Record which nodes are in each group.
 
 | TC ID | Title | Load | Metrics captured | Acceptance | Pri | Trace |
 |---|---|---|---|---|---|---|
-| TC-IPE-060 | Cycle duration vs node count | 50/100/250/500 nodes × L0/L1/L2 | Cycle duration: time from cycle start until every node's request has either completed or reached the configured timeout, taken from conductor logs and the emulator request log. A timed-out node may write no notification, so the last notification does not mark the end of the cycle. Also recorded: notification latency per successful node, and the number of nodes that failed or timed out | Async ≤ sync at L0; async ≥ 50% faster at L1/L2 at 250+ nodes (final threshold agreed with Dev); cycle duration < interval at 500 nodes/L1; failed/timed-out nodes = the nodes faulted by the L2 profile, with no others | P1 | F-8 |
+| TC-IPE-060 | Cycle duration vs node count | 50/100/250/500 nodes × L0/L1/L2 | Cycle duration: time from cycle start until every node's request has either completed or reached the configured timeout, taken from conductor logs and the emulator request log. A timed-out node may write no notification, so the last notification does not mark the end of the cycle. Also recorded: notification latency per successful node, and the number of nodes that failed or timed out | Async ≤ sync at L0; async ≥ 50% faster at L1/L2 at 250+ nodes (final threshold agreed with Dev); cycle duration < interval at 500 nodes/L1. At L2, the failed/timed-out nodes are exactly the nodes in the time-out group; every delayed node succeeds and writes a notification | P1 | F-8 |
 | TC-IPE-061 | Conductor resource overhead | Same matrix | CPU (avg/p95), RSS, greenthreads/threads, open fds, DB connections | Overhead vs. collection off ≤ documented budget (required by R1 NFR); no monotonic growth over 24 h | P1 | F-7 |
 | TC-IPE-062 | API latency under collection | 250 nodes/L2; run `baremetal node list/show` loop | p50/p95/p99 API latency | p95 within +20% of collection-off baseline | P1 | F-9 |
 | TC-IPE-063 | Exporter scaling | 500 nodes | `/metrics` response time, payload size, series count, gunicorn worker CPU/RSS | Response < scrape timeout (default 10 s) with margin ≥ 50%; series/node recorded for capacity docs | P1 | F-10 |
@@ -295,7 +296,7 @@ Run each scenario with the 5.0 (sync) image and the 5.1 (async) image. BMC laten
 | TC-IPE-049 | OCP-91036 | Automated | Interval only (the CR exposes no other collection setting) |
 | TC-IPE-050 | existing specs | CI config | Run 040–043 in FIPS, IPv6, and dual-stack lanes (METAL-1670) |
 | TC-IPE-051 | — | Blocked | Expected to fail until RK-11 is decided; automate once the target behavior is agreed |
-| TC-IPE-052 | OCP-90726 | Partially automated | Skipped when no BMH is provisioned or externally provisioned. The spec checks that the series is present but not yet that the timestamp advances (follow-up in #683) |
+| TC-IPE-052 | OCP-90726 | Partially automated | Skipped when no BMH is provisioned or externally provisioned. The spec checks that the series is present, but not yet that the timestamp advances or that a sensor metric exists for the same Redfish host (follow-up in #683) |
 | TC-IPE-053 | OCP-91037 | Automated | |
 
 ---
@@ -331,7 +332,7 @@ Run each scenario with the 5.0 (sync) image and the 5.1 (async) image. BMC laten
 
 ## 9. Test Deliverables
 
-- This test plan (`TP-OCPSTRAT-2645-v1.2`)
+- This test plan (`TP-OCPSTRAT-2645-v1.3`)
 - Test case specifications in Polarion (linked to METAL-1671 / METAL-2013)
 - Automated test code: Ginkgo e2e PRs, the component test suite, and the perf harness scripts
 - Prow periodic job configuration (METAL-1670)
