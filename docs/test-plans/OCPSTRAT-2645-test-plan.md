@@ -8,7 +8,7 @@
 
 | Field | Value |
 |---|---|
-| Identifier | `TP-OCPSTRAT-2645-v1.6` |
+| Identifier | `TP-OCPSTRAT-2645-v1.7` |
 | Feature | [OCPSTRAT-2645](https://redhat.atlassian.net/browse/OCPSTRAT-2645) — [GA] Enable IPE on OCP: asynchronous metric collection and performance |
 | Engineering epic | [METAL-1669](https://redhat.atlassian.net/browse/METAL-1669) |
 | Test plan task | [METAL-2013](https://redhat.atlassian.net/browse/METAL-2013) |
@@ -16,7 +16,7 @@
 | Component under test | `ironic-image` (Ironic conductor plus `ironic-prometheus-exporter` container), with integration through `cluster-baremetal-operator` (CBO) and Cluster Monitoring Operator (CMO) |
 | QA contact | Jad Haj Yahya |
 | Status | Draft |
-| Date | 2026-11-10 |
+| Date | 2026-11-11 |
 
 **Revision history**
 
@@ -29,6 +29,7 @@
 | v1.4 | 2026-11-10 | Review fixes: label-set snapshots must contain sensor series (§6.2, TC-IPE-033); TC-IPE-052 requires a deployed Redfish host and async-path evidence; one fixed L2 delay for both images (§6.3.5). |
 | v1.5 | 2026-11-10 | Review fixes: TC-IPE-052 checks a single fresh notification file and requires host-specific async evidence; same per-request timeout for both L2 runs (§6.3.5). |
 | v1.6 | 2026-11-10 | Review fixes and self-review: rendered config path (TC-IPE-001/002); DEBUG is the default log level (F-16, TC-IPE-035); TC-IPE-011/012 distinguish async from sync; maintenance/state rules (TC-IPE-021, Q5); churn-based TC-IPE-034/036; upgrade expectations (TC-IPE-047); IPv6 exporter binding (TC-IPE-050, RK-13); host-specific async evidence and all Ironic error strings (TC-IPE-052, Q8); matched timeouts for L2 acceptance; Redfish scheme definition (§2.3.1); TC-IPE-051 deferral rule and 3+1 hardware for TC-IPE-044 (§7, §11.1); provisional thresholds (RK-2); stale files for deleted nodes (RK-12). |
+| v1.7 | 2026-11-11 | Review fixes: TC-IPE-011 places the slow nodes at the front of the collector's queue and uses each slow node's actual completion time; TC-IPE-036 requires every replacement node to produce a notification before it is deleted. |
 
 ---
 
@@ -215,7 +216,7 @@ Priority: **P1** = release-blocking, **P2** = high, **P3** = nice to have.
 | TC ID | Title | Steps (summary) | Expected result | Pri | Trace |
 |---|---|---|---|---|---|
 | TC-IPE-010 | Basic async collection | Enroll 10 Redfish nodes (sushy-tools); enable sensor data; wait 2 intervals | Metrics for all 10 nodes appear; one notification batch per interval; logs/stack show async client code path | P1 | F-1 |
-| TC-IPE-011 | Slow BMCs do not delay the others | 20 nodes; 6 nodes (more than `[sensor_data]workers`, default 4) have a 60 s response delay. Run on the 5.1 image, and on the 5.0 image as a negative control | 5.1: every fast node reports within the normal cycle time; slow nodes report late or time out; cycle time ≈ max(timeout, fast-node time), not the sum; conductor logs show the async path. 5.0: fast nodes queued behind the occupied sync workers report late, which shows the case tells the two paths apart | P1 | F-2 |
+| TC-IPE-011 | Slow BMCs do not delay the others | 20 nodes; 6 nodes (more than `[sensor_data]workers`, default 4) have a 60 s response delay, below the per-request timeout. Pick the 6 slow nodes from the front of the collector's processing order, as observed in a prior cycle (conductor DEBUG log or emulator request order), so fast nodes queue behind occupied workers in the sync path. Run on the 5.1 image, and on the 5.0 image as a negative control | 5.1: every fast node reports within the normal cycle time; slow nodes report late or time out; cycle time ≈ max(slow-node completion time, fast-node time), not the sum, where a slow node's completion time is its 60 s delay when it succeeds and the per-request timeout only when it times out; conductor logs show the async path. 5.0: fast nodes queued behind the occupied sync workers report late, which shows the case tells the two paths apart | P1 | F-2 |
 | TC-IPE-012 | Unreachable BMC | Wait until IPE `/metrics` has a `baremetal_last_payload_timestamp_seconds` sample for node A; then blackhole node A's BMC IP and wait 3 intervals | Timeout after the configured value; error logged once per cycle (not per sensor); other nodes' timestamps keep advancing; node A's timestamp stops advancing while IPE keeps serving its last value; conductor logs show the async path (one blackholed node does not exhaust the sync workers, so the result alone does not prove async). The component environment has no Prometheus or CBO rule, so the `BaremetalStaleMetrics` alert is verified in-cluster by TC-IPE-044 | P1 | F-2, F-16 |
 | TC-IPE-013 | BMC returns HTTP 5xx / 401 / malformed JSON | Inject errors for a subset of nodes | No conductor crash or traceback storm; failing nodes skipped; healthy nodes reported | P1 | F-2 |
 | TC-IPE-014 | Connection reset mid-collection | Reset TCP during `$expand` response | Request fails cleanly; no leaked sessions or file descriptors (fd count stable across 20 cycles) | P2 | F-2, F-7 |
@@ -240,7 +241,7 @@ Priority: **P1** = release-blocking, **P2** = high, **P3** = nice to have.
 | TC-IPE-033 | Stable labels | Confirm sensor series exist for every tested host; record the full label set of every series (§6.2); restart conductor, restart IPE, reboot the BMC, wait 5 cycles; record again | Label sets identical: no series added, removed, or relabeled; no unique/per-cycle IDs in labels | P1 | F-14 |
 | TC-IPE-034 | No alert flapping from label churn | Run 24 h on hardware with §6.2 label snapshots every hour. Where possible, keep one sensor in a Warning state (for example a drive or PSU fault) so a `Baremetal*Health` alert fires | No label change between any two snapshots; a firing alert stays firing without resolving and re-firing | P2 | F-14 |
 | TC-IPE-035 | Log noise | Default log level (DEBUG, see F-16), 100 nodes, 1 h | No per-sensor lines at any level, including DEBUG; per-cycle summary only; failures logged once per node per cycle; log volume ≤ the agreed threshold (define with Dev; baseline vs. 5.0) | P2 | F-16 |
-| TC-IPE-036 | Notification directory growth | 100 nodes, 24 h; every hour delete 10 nodes and enroll 10 new ones; record file count and directory size | Files for existing nodes are overwritten in place (one file per node and event type). Growth is at most one file per newly enrolled node, because IPE does not delete files for deleted nodes (§2.3.1, RK-12); the growth rate is recorded for the docs; no inode exhaustion | P2 | F-11 |
+| TC-IPE-036 | Notification directory growth | 100 nodes, 24 h; every hour delete 10 nodes and enroll 10 new ones; each replacement node must reach `active` and write a notification file before any later round deletes it (a node left in `enroll` writes nothing, see TC-IPE-021); record file count and directory size | Files for existing nodes are overwritten in place (one file per node and event type). Growth is at most one file per newly enrolled node, because IPE does not delete files for deleted nodes (§2.3.1, RK-12); the growth rate is recorded for the docs; no inode exhaustion | P2 | F-11 |
 
 #### 6.3.4 OpenShift integration (e2e)
 
@@ -337,7 +338,7 @@ Run each scenario with the 5.0 (sync) image and the 5.1 (async) image. BMC laten
 
 ## 9. Test Deliverables
 
-- This test plan (`TP-OCPSTRAT-2645-v1.6`)
+- This test plan (`TP-OCPSTRAT-2645-v1.7`)
 - Test case specifications in Polarion (linked to METAL-1671 / METAL-2013)
 - Automated test code: Ginkgo e2e PRs, the component test suite, and the perf harness scripts
 - Prow periodic job configuration (METAL-1670)
