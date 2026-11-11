@@ -50,6 +50,7 @@ import (
 	"github.com/openshift/cluster-baremetal-operator/controllers"
 	"github.com/openshift/cluster-baremetal-operator/provisioning"
 	utiltls "github.com/openshift/controller-runtime-common/pkg/tls"
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
@@ -93,7 +94,7 @@ func main() {
 	config := ctrl.GetConfigOrDie()
 
 	// Read the APIServer CR to check tlsAdherence and optionally apply
-	// the cluster-wide TLS profile to the CBO webhook server.
+	// the cluster-wide TLS profile to the CBO webhook and metrics servers.
 	k8sClient, err := client.New(config, client.Options{Scheme: scheme})
 	if err != nil {
 		klog.ErrorS(err, "unable to create client for TLS profile fetch")
@@ -120,11 +121,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Only apply the TLS profile to the webhook server when adherence is enforced.
+	// Only apply the TLS profile to the webhook and metrics servers when adherence is enforced.
 	if provisioning.ShouldHonorClusterTLSProfile(tlsAdherencePolicy) {
-		tlsConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
-		if len(unsupportedCiphers) > 0 {
-			klog.Infof("TLS configuration contains unsupported ciphers that will be ignored: %v", unsupportedCiphers)
+		curvePreferences, unsupportedGroups := libgocrypto.TLSGroupsToCurveIDs(tlsProfileSpec.Groups)
+		if len(tlsProfileSpec.Groups) > 0 && len(curvePreferences) == 0 {
+			klog.Errorf("TLS profile groups cannot be applied to the webhook and metrics servers: %v", unsupportedGroups)
+			os.Exit(1)
+		}
+
+		tlsConfig, unsupportedTLSSettings := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
+		if len(unsupportedTLSSettings) > 0 {
+			klog.Infof("TLS configuration contains unsupported ciphers or groups that will be ignored: %v", unsupportedTLSSettings)
 		}
 		webhookTLSOpts = append(webhookTLSOpts, tlsConfig)
 		klog.Info("Applying cluster TLS profile to webhook and metrics servers")
