@@ -120,6 +120,7 @@ rules:
   - baremetalhosts/finalizers
   - baremetalhosts/status
   - dataimages/finalizers
+  - hostclaims/finalizers
   - hostfirmwarecomponents/finalizers
   - hostfirmwaresettings/status
   - hostupdatepolicies/finalizers
@@ -129,6 +130,7 @@ rules:
   - metal3.io
   resources:
   - baremetalswitches
+  - hostdeploypolicies
   - hostnetworkattachments
   verbs:
   - get
@@ -140,6 +142,7 @@ rules:
   - baremetalswitches/status
   - bmceventsubscriptions/status
   - dataimages/status
+  - hostclaims/status
   - hostfirmwarecomponents/status
   - hostupdatepolicies/status
   - preprovisioningimages/status
@@ -155,6 +158,7 @@ rules:
   - dataimages
   - firmwareschemas
   - hardwaredata
+  - hostclaims
   - hostfirmwarecomponents
   - hostfirmwaresettings
   - hostupdatepolicies
