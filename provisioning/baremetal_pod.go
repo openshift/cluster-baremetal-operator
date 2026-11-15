@@ -921,6 +921,7 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 	if info.TlsCertHash != "" {
 		annotations[ironicTlsCertHashAnnotation] = info.TlsCertHash
 	}
+	annotations[requiredSCCAnnotation] = privilegedSCC
 
 	return &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -938,8 +939,9 @@ func newMetal3PodTemplateSpec(info *ProvisioningInfo, labels *map[string]string)
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: ptr.To(false),
 			},
-			ServiceAccountName: "cluster-baremetal-operator",
-			Tolerations:        metal3Tolerations(),
+			ServiceAccountName:           metal3IronicServiceAccountName,
+			AutomountServiceAccountToken: ptr.To(false),
+			Tolerations:                  metal3Tolerations(),
 		},
 	}
 }

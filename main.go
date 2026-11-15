@@ -22,7 +22,9 @@ import (
 	"os"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/dynamic"
@@ -68,6 +70,17 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 	// The following is needed to read the Infrastructure CR
 	utilruntime.Must(osconfigv1.Install(scheme))
+}
+
+func secretCacheNamespaces() map[string]cache.Config {
+	return map[string]cache.Config{
+		controllers.ComponentNamespace:        {},
+		provisioning.OpenshiftConfigNamespace: {FieldSelector: fields.OneTermEqualSelector("metadata.name", provisioning.PullSecretName)},
+	}
+}
+
+func defaultCacheNamespaces() map[string]cache.Config {
+	return map[string]cache.Config{controllers.ComponentNamespace: {}}
 }
 
 func main() {
@@ -147,11 +160,11 @@ func main() {
 			CertDir: "/etc/cluster-baremetal-operator/tls",
 		}),
 		Cache: cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				controllers.ComponentNamespace:        {},
-				provisioning.OpenshiftConfigNamespace: {},
-			},
+			DefaultNamespaces: defaultCacheNamespaces(),
 			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Secret{}: {
+					Namespaces: secretCacheNamespaces(),
+				},
 				&unstructured.Unstructured{
 					Object: map[string]interface{}{
 						"apiVersion": "monitoring.coreos.com/v1",

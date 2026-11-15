@@ -235,12 +235,7 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 
 	containers := injectProxyAndCA([]corev1.Container{container}, info.Proxy)
 
-	podAnnotations := make(map[string]string)
-	for key, val := range podTemplateAnnotations {
-		podAnnotations[key] = val
-	}
-
-	podAnnotations["openshift.io/required-scc"] = "hostnetwork-v2"
+	podAnnotations := podAnnotationsWithRequiredSCC(restrictedV2SCC)
 	if info.TlsCertHash != "" {
 		podAnnotations[ironicTlsCertHashAnnotation] = info.TlsCertHash
 	}
@@ -262,7 +257,7 @@ func newBMOPodTemplateSpec(info *ProvisioningInfo, labels *map[string]string) (*
 			DNSPolicy:          corev1.DNSClusterFirstWithHostNet,
 			PriorityClassName:  "system-node-critical",
 			NodeSelector:       nodeSelector,
-			ServiceAccountName: "cluster-baremetal-operator",
+			ServiceAccountName: bmoServiceAccountName,
 			Tolerations:        tolerations,
 		},
 	}, nil
