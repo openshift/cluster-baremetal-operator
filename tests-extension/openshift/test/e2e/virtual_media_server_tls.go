@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,8 +33,8 @@ const (
 )
 
 // virtualMediaServerTLS is the Provisioning spec exercised by METAL-1947.
-// A node reprovision is not part of this coverage: dev-scripts BMCs speak
-// HTTP to Ironic, so a boot would not prove a legacy BMC TLS handshake.
+// The reprovision test targets a bare-metal IPI worker whose BMC boots
+// through virtual media, which is the CI hardware path.
 type virtualMediaServerTLS struct {
 	MinTLSVersion string   `json:"minTLSVersion,omitempty"`
 	Ciphers       []string `json:"ciphers,omitempty"`
@@ -168,6 +169,91 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		out, err := patchProvisioning(oc, `{"spec":{"disableVirtualMediaTLS":true}}`, true)
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("virtualMediaServerTLS cannot be set when disableVirtualMediaTLS is true"))
+	})
+
+	// author: jhajyahy@redhat.com
+	g.It("Author:jhajyahy-Longduration-NonPreRelease-High-METAL-1947-Worker reprovision uses the virtual-media TLS listener [Serial][Disruptive]", func() {
+		doc := getProvisioningTLS(oc)
+		if doc.Spec.DisableVirtualMediaTLS {
+			g.Skip("virtual media TLS is disabled")
+		}
+		bmhName, machineName, machineSet := virtualMediaMachinesetWorker(oc)
+		if bmhName == "" {
+			g.Skip("no virtual-media worker BareMetalHost is owned by a MachineSet")
+		}
+
+		originReplicasStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machineSet, "-n", machineAPINamespace, "-o=jsonpath={.spec.replicas}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		originReplicas, err := strconv.Atoi(originReplicasStr)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if originReplicas < 1 {
+			g.Skip("worker MachineSet has no replicas to reprovision")
+		}
+
+		baseline := runningHTTPDEnv(oc)
+		original := append(json.RawMessage(nil), doc.Spec.VirtualMediaServerTLS...)
+		defer func() {
+			g.By("Restore the original virtual-media TLS setting")
+			restoreVirtualMediaTLS(oc, original)
+			_, waitErr := waitForHTTPDEnv(oc, func(env map[string]string) bool {
+				return env[vmediaProtocolEnv] == baseline[vmediaProtocolEnv]
+			})
+			o.Expect(waitErr).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("Apply a TLS 1.2 minimum for the virtual-media listener")
+		patch, err := json.Marshal(map[string]any{
+			"spec": map[string]any{"virtualMediaServerTLS": virtualMediaServerTLS{MinTLSVersion: "VersionTLS12"}},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = patchProvisioning(oc, string(patch), false)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = waitForHTTPDEnv(oc, func(env map[string]string) bool {
+			return env[vmediaProtocolEnv] == "-ALL +TLSv1.2 +TLSv1.3"
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		scaledDown := false
+		defer func() {
+			if !scaledDown {
+				_, _ = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("machines.machine.openshift.io", machineName, "machine.openshift.io/cluster-api-delete-machine-", "-n", machineAPINamespace).Output()
+				return
+			}
+			g.By("Restore the worker MachineSet replica count")
+			currentReplicasStr, replicaErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machineSet, "-n", machineAPINamespace, "-o=jsonpath={.spec.replicas}").Output()
+			o.Expect(replicaErr).NotTo(o.HaveOccurred())
+			if currentReplicasStr != originReplicasStr {
+				_, scaleErr := oc.AsAdmin().WithoutNamespace().Run("scale").Args("machinesets.machine.openshift.io", machineSet, "-n", machineAPINamespace, fmt.Sprintf("--replicas=%s", originReplicasStr)).Output()
+				o.Expect(scaleErr).NotTo(o.HaveOccurred())
+			}
+			waitForBMHState(oc, bmhName, "provisioned")
+			nodeHealthErr := clusterNodesHealthcheck(oc, 1500)
+			compat_otp.AssertWaitPollNoErr(nodeHealthErr, "worker did not return Ready after virtual-media reprovision")
+			operatorErr := clusterOperatorHealthcheck(oc, 1500, "METAL-1947-reprovision.log")
+			compat_otp.AssertWaitPollNoErr(operatorErr, "cluster operators did not recover after virtual-media reprovision")
+		}()
+
+		g.By("Deprovision one virtual-media worker")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("machines.machine.openshift.io", machineName, "machine.openshift.io/cluster-api-delete-machine=yes", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("machinesets.machine.openshift.io", machineSet, "-n", machineAPINamespace, fmt.Sprintf("--replicas=%d", originReplicas-1)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		scaledDown = true
+		waitForBMHState(oc, bmhName, "available")
+
+		g.By("Provision the worker again through the virtual-media TLS listener")
+		since := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("machinesets.machine.openshift.io", machineSet, "-n", machineAPINamespace, fmt.Sprintf("--replicas=%s", originReplicasStr)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForBMHState(oc, bmhName, "provisioned")
+
+		ironicLogs, ironicErr := metal3LogsSince(oc, "metal3-ironic", since)
+		httpdLogs, httpdErr := metal3LogsSince(oc, vmediaContainer, since)
+		if !strings.Contains(ironicLogs+"\n"+httpdLogs, ":"+vmediaPort) {
+			o.Expect(ironicErr).NotTo(o.HaveOccurred())
+			o.Expect(httpdErr).NotTo(o.HaveOccurred())
+			e2e.Failf("provisioning logs since %s did not mention the virtual-media HTTPS port %s", since, vmediaPort)
+		}
 	})
 })
 
@@ -346,6 +432,58 @@ func bmoContainerArgs(oc *exutil.CLI) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("get").Args(
 		"deploy", "metal3-baremetal-operator", "-n", machineAPINamespace,
 		"-o=jsonpath={.spec.template.spec.containers[0].args}",
+	).Output()
+}
+
+func virtualMediaMachinesetWorker(oc *exutil.CLI) (bmhName, machineName, machineSet string) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"machines.machine.openshift.io", "-n", machineAPINamespace,
+		"-l", "machine.openshift.io/cluster-api-machine-role=worker",
+		`-o=jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}`,
+	).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	bmhOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"bmh", "-n", machineAPINamespace,
+		`-o=jsonpath={range .items[*]}{.metadata.name},{.spec.consumerRef.name}{"\n"}{end}`,
+	).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	machineToBMH := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(bmhOutput), "\n") {
+		parts := strings.SplitN(line, ",", 2)
+		if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+			machineToBMH[parts[1]] = parts[0]
+		}
+	}
+
+	for _, machine := range strings.Split(strings.TrimSpace(output), "\n") {
+		if machine == "" {
+			continue
+		}
+		host := machineToBMH[machine]
+		if host == "" {
+			continue
+		}
+		method, bootErr := getBootMethod(oc, host)
+		if bootErr != nil || method != bootMethodVMedia {
+			continue
+		}
+		owner, ownerErr := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"machines.machine.openshift.io", machine, "-n", machineAPINamespace,
+			"-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"MachineSet\")].name}",
+		).Output()
+		if ownerErr != nil || owner == "" {
+			continue
+		}
+		return host, machine, owner
+	}
+	return "", "", ""
+}
+
+func metal3LogsSince(oc *exutil.CLI, container, since string) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("logs").Args(
+		"-n", machineAPINamespace, "deploy/metal3", "-c", container, "--since-time="+since,
 	).Output()
 }
 
