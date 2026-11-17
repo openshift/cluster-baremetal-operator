@@ -94,7 +94,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-High-METAL-1947-Virtual media TLS override does not change Ironic API TLS [Serial][Disruptive]", func() {
+	g.It("Author:jhajyahy-High-METAL-1947-Virtual media TLS override does not change Ironic API TLS [Serial][Disruptive]", func(ctx context.Context) {
 		doc := getProvisioningTLS(oc)
 		if doc.Spec.DisableVirtualMediaTLS {
 			g.By("Reject virtualMediaServerTLS while virtual media TLS is already disabled")
@@ -163,14 +163,14 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 
 		g.By("Virtual-media port accepts TLS 1.2 with the configured cipher")
 		pod := runningMetal3Pod(oc)
-		vmediaOut, vmediaErr := tlsHandshake(oc, pod, vmediaPort, "-tls1_2")
+		vmediaOut, vmediaErr := tlsHandshake(ctx, oc, pod, vmediaPort, "-tls1_2")
 		o.Expect(handshakeAccepted(vmediaOut, vmediaErr)).To(o.BeTrue(), "virtual-media TLS 1.2 handshake failed: %s", handshakeText(vmediaOut, vmediaErr))
 
 		if baseline[ironicProtocolEnv] == "-ALL +TLSv1.3" {
 			g.By("Ironic API port still accepts TLS 1.3 and rejects TLS 1.2")
-			apiTLS13Out, apiTLS13Err := tlsHandshake(oc, pod, ironicAPIPort, "-tls1_3")
+			apiTLS13Out, apiTLS13Err := tlsHandshake(ctx, oc, pod, ironicAPIPort, "-tls1_3")
 			o.Expect(handshakeNegotiatedTLS13(apiTLS13Out, apiTLS13Err)).To(o.BeTrue(), "Ironic API TLS 1.3 handshake failed, so a TLS 1.2 rejection is not meaningful: %s", handshakeText(apiTLS13Out, apiTLS13Err))
-			apiOut, apiErr := tlsHandshake(oc, pod, ironicAPIPort, "-tls1_2")
+			apiOut, apiErr := tlsHandshake(ctx, oc, pod, ironicAPIPort, "-tls1_2")
 			o.Expect(handshakeRejected(apiOut, apiErr)).To(o.BeTrue(), "Ironic API did not reject TLS 1.2: %s", handshakeText(apiOut, apiErr))
 		}
 
@@ -407,14 +407,16 @@ func httpdEnv(oc *exutil.CLI, pod string) (map[string]string, error) {
 	return env, nil
 }
 
-func tlsHandshake(oc *exutil.CLI, pod, port, tlsFlag string) (string, error) {
-	// timeout stops a handshake that accepts TCP and then stalls. The local
-	// deadline stops oc itself when the exec stream never returns.
+func tlsHandshake(ctx context.Context, oc *exutil.CLI, pod, port, tlsFlag string) (string, error) {
+	// timeout stops a handshake that accepts TCP and then stalls. The context
+	// stops the local oc process when the exec stream never returns.
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
 	script := fmt.Sprintf("timeout 10 openssl s_client -connect 127.0.0.1:%s %s </dev/null", port, tlsFlag)
-	return execHTTPDWithin(oc, 20*time.Second, pod, "/bin/sh", "-c", script)
+	return execHTTPDWithin(ctx, oc, pod, "/bin/sh", "-c", script)
 }
 
-func execHTTPDWithin(oc *exutil.CLI, deadline time.Duration, pod string, command ...string) (string, error) {
+func execHTTPDWithin(ctx context.Context, oc *exutil.CLI, pod string, command ...string) (string, error) {
 	args := append([]string{"-n", machineAPINamespace, pod, "-c", vmediaContainer, "--"}, command...)
 	cmd, stdout, stderr, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(args...).Background()
 	if err != nil {
@@ -424,11 +426,9 @@ func execHTTPDWithin(oc *exutil.CLI, deadline time.Duration, pod string, command
 	go func() {
 		done <- cmd.Wait()
 	}()
-	timer := time.NewTimer(deadline)
-	defer timer.Stop()
 	select {
 	case err = <-done:
-	case <-timer.C:
+	case <-ctx.Done():
 		if cmd.Process != nil {
 			if killErr := cmd.Process.Kill(); killErr != nil {
 				e2e.Logf("stopping oc exec: %v", killErr)
@@ -436,9 +436,9 @@ func execHTTPDWithin(oc *exutil.CLI, deadline time.Duration, pod string, command
 		}
 		waitErr := <-done
 		if waitErr != nil {
-			err = fmt.Errorf("oc exec exceeded %s: %w", deadline, waitErr)
+			err = fmt.Errorf("oc exec stopped after %w: %v", ctx.Err(), waitErr)
 		} else {
-			err = fmt.Errorf("oc exec exceeded %s", deadline)
+			err = fmt.Errorf("oc exec stopped after %w", ctx.Err())
 		}
 	}
 	out := strings.TrimSpace(stdout.String())
@@ -504,7 +504,10 @@ func handshakeSetupFailed(text string) bool {
 		strings.Contains(text, "exit code 124") ||
 		strings.Contains(text, "exit status 124") ||
 		strings.Contains(text, "signal: killed") ||
-		strings.Contains(text, "oc exec exceeded")
+		strings.Contains(text, "oc exec exceeded") ||
+		strings.Contains(text, "oc exec stopped") ||
+		strings.Contains(text, "context deadline exceeded") ||
+		strings.Contains(text, "context canceled")
 }
 
 func execHTTPD(oc *exutil.CLI, pod string, command ...string) (string, error) {

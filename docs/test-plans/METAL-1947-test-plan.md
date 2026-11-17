@@ -5,7 +5,7 @@
 | Document identifier | CBO-LTP-METAL-1947 |
 | Standard | IEEE 829-2008, Level Test Plan |
 | Test level | System test of the Cluster Baremetal Operator on OpenShift |
-| Version | 1.3 |
+| Version | 1.4 |
 | Date | 2026-11-17 |
 | Epic | [METAL-1947](https://redhat.atlassian.net/browse/METAL-1947) |
 | Tracking ticket | [METAL-2009](https://redhat.atlassian.net/browse/METAL-2009) |
@@ -238,7 +238,7 @@ Expected result: `IRONIC_SSL_PROTOCOL`, `IRONIC_TLS_12_CIPHERS`, `IRONIC_TLS_13_
 
 #### TC-VMEDIA-TLS-009 Listener handshake
 
-Input: the TLS 1.2 override, then `timeout 10 openssl s_client -connect 127.0.0.1:6183 -tls1_2` executed in the running `metal3` pod. The in-pod command stops after 10 seconds. The local `oc exec` process is killed if it is still running after 20 seconds. Either deadline is a failure, not a rejected or accepted handshake.
+Input: the TLS 1.2 override, then `timeout 10 openssl s_client -connect 127.0.0.1:6183 -tls1_2 </dev/null` executed in the running `metal3` pod. Closing stdin keeps `s_client` from waiting for input after the handshake. The in-pod command stops after 10 seconds. The local `oc exec` process is killed if it is still running after 20 seconds, or sooner if the test context is cancelled. Either deadline is a failure, not a rejected or accepted handshake.
 
 Expected result: the handshake text contains `ECDHE-RSA-AES128-GCM-SHA256` and does not contain a failure signature from section 2.3. The process exit code is not the pass criterion.
 
@@ -368,6 +368,7 @@ Section 2.2 maps each METAL-1947 behavior in section 1.1 to a case. Automated co
 | 1.1 | 2026-11-17 | Record METAL-1999 on `main` as the implementation prerequisite. State that mutual exclusion is automated for both directions of the resulting object, and that a TLS 1.2 rejection requires an explicit handshake failure. |
 | 1.2 | 2026-11-17 | Bound each `openssl s_client` probe with a 10 second `timeout` so a stalled handshake cannot block cleanup. |
 | 1.3 | 2026-11-17 | Kill the local `oc exec` process if it is still running 20 seconds after the probe starts. |
+| 1.4 | 2026-11-17 | Close the documented probe's stdin, and cancel the local `oc exec` from the test context. |
 
 ## 5. Approvals
 
