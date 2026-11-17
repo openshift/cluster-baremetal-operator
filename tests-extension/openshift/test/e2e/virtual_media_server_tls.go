@@ -408,10 +408,47 @@ func httpdEnv(oc *exutil.CLI, pod string) (map[string]string, error) {
 }
 
 func tlsHandshake(oc *exutil.CLI, pod, port, tlsFlag string) (string, error) {
-	// timeout bounds a handshake that accepts TCP and then stalls. oc exec has
-	// no caller-side deadline, and closing stdin does not stop that wait.
+	// timeout stops a handshake that accepts TCP and then stalls. The local
+	// deadline stops oc itself when the exec stream never returns.
 	script := fmt.Sprintf("timeout 10 openssl s_client -connect 127.0.0.1:%s %s </dev/null", port, tlsFlag)
-	return execHTTPD(oc, pod, "/bin/sh", "-c", script)
+	return execHTTPDWithin(oc, 20*time.Second, pod, "/bin/sh", "-c", script)
+}
+
+func execHTTPDWithin(oc *exutil.CLI, deadline time.Duration, pod string, command ...string) (string, error) {
+	args := append([]string{"-n", machineAPINamespace, pod, "-c", vmediaContainer, "--"}, command...)
+	cmd, stdout, stderr, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(args...).Background()
+	if err != nil {
+		return "", err
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+	timer := time.NewTimer(deadline)
+	defer timer.Stop()
+	select {
+	case err = <-done:
+	case <-timer.C:
+		if cmd.Process != nil {
+			if killErr := cmd.Process.Kill(); killErr != nil {
+				e2e.Logf("stopping oc exec: %v", killErr)
+			}
+		}
+		waitErr := <-done
+		if waitErr != nil {
+			err = fmt.Errorf("oc exec exceeded %s: %w", deadline, waitErr)
+		} else {
+			err = fmt.Errorf("oc exec exceeded %s", deadline)
+		}
+	}
+	out := strings.TrimSpace(stdout.String())
+	if stderrText := strings.TrimSpace(stderr.String()); stderrText != "" {
+		if out != "" {
+			out += "\n"
+		}
+		out += stderrText
+	}
+	return out, err
 }
 
 func handshakeText(out string, err error) string {
@@ -464,7 +501,10 @@ func handshakeSetupFailed(text string) bool {
 		strings.Contains(text, "unable to upgrade connection") ||
 		strings.Contains(text, "cannot exec") ||
 		strings.Contains(text, "Connection refused") ||
-		strings.Contains(text, "exit code 124")
+		strings.Contains(text, "exit code 124") ||
+		strings.Contains(text, "exit status 124") ||
+		strings.Contains(text, "signal: killed") ||
+		strings.Contains(text, "oc exec exceeded")
 }
 
 func execHTTPD(oc *exutil.CLI, pod string, command ...string) (string, error) {
