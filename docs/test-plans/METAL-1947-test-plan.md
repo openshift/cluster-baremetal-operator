@@ -5,7 +5,7 @@
 | Document identifier | CBO-LTP-METAL-1947 |
 | Standard | IEEE 829-2008, Level Test Plan |
 | Test level | System test of the Cluster Baremetal Operator on OpenShift |
-| Version | 1.1 |
+| Version | 1.2 |
 | Date | 2026-11-17 |
 | Epic | [METAL-1947](https://redhat.atlassian.net/browse/METAL-1947) |
 | Tracking ticket | [METAL-2009](https://redhat.atlassian.net/browse/METAL-2009) |
@@ -238,7 +238,7 @@ Expected result: `IRONIC_SSL_PROTOCOL`, `IRONIC_TLS_12_CIPHERS`, `IRONIC_TLS_13_
 
 #### TC-VMEDIA-TLS-009 Listener handshake
 
-Input: the TLS 1.2 override, then `openssl s_client -connect 127.0.0.1:6183 -tls1_2` executed in the running `metal3` pod.
+Input: the TLS 1.2 override, then `timeout 10 openssl s_client -connect 127.0.0.1:6183 -tls1_2` executed in the running `metal3` pod. A probe that reaches the 10 second deadline is a failure.
 
 Expected result: the handshake text contains `ECDHE-RSA-AES128-GCM-SHA256` and does not contain a failure signature from section 2.3. The process exit code is not the pass criterion.
 
@@ -366,6 +366,7 @@ Section 2.2 maps each METAL-1947 behavior in section 1.1 to a case. Automated co
 |---|---|---|
 | 1.0 | 2026-11-16 | Initial level test plan for METAL-1947, aligned with the merged virtual-media server API and the system tests on branch `virtual-media-server-tls`. |
 | 1.1 | 2026-11-17 | Record METAL-1999 on `main` as the implementation prerequisite. State that mutual exclusion is automated for both directions of the resulting object, and that a TLS 1.2 rejection requires an explicit handshake failure. |
+| 1.2 | 2026-11-17 | Bound each `openssl s_client` probe with a 10 second `timeout` so a stalled handshake cannot block cleanup. |
 
 ## 5. Approvals
 

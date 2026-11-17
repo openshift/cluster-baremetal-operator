@@ -408,7 +408,9 @@ func httpdEnv(oc *exutil.CLI, pod string) (map[string]string, error) {
 }
 
 func tlsHandshake(oc *exutil.CLI, pod, port, tlsFlag string) (string, error) {
-	script := fmt.Sprintf("openssl s_client -connect 127.0.0.1:%s %s </dev/null", port, tlsFlag)
+	// timeout bounds a handshake that accepts TCP and then stalls. oc exec has
+	// no caller-side deadline, and closing stdin does not stop that wait.
+	script := fmt.Sprintf("timeout 10 openssl s_client -connect 127.0.0.1:%s %s </dev/null", port, tlsFlag)
 	return execHTTPD(oc, pod, "/bin/sh", "-c", script)
 }
 
@@ -461,7 +463,8 @@ func handshakeSetupFailed(text string) bool {
 		strings.Contains(text, "openssl: not found") ||
 		strings.Contains(text, "unable to upgrade connection") ||
 		strings.Contains(text, "cannot exec") ||
-		strings.Contains(text, "Connection refused")
+		strings.Contains(text, "Connection refused") ||
+		strings.Contains(text, "exit code 124")
 }
 
 func execHTTPD(oc *exutil.CLI, pod string, command ...string) (string, error) {
