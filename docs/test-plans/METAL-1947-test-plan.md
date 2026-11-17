@@ -5,8 +5,8 @@
 | Document identifier | CBO-LTP-METAL-1947 |
 | Standard | IEEE 829-2008, Level Test Plan |
 | Test level | System test of the Cluster Baremetal Operator on OpenShift |
-| Version | 1.0 |
-| Date | 2026-11-16 |
+| Version | 1.1 |
+| Date | 2026-11-17 |
 | Epic | [METAL-1947](https://redhat.atlassian.net/browse/METAL-1947) |
 | Tracking ticket | [METAL-2009](https://redhat.atlassian.net/browse/METAL-2009) |
 | Parent initiative | [OCPSTRAT-3718](https://redhat.atlassian.net/browse/OCPSTRAT-3718) |
@@ -59,6 +59,8 @@ The virtual-media HTTPS listener is port 6183 on `metal3-httpd`. The Ironic API 
 - `createContainerMetal3Httpd` in `provisioning/baremetal_pod.go`.
 - IEEE Std 829-2008, IEEE Standard for Software and System Test Documentation.
 
+Those Go identifiers are a prerequisite. [METAL-1999](https://redhat.atlassian.net/browse/METAL-1999) already added them on `main`. This change adds the system tests and this plan, and a checkout of only this change does not contain that implementation.
+
 ### 1.3 Test overview
 
 Testing has three layers.
@@ -91,7 +93,7 @@ The cases in section 2.2 that are marked Manual cover behavior the automated sys
 | TC-VMEDIA-TLS-003 | Cipher names split into the TLS 1.2 and TLS 1.3 variables | TI-HTTPD, TI-LISTEN | Automated | Disruptive e2e |
 | TC-VMEDIA-TLS-004 | `groups` sets `IRONIC_VMEDIA_CURVES` only | TI-HTTPD | Automated | Disruptive e2e |
 | TC-VMEDIA-TLS-005 | Invalid version, cipher, group, and empty lists are rejected | TI-API | Automated for a bad version, a cipher containing a space, and an unknown group | Disruptive e2e, in part |
-| TC-VMEDIA-TLS-006 | The object cannot be combined with `disableVirtualMediaTLS: true` | TI-API | Automated | Disruptive e2e |
+| TC-VMEDIA-TLS-006 | The object cannot be combined with `disableVirtualMediaTLS: true` | TI-API | Automated for both directions of the resulting object | Disruptive e2e |
 | TC-VMEDIA-TLS-007 | TLS 1.0 and 1.1 emit `DeprecatedVirtualMediaServerTLSVersion` | TI-CBO | Manual | — |
 | TC-VMEDIA-TLS-008 | Ironic API settings and baremetal-operator arguments stay unchanged | TI-ISOLATION | Automated | Disruptive e2e |
 | TC-VMEDIA-TLS-009 | Port 6183 completes a handshake at the configured floor | TI-LISTEN | Automated for TLS 1.2 | Disruptive e2e |
@@ -214,9 +216,13 @@ Expected result: the API rejects every patch. The stored object does not change.
 
 #### TC-VMEDIA-TLS-006 Mutual exclusion
 
-Input: a Provisioning object that already has `virtualMediaServerTLS`, then a dry-run set of `disableVirtualMediaTLS: true`. Also the reverse order: `disableVirtualMediaTLS: true` already stored, then a dry-run set of the TLS object.
+Input, as dry-run patches:
 
-Expected result: both updates fail with `virtualMediaServerTLS cannot be set when disableVirtualMediaTLS is true`.
+- `disableVirtualMediaTLS: true` together with `virtualMediaServerTLS`, so admission sees both fields on the resulting object.
+- `disableVirtualMediaTLS: true` after `virtualMediaServerTLS` is already stored.
+- When `disableVirtualMediaTLS` is already true, `virtualMediaServerTLS` by itself. The rest of the disruptive test then skips, because the HTTPS listener is off.
+
+Expected result: each update fails with `virtualMediaServerTLS cannot be set when disableVirtualMediaTLS is true`. The automated test does not store `disableVirtualMediaTLS: true` on a cluster where it is currently false, because that would remove the HTTPS listener.
 
 #### TC-VMEDIA-TLS-007 Deprecation warning
 
@@ -228,7 +234,7 @@ Expected result: the first two updates emit a Warning event on `provisioning-con
 
 Input: the override from TC-VMEDIA-TLS-003 plus `groups: [secp384r1]`.
 
-Expected result: `IRONIC_SSL_PROTOCOL`, `IRONIC_TLS_12_CIPHERS`, `IRONIC_TLS_13_CIPHERS`, and `IRONIC_TLS_CURVES` equal the values recorded before the patch. The baremetal-operator arguments equal the recorded arguments and do not contain `VMEDIA`. When the recorded API protocol is `-ALL +TLSv1.3`, port 6385 rejects a TLS 1.2 handshake while port 6183 accepts it.
+Expected result: `IRONIC_SSL_PROTOCOL`, `IRONIC_TLS_12_CIPHERS`, `IRONIC_TLS_13_CIPHERS`, and `IRONIC_TLS_CURVES` equal the values recorded before the patch. The baremetal-operator arguments equal the recorded arguments and do not contain `VMEDIA`. When the recorded API protocol is `-ALL +TLSv1.3`, port 6385 first completes a TLS 1.3 handshake. The following TLS 1.2 handshake is a rejection only when its output contains a failure signature from section 2.3. A missing cipher, a refused connection, or a failed `oc exec` is not a rejection. Port 6183 still accepts TLS 1.2.
 
 #### TC-VMEDIA-TLS-009 Listener handshake
 
@@ -343,7 +349,7 @@ A case result is accepted when the command output cited in section 2.9 is retain
 
 ### 4.3 Test coverage
 
-Section 2.2 maps each METAL-1947 behavior in section 1.1 to a case. Automated coverage is complete for inheritance, one minimum version, cipher split, one group, the common admission rejects, mutual exclusion, API and baremetal-operator isolation, the TLS 1.2 handshake, worker reprovision, and restore. The remaining minimum versions, the warning, the omitted cipher family, iPXE isolation, and the FIPS interpretation stay manual until they are added to the system suite.
+Section 2.2 maps each METAL-1947 behavior in section 1.1 to a case. Automated coverage is complete for inheritance, one minimum version, cipher split, one group, the common admission rejects, mutual exclusion of the resulting object in both directions, API and baremetal-operator isolation, the TLS 1.2 handshake, worker reprovision, and restore. The remaining minimum versions, the warning, the omitted cipher family, iPXE isolation, and the FIPS interpretation stay manual until they are added to the system suite.
 
 ### 4.4 Glossary
 
@@ -359,6 +365,7 @@ Section 2.2 maps each METAL-1947 behavior in section 1.1 to a case. Automated co
 | Version | Date | Description |
 |---|---|---|
 | 1.0 | 2026-11-16 | Initial level test plan for METAL-1947, aligned with the merged virtual-media server API and the system tests on branch `virtual-media-server-tls`. |
+| 1.1 | 2026-11-17 | Record METAL-1999 on `main` as the implementation prerequisite. State that mutual exclusion is automated for both directions of the resulting object, and that a TLS 1.2 rejection requires an explicit handshake failure. |
 
 ## 5. Approvals
 

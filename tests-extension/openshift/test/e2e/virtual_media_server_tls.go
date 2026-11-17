@@ -97,6 +97,10 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	g.It("Author:jhajyahy-High-METAL-1947-Virtual media TLS override does not change Ironic API TLS [Serial][Disruptive]", func() {
 		doc := getProvisioningTLS(oc)
 		if doc.Spec.DisableVirtualMediaTLS {
+			g.By("Reject virtualMediaServerTLS while virtual media TLS is already disabled")
+			out, err := patchProvisioning(oc, `{"spec":{"virtualMediaServerTLS":{"minTLSVersion":"VersionTLS12"}}}`, true)
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(out).To(o.ContainSubstring("virtualMediaServerTLS cannot be set when disableVirtualMediaTLS is true"))
 			g.Skip("virtual media TLS is disabled")
 		}
 
@@ -104,6 +108,9 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		expectProvisioningPatchRejected(oc, `{"spec":{"virtualMediaServerTLS":{"minTLSVersion":"TLSv1.2"}}}`)
 		expectProvisioningPatchRejected(oc, `{"spec":{"virtualMediaServerTLS":{"minTLSVersion":"VersionTLS12","ciphers":["ECDHE RSA"]}}}`)
 		expectProvisioningPatchRejected(oc, `{"spec":{"virtualMediaServerTLS":{"minTLSVersion":"VersionTLS12","groups":["not-a-group"]}}}`)
+		out, err := patchProvisioning(oc, `{"spec":{"disableVirtualMediaTLS":true,"virtualMediaServerTLS":{"minTLSVersion":"VersionTLS12"}}}`, true)
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("virtualMediaServerTLS cannot be set when disableVirtualMediaTLS is true"))
 
 		baseline := runningHTTPDEnv(oc)
 		bmoBefore, err := bmoContainerArgs(oc)
@@ -160,13 +167,15 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		o.Expect(handshakeAccepted(vmediaOut, vmediaErr)).To(o.BeTrue(), "virtual-media TLS 1.2 handshake failed: %s", handshakeText(vmediaOut, vmediaErr))
 
 		if baseline[ironicProtocolEnv] == "-ALL +TLSv1.3" {
-			g.By("Ironic API port still rejects TLS 1.2")
+			g.By("Ironic API port still accepts TLS 1.3 and rejects TLS 1.2")
+			apiTLS13Out, apiTLS13Err := tlsHandshake(oc, pod, ironicAPIPort, "-tls1_3")
+			o.Expect(handshakeNegotiatedTLS13(apiTLS13Out, apiTLS13Err)).To(o.BeTrue(), "Ironic API TLS 1.3 handshake failed, so a TLS 1.2 rejection is not meaningful: %s", handshakeText(apiTLS13Out, apiTLS13Err))
 			apiOut, apiErr := tlsHandshake(oc, pod, ironicAPIPort, "-tls1_2")
-			o.Expect(handshakeAccepted(apiOut, apiErr)).To(o.BeFalse(), "Ironic API unexpectedly accepted TLS 1.2: %s", handshakeText(apiOut, apiErr))
+			o.Expect(handshakeRejected(apiOut, apiErr)).To(o.BeTrue(), "Ironic API did not reject TLS 1.2: %s", handshakeText(apiOut, apiErr))
 		}
 
 		g.By("Reject disabling virtual media TLS while the override is set")
-		out, err := patchProvisioning(oc, `{"spec":{"disableVirtualMediaTLS":true}}`, true)
+		out, err = patchProvisioning(oc, `{"spec":{"disableVirtualMediaTLS":true}}`, true)
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("virtualMediaServerTLS cannot be set when disableVirtualMediaTLS is true"))
 	})
@@ -213,10 +222,17 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		annotated := false
 		scaledDown := false
 		defer func() {
 			if !scaledDown {
-				_, _ = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("machines.machine.openshift.io", machineName, "machine.openshift.io/cluster-api-delete-machine-", "-n", machineAPINamespace).Output()
+				if annotated {
+					_, annErr := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("machines.machine.openshift.io", machineName, "machine.openshift.io/cluster-api-delete-machine-", "-n", machineAPINamespace).Output()
+					if annErr != nil {
+						e2e.Logf("removing delete-machine annotation from %s: %v", machineName, annErr)
+					}
+					o.Expect(annErr).NotTo(o.HaveOccurred())
+				}
 				return
 			}
 			g.By("Restore the worker MachineSet replica count")
@@ -236,6 +252,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 		g.By("Deprovision one virtual-media worker")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("machines.machine.openshift.io", machineName, "machine.openshift.io/cluster-api-delete-machine=yes", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		annotated = true
 		_, err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("machinesets.machine.openshift.io", machineSet, "-n", machineAPINamespace, fmt.Sprintf("--replicas=%d", originReplicas-1)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		scaledDown = true
@@ -308,14 +325,16 @@ func restoreVirtualMediaTLS(oc *exutil.CLI, original json.RawMessage) {
 		}
 		return
 	}
-	patch, err := json.Marshal(map[string]any{
-		"spec": map[string]json.RawMessage{"virtualMediaServerTLS": original},
+	patch, err := json.Marshal([]map[string]any{
+		{"op": "add", "path": "/spec/virtualMediaServerTLS", "value": original},
 	})
 	if err != nil {
 		e2e.Logf("encoding original virtualMediaServerTLS: %v", err)
 		return
 	}
-	if _, err := patchProvisioning(oc, string(patch), false); err != nil {
+	if _, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(
+		"provisioning", "provisioning-configuration", "--type=json", "-p", string(patch),
+	).Output(); err != nil {
 		e2e.Logf("restoring virtualMediaServerTLS: %v", err)
 	}
 }
@@ -405,14 +424,44 @@ func handshakeText(out string, err error) string {
 // non-zero after a successful handshake, so the cipher line is the signal.
 func handshakeAccepted(out string, err error) bool {
 	text := handshakeText(out, err)
-	if strings.Contains(text, "handshake failure") ||
-		strings.Contains(text, "no protocols available") ||
-		strings.Contains(text, "alert protocol version") ||
-		strings.Contains(text, "Cipher is (NONE)") ||
-		strings.Contains(text, "Cipher    : (NONE)") {
+	if tlsNegotiationFailed(text) || handshakeSetupFailed(text) {
 		return false
 	}
 	return strings.Contains(text, "ECDHE-RSA-AES128-GCM-SHA256")
+}
+
+// handshakeRejected reports an explicit TLS negotiation failure. A missing
+// cipher, a failed exec, or a refused connection is not a rejection.
+func handshakeRejected(out string, err error) bool {
+	text := handshakeText(out, err)
+	if handshakeSetupFailed(text) || strings.Contains(text, "ECDHE-RSA-AES128-GCM-SHA256") {
+		return false
+	}
+	return tlsNegotiationFailed(text)
+}
+
+func handshakeNegotiatedTLS13(out string, err error) bool {
+	text := handshakeText(out, err)
+	if tlsNegotiationFailed(text) || handshakeSetupFailed(text) {
+		return false
+	}
+	return strings.Contains(text, "TLSv1.3")
+}
+
+func tlsNegotiationFailed(text string) bool {
+	return strings.Contains(text, "handshake failure") ||
+		strings.Contains(text, "no protocols available") ||
+		strings.Contains(text, "alert protocol version") ||
+		strings.Contains(text, "Cipher is (NONE)") ||
+		strings.Contains(text, "Cipher    : (NONE)")
+}
+
+func handshakeSetupFailed(text string) bool {
+	return strings.Contains(text, "executable file not found") ||
+		strings.Contains(text, "openssl: not found") ||
+		strings.Contains(text, "unable to upgrade connection") ||
+		strings.Contains(text, "cannot exec") ||
+		strings.Contains(text, "Connection refused")
 }
 
 func execHTTPD(oc *exutil.CLI, pod string, command ...string) (string, error) {
