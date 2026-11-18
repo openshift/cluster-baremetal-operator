@@ -5,8 +5,8 @@
 | Document identifier | CBO-LTP-METAL-1947 |
 | Standard | IEEE 829-2008, Level Test Plan |
 | Test level | System test of the Cluster Baremetal Operator on OpenShift |
-| Version | 1.4 |
-| Date | 2026-11-17 |
+| Version | 1.5 |
+| Date | 2026-11-18 |
 | Epic | [METAL-1947](https://redhat.atlassian.net/browse/METAL-1947) |
 | Tracking ticket | [METAL-2009](https://redhat.atlassian.net/browse/METAL-2009) |
 | Parent initiative | [OCPSTRAT-3718](https://redhat.atlassian.net/browse/OCPSTRAT-3718) |
@@ -24,7 +24,7 @@ The object has three fields:
 
 - `minTLSVersion` (required): `VersionTLS10`, `VersionTLS11`, `VersionTLS12`, or `VersionTLS13`. The listener accepts that version and every later version through TLS 1.3. There is no maximum-version field.
 - `ciphers` (optional): OpenSSL cipher names. Names that start with `TLS_` configure TLS 1.3. Other names configure TLS 1.0 through 1.2. When the list is omitted, the cluster profile or the image defaults remain. When a supplied list omits one family, that family stays enabled and uses OpenSSL defaults.
-- `groups` (optional), in preference order: `X25519`, `secp256r1`, `secp384r1`, `secp521r1`, `X25519MLKEM768`, `SecP256r1MLKEM768`, `SecP384r1MLKEM1024`. When omitted, the cluster profile or the image defaults remain.
+- `groups` (optional): `X25519`, `secp256r1`, `secp384r1`, `secp521r1`, `X25519MLKEM768`, `SecP256r1MLKEM768`, or `SecP384r1MLKEM1024`. When omitted, the cluster profile or the image defaults remain.
 
 When the object is unset, both the Ironic API listener and the virtual-media listener follow the cluster TLS profile. When it is set, only these virtual-media variables change:
 
@@ -357,7 +357,7 @@ Section 2.2 maps each METAL-1947 behavior in section 1.1 to a case. Automated co
 |---|---|
 | Virtual-media listener | The `metal3-httpd` HTTPS vhost on port 6183 that serves the image a BMC mounts |
 | Floor | The minimum TLS version. Higher versions through TLS 1.3 stay enabled |
-| Cluster profile | The TLS profile CBO applies when `virtualMediaServerTLS` is unset |
+| Cluster profile | The TLS security profile applied cluster-wide through `apiserver.config.openshift.io/cluster`. CBO uses it for both listeners when `virtualMediaServerTLS` is unset |
 | IPI | Installer-provisioned infrastructure, with MachineSets and BareMetalHosts |
 
 ### 4.5 Document history
@@ -369,6 +369,7 @@ Section 2.2 maps each METAL-1947 behavior in section 1.1 to a case. Automated co
 | 1.2 | 2026-11-17 | Bound each `openssl s_client` probe with a 10 second `timeout` so a stalled handshake cannot block cleanup. |
 | 1.3 | 2026-11-17 | Kill the local `oc exec` process if it is still running 20 seconds after the probe starts. |
 | 1.4 | 2026-11-17 | Close the documented probe's stdin, and cancel the local `oc exec` from the test context. |
+| 1.5 | 2026-11-18 | List `groups` as allowed values, and describe the cluster profile as the cluster-wide apiserver TLS configuration. |
 
 ## 5. Approvals
 
