@@ -5,8 +5,8 @@
 | Document identifier | CBO-LTP-METAL-1947 |
 | Standard | IEEE 829-2008, Level Test Plan |
 | Test level | System test of the Cluster Baremetal Operator on OpenShift |
-| Version | 1.5 |
-| Date | 2026-11-18 |
+| Version | 1.6 |
+| Date | 2026-11-19 |
 | Epic | [METAL-1947](https://redhat.atlassian.net/browse/METAL-1947) |
 | Tracking ticket | [METAL-2009](https://redhat.atlassian.net/browse/METAL-2009) |
 | Parent initiative | [OCPSTRAT-3718](https://redhat.atlassian.net/browse/OCPSTRAT-3718) |
@@ -105,9 +105,9 @@ The cases in section 2.2 that are marked Manual cover behavior the automated sys
 
 The automated cases are:
 
-- `Author:jhajyahy-High-METAL-1947-Virtual media TLS listener matches the Provisioning spec [Level0]`
-- `Author:jhajyahy-High-METAL-1947-Virtual media TLS override does not change Ironic API TLS [Serial][Disruptive]`
-- `Author:jhajyahy-Longduration-NonPreRelease-High-METAL-1947-Worker reprovision uses the virtual-media TLS listener [Serial][Disruptive]`
+- `Author:jhajyahy-High-91125-Virtual media TLS listener matches the Provisioning spec [Level0]` ([OCP-91125](https://polarion.engineering.redhat.com/polarion/#/project/OSE/workitem?id=OCP-91125))
+- `Author:jhajyahy-High-91126-Virtual media TLS override does not change Ironic API TLS [Serial][Disruptive]` ([OCP-91126](https://polarion.engineering.redhat.com/polarion/#/project/OSE/workitem?id=OCP-91126))
+- `Author:jhajyahy-Longduration-NonPreRelease-High-91127-Worker reprovision uses the virtual-media TLS listener [Serial][Disruptive]` ([OCP-91127](https://polarion.engineering.redhat.com/polarion/#/project/OSE/workitem?id=OCP-91127))
 
 ### 2.3 Features to be tested
 
@@ -370,6 +370,7 @@ Section 2.2 maps each METAL-1947 behavior in section 1.1 to a case. Automated co
 | 1.3 | 2026-11-17 | Kill the local `oc exec` process if it is still running 20 seconds after the probe starts. |
 | 1.4 | 2026-11-17 | Close the documented probe's stdin, and cancel the local `oc exec` from the test context. |
 | 1.5 | 2026-11-18 | List `groups` as allowed values, and describe the cluster profile as the cluster-wide apiserver TLS configuration. |
+| 1.6 | 2026-11-19 | Record Polarion cases OCP-91125, OCP-91126, and OCP-91127 on the automated system tests. |
 
 ## 5. Approvals
 

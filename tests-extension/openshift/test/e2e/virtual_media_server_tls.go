@@ -62,7 +62,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-High-METAL-1947-Virtual media TLS listener matches the Provisioning spec [Level0]", func() {
+	g.It("Author:jhajyahy-High-91125-Virtual media TLS listener matches the Provisioning spec [Level0]", func() {
 		doc := getProvisioningTLS(oc)
 		if doc.Spec.DisableVirtualMediaTLS {
 			g.Skip("virtual media TLS is disabled")
@@ -94,7 +94,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-High-METAL-1947-Virtual media TLS override does not change Ironic API TLS [Serial][Disruptive]", func(ctx context.Context) {
+	g.It("Author:jhajyahy-High-91126-Virtual media TLS override does not change Ironic API TLS [Serial][Disruptive]", func(ctx context.Context) {
 		doc := getProvisioningTLS(oc)
 		if doc.Spec.DisableVirtualMediaTLS {
 			g.By("Reject virtualMediaServerTLS while virtual media TLS is already disabled")
@@ -181,7 +181,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Longduration-NonPreRelease-High-METAL-1947-Worker reprovision uses the virtual-media TLS listener [Serial][Disruptive]", func() {
+	g.It("Author:jhajyahy-Longduration-NonPreRelease-High-91127-Worker reprovision uses the virtual-media TLS listener [Serial][Disruptive]", func() {
 		doc := getProvisioningTLS(oc)
 		if doc.Spec.DisableVirtualMediaTLS {
 			g.Skip("virtual media TLS is disabled")
@@ -245,7 +245,7 @@ var _ = g.Describe("[OTP][sig-baremetal] IPI BareMetal", func() {
 			waitForBMHState(oc, bmhName, "provisioned")
 			nodeHealthErr := clusterNodesHealthcheck(oc, 1500)
 			compat_otp.AssertWaitPollNoErr(nodeHealthErr, "worker did not return Ready after virtual-media reprovision")
-			operatorErr := clusterOperatorHealthcheck(oc, 1500, "METAL-1947-reprovision.log")
+			operatorErr := clusterOperatorHealthcheck(oc, 1500, "OCP-91127.log")
 			compat_otp.AssertWaitPollNoErr(operatorErr, "cluster operators did not recover after virtual-media reprovision")
 		}()
 
