@@ -163,7 +163,7 @@ func createContainerBaremetalOperator(info *ProvisioningInfo) (corev1.Container,
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("20m"),
-				corev1.ResourceMemory: resource.MustParse("50Mi"),
+				corev1.ResourceMemory: resource.MustParse("65Mi"),
 			},
 		},
 		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,

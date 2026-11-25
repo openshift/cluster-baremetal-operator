@@ -32,6 +32,7 @@ rules:
   - dataimages
   - firmwareschemas
   - hardwaredata
+  - hostclaims
   - hostfirmwarecomponents
   - hostfirmwaresettings
   - preprovisioningimages
@@ -49,7 +50,9 @@ rules:
   - baremetalhosts/finalizers
   - dataimages/finalizers
   - hardware/finalizers
+  - hostclaims/finalizers
   - hostfirmwarecomponents/finalizers
+  - hostupdatepolicies/finalizers
   verbs:
   - update
 - apiGroups:
@@ -59,6 +62,7 @@ rules:
   - bmceventsubscriptions/status
   - dataimages/status
   - firmwareschemas/status
+  - hostclaims/status
   - hostfirmwarecomponents/status
   - hostfirmwaresettings/status
   - preprovisioningimages/status
@@ -80,6 +84,7 @@ rules:
   - metal3.io
   resources:
   - baremetalswitches
+  - hostdeploypolicies
   - hostnetworkattachments
   verbs:
   - get

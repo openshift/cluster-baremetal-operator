@@ -21,6 +21,7 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 )
 
@@ -157,6 +158,39 @@ type PrometheusExporter struct {
 	DisableDefaultPrometheusRules bool `json:"disableDefaultPrometheusRules,omitempty"`
 }
 
+// VirtualMediaServerTLS configures the minimum TLS version, cipher suites, and
+// supported groups for the HTTPS server that serves virtual-media images to
+// BMCs. It does not configure Ironic's Redfish client connections to BMCs.
+type VirtualMediaServerTLS struct {
+	// MinTLSVersion is the minimum TLS version accepted by the virtual-media
+	// HTTPS server. The server accepts this version and later versions through
+	// TLS 1.3. When virtual-media TLS is enabled, TLS 1.0 and 1.1 emit a warning
+	// event and should be used only for legacy BMCs.
+	// +kubebuilder:validation:Enum=VersionTLS10;VersionTLS11;VersionTLS12;VersionTLS13
+	MinTLSVersion string `json:"minTLSVersion"`
+	// Ciphers optionally overrides the virtual-media listener's OpenSSL cipher
+	// specifications. Entries starting with TLS_ configure TLS 1.3. Other entries
+	// set the shared cipher list for TLS 1.0 through 1.2. When unset, applicable
+	// cluster-profile or image settings remain in effect. If a supplied list omits
+	// one family, it remains enabled and uses OpenSSL defaults. CBO checks allowed
+	// characters, not whether OpenSSL supports each entry. Each entry is bounded,
+	// and each resulting environment variable must fit Linux's 128 KiB per-string
+	// limit, including its name and terminating byte.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:items:MaxLength=131042
+	// +kubebuilder:validation:items:Pattern=`^[A-Za-z0-9_+!@.-]+$`
+	Ciphers []string `json:"ciphers,omitempty"`
+	// Groups optionally overrides the virtual-media listener's TLS groups in
+	// preference order. When unset, applicable cluster-profile or image settings
+	// remain in effect. The ironic-image OpenSSL version must support each group.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	Groups []configv1.TLSGroup `json:"groups,omitempty"`
+}
+
 // ProvisioningSpec defines the desired state of Provisioning
 type ProvisioningSpec struct {
 	// ProvisioningInterface is the name of the network interface
@@ -286,6 +320,12 @@ type ProvisioningSpec struct {
 	// DisableVirtualMediaTLS turns off TLS on the virtual media server,
 	// which may be required for hardware that cannot accept HTTPS links.
 	DisableVirtualMediaTLS bool `json:"disableVirtualMediaTLS,omitempty"`
+
+	// VirtualMediaServerTLS configures TLS settings for the virtual-media HTTPS
+	// listener that serves images to BMCs. Use this override for legacy BMC
+	// firmware that doesn’t support TLS 1.3 settings on the virtual-media endpoint.
+	// +optional
+	VirtualMediaServerTLS *VirtualMediaServerTLS `json:"virtualMediaServerTLS,omitempty"`
 
 	// UnsupportedConfigOverrides are site-specific overrides that are not
 	// officially supported in the Metal platform and may cause the
