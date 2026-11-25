@@ -1,0 +1,42 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metal3-image-customization
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metal3-image-customization
+subjects:
+- kind: ServiceAccount
+  name: metal3-image-customization
+  namespace: openshift-machine-api
+- kind: ServiceAccount
+  name: metal3-image-customization-all-namespaces
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: metal3-image-customization-secrets
+  namespace: openshift-machine-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: metal3-image-customization-secrets
+subjects:
+- kind: ServiceAccount
+  name: metal3-image-customization
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metal3-image-customization-all-namespaces-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metal3-image-customization-all-namespaces-secrets
+subjects:
+- kind: ServiceAccount
+  name: metal3-image-customization-all-namespaces
+  namespace: openshift-machine-api

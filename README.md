@@ -329,6 +329,28 @@ Services:
     └─ port 6385 (one endpoint per master node)
 ```
 
+## RBAC layout
+
+CBO and its operands use separate ServiceAccounts. CBO's own cluster and namespace
+roles are generated from the Kubebuilder markers in
+[`controllers/provisioning_controller.go`](controllers/provisioning_controller.go).
+The namespaced Role covers the resources CBO manages in `openshift-machine-api`.
+
+[`config/rbac/cbo_supplemental_role.yaml`](config/rbac/cbo_supplemental_role.yaml)
+holds the permissions specific to the OpenShift deployment: access to the named
+`pull-secret` in `openshift-config`, read access to the named `cluster-config-v1`
+ConfigMap in `kube-system`, and permission to use the `anyuid` SCC. Separate Roles
+and RoleBindings put the Secret and ConfigMap permissions in the namespaces where
+the objects live, without granting CBO cluster-wide access to those resource types.
+
+BMO's Metal3 API permissions belong in
+[`config/rbac/bmo_role.yaml`](config/rbac/bmo_role.yaml), not in CBO's markers.
+Image customization has its own [RBAC](config/rbac/icc_role.yaml), with namespaced
+Secret access for the default account and a separate account for `WatchAllNamespaces`.
+Ironic, image cache, and Ironic proxy share an account with SCC access and do not
+mount a Kubernetes API token. After editing RBAC sources, run `make manifests`
+and commit the generated release manifests.
+
 ## Testing CBO patches
 
 If you want to test a CBO change on your cluster, you need to stop
